@@ -724,6 +724,7 @@ export type Database = {
         Args: { _product_id: string; _quantity?: number }
         Returns: string
       }
+      run_card_checks: { Args: { _order_ids: string[] }; Returns: number }
       settle_crypto_deposit: {
         Args: {
           _confirmations?: number

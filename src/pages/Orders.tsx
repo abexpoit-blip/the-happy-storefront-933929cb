@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { listMyOrders, listProducts, type Product } from "@/lib/store";
+import { publicBase } from "@/lib/baseLabel";
 import { CARD_TXT_HEADER, formatCardTxtLine, isPipeLine } from "@/lib/cardFormat";
 import { useAuth } from "@/hooks/useAuth";
 import { Search, RotateCcw, AlertCircle, ChevronLeft, ChevronRight, Package, Receipt, CreditCard } from "lucide-react";
@@ -79,7 +80,7 @@ const Orders = () => {
 
       lines.push(
         formatCardTxtLine({
-          base: p?.base ?? it.product_title,
+          base: publicBase(p?.base) || it.product_title,
           price: it.price,
           cc: raw.join(" ") || p?.bin || "",
           month: p?.exp_month ?? "",

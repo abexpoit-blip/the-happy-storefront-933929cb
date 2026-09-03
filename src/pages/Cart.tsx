@@ -6,9 +6,10 @@ import { toast } from "sonner";
 import { Trash2, Loader2, ShieldCheck, ShieldOff, Radar, Sparkles, ShoppingCart, Wallet, CreditCard } from "lucide-react";
 import { PageHero, StatCard } from "@/components/PageHero";
 import { getCart, removeFromCart, clearCart, onCartChange, type CartLine } from "@/lib/cart";
-import { purchaseProduct, listChecksForOrders, type CardCheck } from "@/lib/store";
+import { purchaseProduct, listChecksForOrders, listPendingChecks, runCardChecks, type CardCheck } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { publicBase } from "@/lib/baseLabel";
 import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode } from "@/lib/brands";
 
 const Cart = () => {
@@ -21,6 +22,12 @@ const Cart = () => {
   const [busy, setBusy] = useState(false);
   const [checks, setChecks] = useState<CardCheck[] | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [pending, setPending] = useState<CardCheck[]>([]);
+
+  const loadPending = async () => {
+    try { setPending(await listPendingChecks()); } catch { /* ignore */ }
+  };
+  useEffect(() => { void loadPending(); }, []);
 
   useEffect(() => {
     const sync = () => {
@@ -56,39 +63,57 @@ const Cart = () => {
     const spendable = Number(profile?.balance ?? 0) + Number(profile?.bonus_balance ?? 0);
     if (spendable < total + fees) return toast.error("Insufficient funds. Please top up your balance.");
     setBusy(true);
-    if (refundables.length) setScanning(true);
     let ok = 0;
     const failed: string[] = [];
-    const orderIds: string[] = [];
+    let hadRefundable = false;
     try {
       for (const it of chosen) {
         try {
-          const orderId = await purchaseProduct(it.id, 1);
-          if (orderId) orderIds.push(orderId);
+          await purchaseProduct(it.id, 1);
+          if (it.refundable) hadRefundable = true;
           removeFromCart(it.id);
           ok++;
         } catch {
           failed.push(it.bin ?? it.title);
         }
       }
-      const results = await listChecksForOrders(orderIds);
       void refresh?.();
-      if (refundables.length) {
-        // Let the scan animation breathe before revealing results.
-        await new Promise((r) => setTimeout(r, 1600));
-      }
-      setScanning(false);
+      await loadPending();
       if (ok > 0) {
-        toast.success(`Purchased: ${ok}`);
-        if (results.length > 0) setChecks(results);
-        else nav("/orders");
+        toast.success(
+          hadRefundable
+            ? `Purchased: ${ok}. Refund cards are ready — press "Check cards" to run the checker.`
+            : `Purchased: ${ok}`,
+        );
+        if (!hadRefundable) nav("/orders");
       }
       if (failed.length) toast.error(`Failed: ${failed.join(", ")}`);
     } finally {
-      setScanning(false);
       setBusy(false);
     }
   };
+
+  /** Manual checker — only refund cards, started by the buyer. */
+  const runChecker = async () => {
+    if (!pending.length) return toast.error("No refund cards waiting for a check");
+    const orderIds = [...new Set(pending.map((p) => p.order_id).filter(Boolean) as string[])];
+    setScanning(true);
+    try {
+      await runCardChecks(orderIds);
+      await new Promise((r) => setTimeout(r, 1600));
+      const results = await listChecksForOrders(orderIds);
+      void refresh?.();
+      await loadPending();
+      setScanning(false);
+      setChecks(results.filter((r) => r.status !== "pending"));
+    } catch (e) {
+      setScanning(false);
+      toast.error(e instanceof Error ? e.message : "Check failed");
+    } finally {
+      setScanning(false);
+    }
+  };
+
 
   return (
     <AppShell>
@@ -99,7 +124,7 @@ const Cart = () => {
         eyebrowIcon={ShoppingCart}
         title="Your"
         highlight="cart"
-        description={`Refund cards are checked automatically after purchase — $${checkFee.toFixed(2)} per card. DEAD cards are refunded to your main balance instantly.`}
+        description={`Only refund cards can be checked — the $${checkFee.toFixed(2)} per-card fee is charged at purchase and you start the checker yourself with the "Check cards" button. DEAD cards are refunded to your main balance instantly.`}
       />
 
       <div className="grid gap-3 sm:grid-cols-3 mb-4">
@@ -107,6 +132,31 @@ const Cart = () => {
         <StatCard label="Order total" icon={ShoppingCart} tone="green" value={`$${(total + fees).toFixed(2)}`} hint={`cards $${total.toFixed(2)} + checking $${fees.toFixed(2)}`} />
         <StatCard label="Available balance" icon={Wallet} tone="amber" value={`$${(Number(profile?.balance ?? 0) + Number(profile?.bonus_balance ?? 0)).toFixed(2)}`} hint="bonus is spent first" />
       </div>
+
+      {pending.length > 0 && (
+        <div className="mb-4 rounded-xl border border-[#2196f3]/30 bg-gradient-to-r from-[#0f1a33] via-[#132244] to-[#0f1a33] px-4 py-3.5 flex flex-wrap items-center gap-3 shadow-[0_10px_30px_rgba(15,26,51,0.35)]">
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#2196f3]/15 border border-[#2196f3]/30">
+            <Radar className="h-4.5 w-4.5 text-[#5ac8fa]" />
+          </span>
+          <div className="min-w-[200px]">
+            <div className="text-[13.5px] font-semibold text-white">
+              {pending.length} refund card{pending.length === 1 ? "" : "s"} waiting for a check
+            </div>
+            <div className="text-[12px] text-white/60">
+              Checking is manual — press the button to open the checker. DEAD cards are refunded instantly.
+            </div>
+          </div>
+          <button
+            onClick={() => void runChecker()}
+            disabled={scanning}
+            className="ml-auto h-9 px-5 rounded-md bg-gradient-to-r from-[#2196f3] to-[#5ac8fa] text-white text-[13px] font-semibold shadow-[0_6px_18px_rgba(33,150,243,0.4)] hover:brightness-110 transition disabled:opacity-60 inline-flex items-center gap-2"
+          >
+            {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
+            Check cards
+          </button>
+        </div>
+      )}
+
 
       <div className="rounded-xl border border-[#e6e6e6] bg-gradient-to-r from-white via-[#fbfcff] to-[#f4f7ff] px-4 py-3 flex flex-wrap items-center gap-3 text-[13px] shadow-[0_2px_10px_rgba(20,30,60,0.06)]">
         <span className="font-semibold text-[#1f2d3d]">Cart</span>
@@ -143,7 +193,7 @@ const Cart = () => {
             className="h-8 px-5 rounded-md bg-gradient-to-r from-[#2e7d32] to-[#43a047] text-white text-[13px] shadow-[0_4px_14px_rgba(46,125,50,0.35)] hover:brightness-110 transition disabled:opacity-60 inline-flex items-center gap-2"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
-            Buy {chosen.length || ""}{refundables.length ? " & check" : " now"}
+            Buy {chosen.length || ""} now
           </button>
         </div>
       </div>
@@ -217,7 +267,7 @@ const Cart = () => {
                 </td>
                 <td className="p-2 text-center font-mono">{Number(c.price).toFixed(2)}</td>
                 <td className="p-2 text-center text-[11px] text-[#666] max-w-[180px]">
-                  <span className="whitespace-pre-line break-words">{c.base ?? "—"}</span>
+                  <span className="whitespace-pre-line break-words">{publicBase(c.base) || "—"}</span>
                 </td>
                 <td className="p-2 text-center">
                   <button
@@ -243,12 +293,13 @@ const Cart = () => {
       </div>
 
       <p className="mt-3 text-[12px] text-[#777]">
-        Checking runs <b>automatically for refund cards only</b> — right after purchase, ${checkFee.toFixed(2)} per card.
-        DEAD cards are instantly refunded to your main balance. Non-refund cards are never checked and never refunded.
+        Checking is <b>manual and only for refund cards</b> — the ${checkFee.toFixed(2)} per-card fee is taken at purchase, then you
+        start the checker from the "Check cards" panel above. DEAD cards are instantly refunded to your main balance.
+        Non-refund cards are never checked and never refunded.
       </p>
 
       {scanning && <ScanOverlay count={refundables.length} />}
-      {checks && <CheckResultDialog checks={checks} onClose={() => { setChecks(null); nav("/orders"); }} />}
+      {checks && <CheckResultDialog checks={checks} onClose={() => { setChecks(null); void loadPending(); }} />}
     </AppShell>
   );
 };
