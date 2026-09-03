@@ -132,11 +132,47 @@ const AdminSiteSettings = () => {
 
         <Section icon={ShieldCheck} title="Refund checker">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Live rate (%)">
-              <Input type="number" step="1" min="0" max="100" value={s.refund_live_rate} onChange={(e) => set("refund_live_rate", Number(e.target.value))} />
-              <p className="text-[10px] text-muted-foreground mt-1">
-                Only refundable cards are checked at purchase. Example: 60 = about 6 live out of 10.
-                Dead cards are refunded automatically to the buyer's main balance. Non-refundable cards are never checked.
+            <Field label="Live / Dead ratio (%)">
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {[50, 60, 70, 80, 90].map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => set("refund_live_rate", r)}
+                    className={`rounded-md border px-2.5 py-1 text-[11px] transition ${
+                      Number(s.refund_live_rate) === r
+                        ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-400"
+                        : "border-border/50 text-muted-foreground hover:bg-secondary/50"
+                    }`}
+                  >
+                    {r}% / {100 - r}%
+                  </button>
+                ))}
+              </div>
+              <Input
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value={s.refund_live_rate}
+                onChange={(e) => set("refund_live_rate", Number(e.target.value))}
+                className="h-2 p-0 cursor-pointer"
+              />
+              <div className="mt-2 flex items-center gap-2">
+                <Input type="number" step="1" min="0" max="100" value={s.refund_live_rate} onChange={(e) => set("refund_live_rate", Number(e.target.value))} className="w-24" />
+                <span className="text-[11px] text-muted-foreground">
+                  LIVE {Math.round(Number(s.refund_live_rate) || 0)}% / DEAD {100 - Math.round(Number(s.refund_live_rate) || 0)}%
+                </span>
+              </div>
+              <div className="mt-2 flex h-2 w-full overflow-hidden rounded-full bg-secondary">
+                <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, Math.max(0, Number(s.refund_live_rate) || 0))}%` }} />
+                <div className="h-full flex-1 bg-red-500/70" />
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-2">
+                Exact quota, not random: buying 10 refundable cards at {Math.round(Number(s.refund_live_rate) || 0)}% gives{" "}
+                <b>{Math.round((Number(s.refund_live_rate) || 0) / 10)} LIVE</b> and{" "}
+                <b>{10 - Math.round((Number(s.refund_live_rate) || 0) / 10)} DEAD</b>.
+                Dead cards are refunded instantly to the buyer's main balance. Non-refundable cards are never checked.
               </p>
             </Field>
             <Field label="Check fee ($ per card)">
