@@ -27,10 +27,23 @@ async function call<T>(path: string, params: Record<string, string>): Promise<T>
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   url.searchParams.set("api_key", apiKey());
   const res = await fetch(url.toString(), { headers: { accept: "application/json" } });
-  const json = (await res.json()) as { status?: string; data?: unknown; message?: string };
+  const raw = await res.text();
+  let json: { status?: string; data?: unknown; message?: string } = {};
+  try {
+    json = JSON.parse(raw) as typeof json;
+  } catch {
+    console.error("plisio non-json response", res.status, raw.slice(0, 300));
+    throw new Error(`payment_gateway_error: HTTP ${res.status}`);
+  }
   if (!res.ok || json.status !== "success" || !json.data) {
-    console.error("plisio error", res.status, json?.message);
-    throw new Error("payment_gateway_error");
+    const detail =
+      json.message ??
+      (json.data && typeof json.data === "object"
+        ? (json.data as { message?: string }).message
+        : undefined) ??
+      raw.slice(0, 200);
+    console.error("plisio error", res.status, detail);
+    throw new Error(`payment_gateway_error: ${detail}`);
   }
   return json.data as T;
 }
