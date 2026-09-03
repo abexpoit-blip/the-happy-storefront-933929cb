@@ -193,7 +193,7 @@ const Cart = () => {
             className="h-8 px-5 rounded-md bg-gradient-to-r from-[#2e7d32] to-[#43a047] text-white text-[13px] shadow-[0_4px_14px_rgba(46,125,50,0.35)] hover:brightness-110 transition disabled:opacity-60 inline-flex items-center gap-2"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
-            Buy {chosen.length || ""}{refundables.length ? " & check" : " now"}
+            Buy {chosen.length || ""} now
           </button>
         </div>
       </div>
@@ -293,12 +293,13 @@ const Cart = () => {
       </div>
 
       <p className="mt-3 text-[12px] text-[#777]">
-        Checking runs <b>automatically for refund cards only</b> — right after purchase, ${checkFee.toFixed(2)} per card.
-        DEAD cards are instantly refunded to your main balance. Non-refund cards are never checked and never refunded.
+        Checking is <b>manual and only for refund cards</b> — the ${checkFee.toFixed(2)} per-card fee is taken at purchase, then you
+        start the checker from the "Check cards" panel above. DEAD cards are instantly refunded to your main balance.
+        Non-refund cards are never checked and never refunded.
       </p>
 
       {scanning && <ScanOverlay count={refundables.length} />}
-      {checks && <CheckResultDialog checks={checks} onClose={() => { setChecks(null); nav("/orders"); }} />}
+      {checks && <CheckResultDialog checks={checks} onClose={() => { setChecks(null); void loadPending(); }} />}
     </AppShell>
   );
 };
