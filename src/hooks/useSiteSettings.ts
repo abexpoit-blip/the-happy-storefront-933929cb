@@ -15,6 +15,7 @@ export interface SiteSettings {
   deposit_fee_percent: number;
   deposit_fee_flat: number;
   min_deposit: number;
+  refund_live_rate: number;
 }
 
 export const DEFAULT_SETTINGS: SiteSettings = {
@@ -37,6 +38,7 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   deposit_fee_percent: 0,
   deposit_fee_flat: 0,
   min_deposit: 5,
+  refund_live_rate: 60,
 };
 
 let cache: SiteSettings | null = null;
