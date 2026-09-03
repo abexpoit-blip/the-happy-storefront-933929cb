@@ -75,7 +75,9 @@ export async function createLtcInvoice(input: {
     fail_callback_url: input.callbackUrl,
     success_invoice_url: input.successUrl,
     fail_invoice_url: input.failUrl,
-    redirect_to_invoice: "true",
+    // Server-side calls must receive invoice JSON. When true, fetch follows
+    // the hosted checkout redirect and returns an HTTP 200 HTML page instead.
+    redirect_to_invoice: "false",
     expire_min: "30",
     email: input.email,
   });
