@@ -124,6 +124,7 @@ export function ScorpionAuthShell({
   title = "Zoru Shop",
   tagline,
   accent = "blue",
+  fire = false,
 }: Props) {
   return (
     <main
@@ -147,6 +148,22 @@ export function ScorpionAuthShell({
         @keyframes fade-up {
           from { opacity: 0; transform: translateY(14px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fire-breath {
+          0% { transform: translateX(-50%) scaleY(0) scaleX(0.4); opacity: 0; }
+          12% { opacity: 1; }
+          45% { transform: translateX(-50%) scaleY(1.15) scaleX(1.15); opacity: 1; }
+          100% { transform: translateX(-50%) scaleY(1.35) scaleX(0.9); opacity: 0; }
+        }
+        @keyframes fire-spark {
+          0% { transform: translate(-50%, 0) scale(0.5); opacity: 0; }
+          15% { opacity: 1; }
+          100% { transform: translate(calc(-50% + var(--dx)), var(--dy)) scale(0.2); opacity: 0; }
+        }
+        @keyframes dragon-roar {
+          0%, 100% { transform: translateY(0) scale(1); }
+          20% { transform: translateY(-10px) scale(1.08); filter: brightness(1.5) drop-shadow(0 0 24px rgba(255,120,20,0.95)); }
+          55% { transform: translateY(-4px) scale(1.04); filter: brightness(1.25) drop-shadow(0 0 14px rgba(255,80,20,0.8)); }
         }
       `}</style>
 
