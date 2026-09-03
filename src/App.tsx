@@ -24,6 +24,7 @@ const AdminSiteSettings = lazy(() => import("./pages/AdminSiteSettings"));
 const Cart = lazy(() => import("./pages/Cart"));
 const Orders = lazy(() => import("./pages/Orders"));
 const Recharge = lazy(() => import("./pages/Recharge"));
+const Referrals = lazy(() => import("./pages/Referrals"));
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminCards = lazy(() => import("./pages/AdminCards"));
 const AdminPaymentGateway = lazy(() => import("./pages/AdminPaymentGateway"));
@@ -85,6 +86,8 @@ const App = () => (
             <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
             <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
             <Route path="/recharge" element={<ProtectedRoute><Recharge /></ProtectedRoute>} />
+            <Route path="/referrals" element={<ProtectedRoute><Referrals /></ProtectedRoute>} />
+
 
             <Route path="*" element={<NotFound />} />
           </Routes>

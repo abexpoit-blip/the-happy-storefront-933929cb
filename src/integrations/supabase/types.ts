@@ -458,6 +458,8 @@ export type Database = {
           created_at: string
           email: string | null
           id: string
+          referral_code: string | null
+          referred_by: string | null
           telegram: string | null
           updated_at: string
           username: string
@@ -469,6 +471,8 @@ export type Database = {
           created_at?: string
           email?: string | null
           id: string
+          referral_code?: string | null
+          referred_by?: string | null
           telegram?: string | null
           updated_at?: string
           username: string
@@ -480,9 +484,38 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          referral_code?: string | null
+          referred_by?: string | null
           telegram?: string | null
           updated_at?: string
           username?: string
+        }
+        Relationships: []
+      }
+      referrals: {
+        Row: {
+          bonus_amount: number
+          created_at: string
+          id: string
+          paid_at: string
+          referee_id: string
+          referrer_id: string
+        }
+        Insert: {
+          bonus_amount?: number
+          created_at?: string
+          id?: string
+          paid_at?: string
+          referee_id: string
+          referrer_id: string
+        }
+        Update: {
+          bonus_amount?: number
+          created_at?: string
+          id?: string
+          paid_at?: string
+          referee_id?: string
+          referrer_id?: string
         }
         Relationships: []
       }
@@ -546,6 +579,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      award_referral_bonus: { Args: { _user_id: string }; Returns: boolean }
       expire_stale_deposits: { Args: never; Returns: number }
       has_role: {
         Args: {

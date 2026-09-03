@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { authApi, setToken, ApiError } from "@/lib/api";
 import { toast } from "sonner";
-import { Loader2, User as UserIcon, Lock, Eye, EyeOff, ShieldCheck, Zap, BadgeCheck, Send } from "lucide-react";
+import { Loader2, User as UserIcon, Lock, Eye, EyeOff, ShieldCheck, Zap, BadgeCheck, Send, Gift } from "lucide-react";
 import Seo from "@/components/Seo";
 import { useAuth } from "@/hooks/useAuth";
 import { ScorpionAuthShell } from "@/components/ScorpionAuthShell";
@@ -19,6 +19,7 @@ const Auth = () => {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [username, setUsername] = useState("");
   const [telegram, setTelegram] = useState("");
+  const [refCode, setRefCode] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -33,6 +34,11 @@ const Auth = () => {
       setUsername(prefill);
       sessionStorage.removeItem("zorushop.prefillEmail");
     }
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref) {
+      setRefCode(ref.trim().toUpperCase());
+      setMode("signup");
+    }
   }, []);
 
   const submit = async (e: React.FormEvent) => {
@@ -45,7 +51,9 @@ const Auth = () => {
           username: username.trim(),
           password,
           telegram: telegram.trim() || undefined,
+          ref: refCode.trim() || undefined,
         });
+
         if (!result.token) {
           setMode("login");
           toast.success("Аккаунт создан. Войдите в систему.");
@@ -133,6 +141,21 @@ const Auth = () => {
               />
             </div>
           )}
+
+          {mode === "signup" && (
+            <div className="relative group">
+              <Gift className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 group-focus-within:text-[#ffb300] transition-colors" />
+              <input
+                type="text"
+                value={refCode}
+                onChange={(e) => setRefCode(e.target.value.toUpperCase())}
+                placeholder="Реферальный код (необязательно)"
+                className={inputCls}
+              />
+            </div>
+          )}
+
+
 
 
           <div className="relative group">

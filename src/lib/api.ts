@@ -209,8 +209,9 @@ function authMessage(raw: string): string {
 }
 
 export const authApi = {
-  signup: async (data: { email?: string; username: string; password: string; telegram?: string }): Promise<AuthResult> => {
+  signup: async (data: { email?: string; username: string; password: string; telegram?: string; ref?: string }): Promise<AuthResult> => {
     const email = toAuthEmail(data.username); // username-based auth email
+    const ref = (data.ref ?? "").trim().toUpperCase();
     const { data: res, error } = await supabase.auth.signUp({
       email,
       password: data.password,
@@ -219,10 +220,12 @@ export const authApi = {
           username: data.username,
           real_email: data.email || null,
           telegram: data.telegram?.trim() ? data.telegram.trim().replace(/^@/, "") : null,
+          ref: ref || null,
         },
         emailRedirectTo: `${window.location.origin}/`,
       },
     });
+
     if (error) throw new ApiError(400, authMessage(error.message));
     if (!res.user) throw new ApiError(400, "Не удалось создать аккаунт");
     const user = await loadRolesAndProfile(res.user.id);
