@@ -77,6 +77,63 @@ export type Database = {
         }
         Relationships: []
       }
+      card_checks: {
+        Row: {
+          bin: string | null
+          created_at: string
+          fee: number
+          id: string
+          last_digits: string | null
+          order_id: string | null
+          price: number
+          product_id: string | null
+          refunded: number
+          status: string
+          user_id: string
+        }
+        Insert: {
+          bin?: string | null
+          created_at?: string
+          fee?: number
+          id?: string
+          last_digits?: string | null
+          order_id?: string | null
+          price?: number
+          product_id?: string | null
+          refunded?: number
+          status: string
+          user_id: string
+        }
+        Update: {
+          bin?: string | null
+          created_at?: string
+          fee?: number
+          id?: string
+          last_digits?: string | null
+          order_id?: string | null
+          price?: number
+          product_id?: string | null
+          refunded?: number
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_checks_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_checks_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           active: boolean
@@ -455,6 +512,7 @@ export type Database = {
           avatar_url: string | null
           balance: number
           blocked: boolean
+          bonus_balance: number
           created_at: string
           email: string | null
           id: string
@@ -468,6 +526,7 @@ export type Database = {
           avatar_url?: string | null
           balance?: number
           blocked?: boolean
+          bonus_balance?: number
           created_at?: string
           email?: string | null
           id: string
@@ -481,6 +540,7 @@ export type Database = {
           avatar_url?: string | null
           balance?: number
           blocked?: boolean
+          bonus_balance?: number
           created_at?: string
           email?: string | null
           id?: string
@@ -564,6 +624,10 @@ export type Database = {
     }
     Functions: {
       admin_adjust_balance: {
+        Args: { _amount: number; _description?: string; _user_id: string }
+        Returns: undefined
+      }
+      admin_adjust_bonus: {
         Args: { _amount: number; _description?: string; _user_id: string }
         Returns: undefined
       }
