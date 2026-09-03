@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Trash2, Loader2, ShieldCheck, ShieldOff, Radar, Sparkles, ShoppingCart, Wallet, CreditCard } from "lucide-react";
 import { PageHero, StatCard } from "@/components/PageHero";
 import { getCart, removeFromCart, clearCart, onCartChange, type CartLine } from "@/lib/cart";
-import { purchaseProduct, listChecksForOrders, type CardCheck } from "@/lib/store";
+import { purchaseProduct, listChecksForOrders, listPendingChecks, runCardChecks, type CardCheck } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { publicBase } from "@/lib/baseLabel";
