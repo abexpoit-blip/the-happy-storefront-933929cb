@@ -49,11 +49,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
       return;
     }
-    if (loadedForUid.current === uid) return;
+    if (loadedForUid.current === uid) { setLoading(false); return; }
     loadedForUid.current = uid;
 
     setLoading(true);
     setProfileError(null);
+    // Watchdog: never let the app hang on "Загрузка…" if the network stalls.
+    const watchdog = setTimeout(() => setLoading(false), 8000);
+
     try {
       const [{ data: p, error: pErr }, { data: roles }] = await Promise.all([
         supabase.from("profiles").select("id, username, email, avatar_url, balance, bonus_balance, blocked").eq("id", uid).maybeSingle(),
