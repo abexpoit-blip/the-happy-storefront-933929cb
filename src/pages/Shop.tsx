@@ -8,6 +8,7 @@ import { listProducts, type Product } from "@/lib/store";
 import { addToCart, cartCount, onCartChange } from "@/lib/cart";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { publicBase } from "@/lib/baseLabel";
 import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode } from "@/lib/brands";
 
 const PAGE_SIZES = [10, 20, 50, 100];
@@ -159,7 +160,7 @@ const Shop = () => {
             className="h-8 w-full min-w-0 lg:w-[160px] rounded-md border border-[#dcdcdc] px-2 text-[13px] outline-none bg-white focus:border-[#2196f3] focus:ring-2 focus:ring-[#2196f3]/15 transition"
           >
             <option value="all">base</option>
-            {bases.map((b) => <option key={b} value={b}>{b}</option>)}
+            {bases.map((b) => <option key={b} value={b}>{publicBase(b)}</option>)}
           </select>
         </Field>
         <Field label="REFUND">
@@ -334,7 +335,7 @@ const Shop = () => {
                 <td className="p-2 text-center">{c.has_email ? "yes" : "no"}</td>
                 <td className="p-2 text-center font-mono font-semibold text-[#1f2d3d]">{Number(c.price).toFixed(2)}</td>
                 <td className="p-2 text-center text-[11px] text-[#666] max-w-[180px]">
-                  <span className="whitespace-pre-line break-words">{c.base ?? "—"}</span>
+                  <span className="whitespace-pre-line break-words">{publicBase(c.base) || "—"}</span>
                 </td>
                 <td className="p-2 text-center">
                   {c.delivery_type === "key" && c.stock <= 0 ? (

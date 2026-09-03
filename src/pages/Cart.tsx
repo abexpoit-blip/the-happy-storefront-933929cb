@@ -9,6 +9,7 @@ import { getCart, removeFromCart, clearCart, onCartChange, type CartLine } from 
 import { purchaseProduct, listChecksForOrders, type CardCheck } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { publicBase } from "@/lib/baseLabel";
 import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode } from "@/lib/brands";
 
 const Cart = () => {
@@ -217,7 +218,7 @@ const Cart = () => {
                 </td>
                 <td className="p-2 text-center font-mono">{Number(c.price).toFixed(2)}</td>
                 <td className="p-2 text-center text-[11px] text-[#666] max-w-[180px]">
-                  <span className="whitespace-pre-line break-words">{c.base ?? "—"}</span>
+                  <span className="whitespace-pre-line break-words">{publicBase(c.base) || "—"}</span>
                 </td>
                 <td className="p-2 text-center">
                   <button
