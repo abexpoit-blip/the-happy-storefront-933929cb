@@ -12,6 +12,7 @@ import {
   type SupportTicket,
   type SupportMessage,
 } from "@/lib/support";
+import { PageHero } from "@/components/PageHero";
 
 const statusStyle: Record<string, string> = {
   open: "bg-[#fff5e6] text-[#e6892b] border-[#ffdcae]",
@@ -112,6 +113,16 @@ const Support = () => {
   return (
     <AppShell>
       <Seo title="Support | Zoru Shop" description="Open a support ticket and chat with our team." path="/support" />
+
+      <PageHero
+        eyebrow="Support center"
+        eyebrowIcon={LifeBuoy}
+        title="Need help? Talk to"
+        highlight="our team"
+        description="Open a ticket about deposits, orders, refunds or cards. Replies land in the same thread and you get a status update on every answer."
+      />
+
+
 
       <div className="rounded-2xl border border-[#e6e6e6] bg-gradient-to-r from-white via-[#fbfcff] to-[#eef4ff] px-5 py-4 flex flex-wrap items-center gap-3 shadow-[0_6px_22px_rgba(20,30,60,0.07)]">
         <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[#1f2d3d] to-[#2f4b6e] text-white shadow-[0_6px_16px_rgba(31,45,61,0.35)]">

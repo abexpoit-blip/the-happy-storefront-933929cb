@@ -16,6 +16,8 @@ const buyerNav = [
   { to: "/orders", label: "ЗАКАЗЫ" },
   { to: "/recharge", label: "ПОПОЛНЕНИЕ" },
   { to: "/referrals", label: "РЕФЕРАЛЫ" },
+  { to: "/support", label: "ПОДДЕРЖКА" },
+
 ];
 
 
