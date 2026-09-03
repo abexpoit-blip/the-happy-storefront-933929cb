@@ -14,6 +14,7 @@ const Cart = () => {
   const nav = useNavigate();
   const [items, setItems] = useState<CartLine[]>([]);
   const [busy, setBusy] = useState(false);
+  const [checks, setChecks] = useState<CardCheck[] | null>(null);
 
   useEffect(() => {
     setItems(getCart());
