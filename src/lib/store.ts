@@ -41,6 +41,8 @@ export interface Product {
   has_phone: boolean;
   has_email: boolean;
   refundable: boolean;
+  /** Present after the last-digits migration; optional so generated types stay compatible. */
+  last_digits?: string | null;
 }
 
 
@@ -538,6 +540,7 @@ export const adminPublishFullCards = async (
     exp_year: clean(c.year) || null,
     base: c.base,
     refundable: c.refundable,
+    last_digits: (c.cc || "").replace(/\D/g, "").slice(-3) || null,
     has_phone: !!clean(c.tel),
     has_email: !!clean(c.email),
   }));
@@ -553,7 +556,7 @@ export const adminPublishFullCards = async (
 
   for (const part of chunk(products, CHUNK)) {
     const { data, error } = await withRetry(async () =>
-      await supabase.from("products").insert(part).select("id, slug"),
+      await supabase.from("products").insert(part as never).select("id, slug"),
     );
     if (error) throw error;
     const keys = (data ?? [])

@@ -2,24 +2,11 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { authApi, setToken, ApiError } from "@/lib/api";
 import { toast } from "sonner";
-import { RefreshCw, X, Loader2, User as UserIcon, Lock, ShieldCheck } from "lucide-react";
-import { getSavedAccounts, removeSavedAccount, type SavedAccount } from "@/lib/accountSwitcher";
-import { ForgotPasswordDialog } from "@/components/ForgotPasswordDialog";
+import { Loader2, User as UserIcon, Lock } from "lucide-react";
 import Seo from "@/components/Seo";
 import { useAuth } from "@/hooks/useAuth";
 import { ScorpionAuthShell } from "@/components/ScorpionAuthShell";
 import { useLanguage } from "@/lib/i18n";
-
-/** Simple human check: only + and - with a non-negative answer. */
-function makeChallenge() {
-  const ai = Math.floor(Math.random() * 9) + 1;
-  const bi = Math.floor(Math.random() * 9) + 1;
-  const op = Math.random() < 0.5 ? "+" : "-";
-  const [x, y] = op === "-" && bi > ai ? [bi, ai] : [ai, bi];
-  return { a: x, b: y, op, expected: op === "+" ? x + y : x - y };
-}
-
-
 
 const Auth = () => {
   const { lang, setLang } = useLanguage();
@@ -30,23 +17,12 @@ const Auth = () => {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [captcha, setCaptcha] = useState("");
-
-  const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const [statusBanner, setStatusBanner] = useState<{ title: string; hint?: string } | null>(null);
-  const [forgotOpen, setForgotOpen] = useState(false);
-  const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([]);
   const fromPath = (loc.state as { from?: { pathname?: string } } | null)?.from?.pathname;
   const safeFrom = fromPath && fromPath !== "/auth" ? fromPath : null;
 
-  const [challenge, setChallenge] = useState(() => makeChallenge());
-  const { a, b, op, expected } = challenge;
-  const captchaOk = captcha.trim() !== "" && Number(captcha) === expected;
-
-
   useEffect(() => {
-    setSavedAccounts(getSavedAccounts());
     const prefill = sessionStorage.getItem("cruzercc.prefillEmail");
     if (prefill) {
       setUsername(prefill);
@@ -54,25 +30,9 @@ const Auth = () => {
     }
   }, []);
 
-  const pickAccount = (acc: SavedAccount) => {
-    setUsername(acc.email);
-    setMode("login");
-    setTimeout(() => document.getElementById("auth-password")?.focus(), 50);
-  };
-
-  const removeAccount = (e: React.MouseEvent, mail: string) => {
-    e.stopPropagation();
-    removeSavedAccount(mail);
-    setSavedAccounts(getSavedAccounts());
-  };
-
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatusBanner(null);
-    if (!captchaOk) {
-      setStatusBanner({ title: "Неверный проверочный код", hint: "Введите ответ, показанный на кнопке." });
-      return toast.error("Неверный проверочный код");
-    }
     setLoading(true);
     try {
       if (mode === "signup") {
@@ -149,42 +109,6 @@ const Auth = () => {
           ))}
         </div>
 
-        {savedAccounts.length > 0 && mode === "login" && (
-          <div className="mb-5">
-            <div className="text-[10px] uppercase tracking-[0.2em] text-[#ffb300]/80 font-semibold mb-2">
-              Сменить аккаунт
-            </div>
-            <div className="space-y-1.5">
-              {savedAccounts.map((acc) => (
-                <button
-                  key={acc.email}
-                  type="button"
-                  onClick={() => pickAccount(acc)}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#ffb300]/50 hover:bg-white/[0.07] transition-all group text-left"
-                >
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#ff2d2d] to-[#ffb300] text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-[0_2px_8px_rgba(255,80,20,0.4)]">
-                    {acc.username[0]?.toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-white truncate">{acc.username}</div>
-                    <div className="text-[11px] text-white/50 truncate">{acc.role} · {acc.email}</div>
-                  </div>
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => removeAccount(e, acc.email)}
-                    onKeyDown={(e) => { if (e.key === "Enter") removeAccount(e as unknown as React.MouseEvent, acc.email); }}
-                    className="opacity-0 group-hover:opacity-100 text-white/60 hover:text-white p-1 transition"
-                    aria-label="Удалить сохранённый аккаунт"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {statusBanner && (
           <div className="mb-5 rounded-lg border border-red-400/40 bg-red-500/10 backdrop-blur-sm px-3 py-2.5 text-xs text-red-200" role="alert">
             <div className="font-semibold">{statusBanner.title}</div>
@@ -232,55 +156,6 @@ const Auth = () => {
             />
           </div>
 
-          <div className="flex gap-2 items-stretch">
-            <div className="relative flex-1 group">
-              <ShieldCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 group-focus-within:text-[#ffb300] transition-colors" />
-              <input
-                type="text"
-                inputMode="numeric"
-                value={captcha}
-                onChange={(e) => setCaptcha(e.target.value)}
-                placeholder="Код"
-                className="w-full pl-11 pr-3 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white text-sm placeholder-white/35 focus:outline-none focus:border-[#ffb300]/60 focus:bg-white/[0.07] focus:shadow-[0_0_0_3px_rgba(255,179,0,0.1)] transition-all backdrop-blur-sm"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => { setCaptcha(""); setChallenge(makeChallenge()); }}
-              className="min-w-[115px] px-3 rounded-lg bg-gradient-to-br from-[#1a0505]/60 to-[#3a0a0a]/60 border border-[#ffb300]/30 flex items-center justify-center gap-2 hover:border-[#ffb300]/60 hover:shadow-[0_0_15px_rgba(255,179,0,0.2)] transition-all backdrop-blur-sm"
-              aria-label="Обновить код"
-            >
-              <span
-                className="text-base font-bold tracking-wider text-[#ffd54f] select-none"
-                style={{ fontFamily: '"Space Grotesk", serif', fontStyle: "italic" }}
-              >
-                {a}{op}{b}=?
-              </span>
-              <RefreshCw className="h-3 w-3 text-white/60" />
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between pt-1">
-            <label className="flex items-center gap-2 text-[12px] text-white/70 cursor-pointer select-none hover:text-white/90 transition">
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
-                className="h-3.5 w-3.5 accent-[#ffb300]"
-              />
-              Запомнить меня
-            </label>
-            {mode === "login" && (
-              <button
-                type="button"
-                onClick={() => setForgotOpen(true)}
-                className="text-[12px] text-white/70 hover:text-[#ffb300] transition"
-              >
-                Забыли пароль?
-              </button>
-            )}
-          </div>
-
           <button
             type="submit"
             disabled={loading}
@@ -316,13 +191,6 @@ const Auth = () => {
           </button>
         </div>
       </ScorpionAuthShell>
-
-      <ForgotPasswordDialog
-        open={forgotOpen}
-        onOpenChange={setForgotOpen}
-        defaultEmail={username.includes("@") ? username : ""}
-        redirectPath="/reset-password"
-      />
     </>
   );
 };
