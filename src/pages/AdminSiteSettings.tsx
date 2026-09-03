@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
 import { AdminLayout } from "@/components/AdminLayout";
-import { writeSiteSetting } from "@/lib/store";
+import { writeSiteSetting, adminListChecks, type CardCheck } from "@/lib/store";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Loader2, Save, Globe, Megaphone, Palette, Coins, Trash2, Plus } from "lucide-react";
+import { Loader2, Save, Globe, Megaphone, Palette, Coins, Trash2, Plus, ShieldCheck } from "lucide-react";
 import { DEFAULT_SETTINGS, refreshSiteSettings, SiteSettings } from "@/hooks/useSiteSettings";
 
 const AdminSiteSettings = () => {
   const [s, setS] = useState<SiteSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [checks, setChecks] = useState<CardCheck[]>([]);
 
   useEffect(() => {
     document.title = "Admin · Site settings";
@@ -19,6 +20,7 @@ const AdminSiteSettings = () => {
       const fresh = await refreshSiteSettings();
       setS(fresh);
       setLoading(false);
+      try { setChecks(await adminListChecks(200)); } catch { /* table not migrated yet */ }
     })();
   }, []);
 
@@ -40,6 +42,13 @@ const AdminSiteSettings = () => {
     } finally { setSaving(false); }
   };
 
+
+  const checkStats = {
+    total: checks.length,
+    live: checks.filter((c) => c.status === "live").length,
+    dead: checks.filter((c) => c.status === "dead").length,
+    refunded: checks.reduce((sum, c) => sum + c.refunded, 0),
+  };
 
   const updateTicker = (i: number, v: string) =>
     set("ticker_items", s.ticker_items.map((t, idx) => (idx === i ? v : t)));
@@ -120,6 +129,50 @@ const AdminSiteSettings = () => {
             </Field>
           </div>
         </Section>
+
+        <Section icon={ShieldCheck} title="Refund checker">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="Live rate (%)">
+              <Input type="number" step="1" min="0" max="100" value={s.refund_live_rate} onChange={(e) => set("refund_live_rate", Number(e.target.value))} />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Only refundable cards are checked at purchase. Example: 60 = about 6 live out of 10.
+                Dead cards are refunded automatically to the buyer's main balance. Non-refundable cards are never checked.
+              </p>
+            </Field>
+            <div className="grid grid-cols-3 gap-3 self-end">
+              <Stat label="Checked" value={String(checkStats.total)} />
+              <Stat label="Live / Dead" value={`${checkStats.live} / ${checkStats.dead}`} />
+              <Stat label="Refunded" value={`$${checkStats.refunded.toFixed(2)}`} />
+            </div>
+          </div>
+
+          {checks.length > 0 && (
+            <div className="mt-4 max-h-[280px] overflow-y-auto rounded-xl border border-border/40">
+              <table className="w-full text-xs">
+                <thead className="bg-secondary/40 text-muted-foreground">
+                  <tr>
+                    <th className="p-2 text-left font-normal">BIN</th>
+                    <th className="p-2 text-center font-normal">Price</th>
+                    <th className="p-2 text-center font-normal">Status</th>
+                    <th className="p-2 text-right font-normal">Refunded</th>
+                    <th className="p-2 text-right font-normal">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {checks.map((c) => (
+                    <tr key={c.id} className="border-t border-border/30">
+                      <td className="p-2 font-mono">{c.bin ?? "—"}</td>
+                      <td className="p-2 text-center font-mono">${c.price.toFixed(2)}</td>
+                      <td className={`p-2 text-center font-medium ${c.status === "live" ? "text-success" : "text-destructive"}`}>{c.status.toUpperCase()}</td>
+                      <td className="p-2 text-right font-mono">{c.refunded > 0 ? `$${c.refunded.toFixed(2)}` : "—"}</td>
+                      <td className="p-2 text-right text-muted-foreground">{new Date(c.created_at).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Section>
       </div>
     </AdminLayout>
   );
@@ -134,6 +187,13 @@ const Section = ({ icon: Icon, title, children }: { icon: React.ComponentType<{ 
       <h2 className="font-display text-lg font-bold tracking-tight">{title}</h2>
     </div>
     <div className="space-y-4">{children}</div>
+  </div>
+);
+
+const Stat = ({ label, value }: { label: string; value: string }) => (
+  <div className="rounded-xl border border-border/40 bg-secondary/20 p-3 text-center">
+    <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+    <div className="font-display text-sm mt-1">{value}</div>
   </div>
 );
 

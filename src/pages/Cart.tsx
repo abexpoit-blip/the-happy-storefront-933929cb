@@ -5,7 +5,7 @@ import Seo from "@/components/Seo";
 import { toast } from "sonner";
 import { Trash2, Loader2 } from "lucide-react";
 import { getCart, removeFromCart, clearCart, onCartChange, type CartLine } from "@/lib/cart";
-import { purchaseProduct } from "@/lib/store";
+import { purchaseProduct, listChecksForOrders, type CardCheck } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
 import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode } from "@/lib/brands";
 
@@ -14,6 +14,7 @@ const Cart = () => {
   const nav = useNavigate();
   const [items, setItems] = useState<CartLine[]>([]);
   const [busy, setBusy] = useState(false);
+  const [checks, setChecks] = useState<CardCheck[] | null>(null);
 
   useEffect(() => {
     setItems(getCart());
@@ -29,20 +30,24 @@ const Cart = () => {
     setBusy(true);
     let ok = 0;
     const failed: string[] = [];
+    const orderIds: string[] = [];
     try {
       for (const it of items) {
         try {
-          await purchaseProduct(it.id, 1);
+          const orderId = await purchaseProduct(it.id, 1);
+          if (orderId) orderIds.push(orderId);
           removeFromCart(it.id);
           ok++;
         } catch (e) {
           failed.push(it.bin ?? it.title);
         }
       }
+      const results = await listChecksForOrders(orderIds);
       void refresh?.();
       if (ok > 0) {
         toast.success(`Куплено: ${ok}`);
-        nav("/orders");
+        if (results.length > 0) setChecks(results);
+        else nav("/orders");
       }
       if (failed.length) toast.error(`Не удалось: ${failed.join(", ")}`);
     } finally {
@@ -133,7 +138,68 @@ const Cart = () => {
           </tbody>
         </table>
       </div>
+
+      {checks && <CheckResultDialog checks={checks} onClose={() => { setChecks(null); nav("/orders"); }} />}
     </AppShell>
+  );
+};
+
+const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: () => void }) => {
+  const live = checks.filter((c) => c.status === "live");
+  const dead = checks.filter((c) => c.status === "dead");
+  const refunded = dead.reduce((s, c) => s + Number(c.refunded), 0);
+  const rate = checks.length ? Math.round((live.length / checks.length) * 100) : 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-lg bg-white border border-[#e6e6e6] shadow-xl">
+        <div className="px-5 py-3 border-b border-[#eee] flex items-center justify-between">
+          <span className="text-[14px] font-medium text-[#333]">Результат проверки (refund карты)</span>
+          <span className="text-[12px] text-[#888]">LIVE {rate}%</span>
+        </div>
+
+        <div className="grid grid-cols-3 text-center text-[13px] border-b border-[#eee]">
+          <div className="p-3 border-r border-[#f0f0f0]">
+            <div className="text-[11px] text-[#888]">Проверено</div>
+            <div className="font-mono text-[#333]">{checks.length}</div>
+          </div>
+          <div className="p-3 border-r border-[#f0f0f0]">
+            <div className="text-[11px] text-[#888]">Live / Dead</div>
+            <div className="font-mono"><span className="text-[#2e7d32]">{live.length}</span> / <span className="text-[#f56c6c]">{dead.length}</span></div>
+          </div>
+          <div className="p-3">
+            <div className="text-[11px] text-[#888]">Возврат</div>
+            <div className="font-mono text-[#2e7d32]">${refunded.toFixed(2)}</div>
+          </div>
+        </div>
+
+        <div className="max-h-[260px] overflow-y-auto">
+          <table className="w-full text-[12px]">
+            <tbody>
+              {checks.map((c) => (
+                <tr key={c.id} className="border-b border-[#f5f5f5]">
+                  <td className="p-2 font-mono text-[#333]">{c.bin ?? "—"}<span className="text-[#bbb]">••••</span>{c.last_digits ?? ""}</td>
+                  <td className="p-2 text-center font-mono">${Number(c.price).toFixed(2)}</td>
+                  <td className={`p-2 text-center font-medium ${c.status === "live" ? "text-[#2e7d32]" : "text-[#f56c6c]"}`}>
+                    {c.status === "live" ? "LIVE" : "DEAD"}
+                  </td>
+                  <td className="p-2 text-right font-mono text-[#2e7d32]">
+                    {c.status === "dead" ? `+$${Number(c.refunded).toFixed(2)}` : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="px-5 py-3 border-t border-[#eee] flex items-center justify-between gap-3">
+          <span className="text-[11px] text-[#888]">Сумма за DEAD карты возвращена на основной баланс.</span>
+          <button onClick={onClose} className="h-8 px-5 bg-[#e8f5e9] border border-[#c8e6c9] text-[#2e7d32] text-[13px] hover:bg-[#dcedc8]">
+            Ок
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
 
