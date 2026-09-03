@@ -13,6 +13,8 @@ export interface CartLine {
   state: string | null;
   zip: string | null;
   price: number;
+  refundable?: boolean;
+  last_digits?: string | null;
 }
 
 const KEY = "zoru_cart_v1";
