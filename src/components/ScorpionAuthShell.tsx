@@ -224,8 +224,13 @@ export function ScorpionAuthShell({
                 <div className="flex justify-center mb-4">
                   <div
                     className="relative h-24 w-24"
-                    style={{ animation: "dragon-float 4.5s ease-in-out infinite" }}
+                    style={{
+                      animation: fire
+                        ? "dragon-roar 1.2s ease-out both"
+                        : "dragon-float 4.5s ease-in-out infinite",
+                    }}
                   >
+                    {fire && <FireBreath />}
                     <div
                       className="absolute inset-[-14px] rounded-full blur-xl opacity-70"
                       style={{
