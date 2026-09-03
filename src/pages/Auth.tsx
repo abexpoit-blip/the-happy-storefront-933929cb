@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { authApi, setToken, ApiError } from "@/lib/api";
 import { toast } from "sonner";
-import { Loader2, User as UserIcon, Lock, Mail, Eye, EyeOff, ShieldCheck, Zap, BadgeCheck } from "lucide-react";
+import { Loader2, User as UserIcon, Lock, Eye, EyeOff, ShieldCheck, Zap, BadgeCheck } from "lucide-react";
 import Seo from "@/components/Seo";
 import { useAuth } from "@/hooks/useAuth";
 import { ScorpionAuthShell } from "@/components/ScorpionAuthShell";
@@ -16,9 +16,7 @@ const Auth = () => {
   const nav = useNavigate();
   const loc = useLocation();
   const { refresh } = useAuth();
-  const [mode, setMode] = useState<"login" | "signup">("login");
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -40,24 +38,14 @@ const Auth = () => {
     setStatusBanner(null);
     setLoading(true);
     try {
-      if (mode === "signup") {
-        const fakeEmail = email || `${username.toLowerCase()}@zoru.cc`;
-        const result = await authApi.signup({ email: fakeEmail, username, password });
-        setToken(result.token);
-        await refresh();
-        toast.success("Аккаунт создан");
-        setFire(true);
-        setTimeout(() => nav("/shop", { replace: true }), 950);
-      } else {
-        const result = await authApi.login({ identifier: username.trim(), password });
-        setToken(result.token);
-        await refresh();
-        const destination = safeFrom ?? (result.user.role === "admin" ? "/admin" : "/shop");
+      const result = await authApi.login({ identifier: username.trim(), password });
+      setToken(result.token);
+      await refresh();
+      const destination = safeFrom ?? (result.user.role === "admin" ? "/admin" : "/shop");
 
-        toast.success("С возвращением");
-        setFire(true);
-        setTimeout(() => nav(destination, { replace: true }), 950);
-      }
+      toast.success("С возвращением");
+      setFire(true);
+      setTimeout(() => nav(destination, { replace: true }), 950);
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         if (err.status === 403 && err.message === "Use admin login") {
@@ -92,30 +80,6 @@ const Auth = () => {
         tagline="Поддержка — только через тикеты на сайте. Мы не используем Telegram и Discord."
       >
 
-        {/* Tabs */}
-        <div className="relative flex mb-6 p-1 rounded-xl bg-white/[0.04] border border-white/10 backdrop-blur-sm">
-          <span
-            className="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg transition-all duration-300 ease-out"
-            style={{
-              left: mode === "login" ? 4 : "calc(50%)",
-              background: "linear-gradient(135deg, #ff2d2d 0%, #ff6b1a 50%, #ffb300 100%)",
-              boxShadow: "0 4px 15px rgba(255,80,20,0.4)",
-            }}
-          />
-          {(["login", "signup"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              className={`relative z-10 flex-1 py-2 text-[12px] font-semibold tracking-[0.15em] uppercase rounded-lg transition-colors ${
-                mode === m ? "text-white" : "text-white/60 hover:text-white/90"
-              }`}
-            >
-              {m === "login" ? "Вход" : "Регистрация"}
-            </button>
-          ))}
-        </div>
-
         {statusBanner && (
           <div className="mb-5 rounded-lg border border-red-400/40 bg-red-500/10 backdrop-blur-sm px-3 py-2.5 text-xs text-red-200" role="alert">
             <div className="font-semibold">{statusBanner.title}</div>
@@ -136,24 +100,6 @@ const Auth = () => {
             />
           </div>
 
-          <div
-            className="grid transition-all duration-300 ease-out"
-            style={{ gridTemplateRows: mode === "signup" ? "1fr" : "0fr", opacity: mode === "signup" ? 1 : 0 }}
-          >
-            <div className="overflow-hidden">
-              <div className="relative group">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 group-focus-within:text-[#ffb300] transition-colors" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Email (необязательно)"
-                  tabIndex={mode === "signup" ? 0 : -1}
-                  className={inputCls}
-                />
-              </div>
-            </div>
-          </div>
 
           <div className="relative group">
             <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 group-focus-within:text-[#ffb300] transition-colors" />
@@ -193,7 +139,7 @@ const Auth = () => {
             />
             <span className="relative flex items-center gap-2">
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {loading ? "Выполняется вход…" : mode === "login" ? "Войти" : "Создать аккаунт"}
+              {loading ? "Выполняется вход…" : "Войти"}
             </span>
           </button>
         </form>
@@ -215,19 +161,6 @@ const Auth = () => {
           ))}
         </div>
 
-        <div className="mt-6 pt-5 border-t border-white/10 text-center">
-          <button
-            type="button"
-            onClick={() => setMode(mode === "login" ? "signup" : "login")}
-            className="text-[12px] text-white/60 hover:text-[#ffb300] transition tracking-wide"
-          >
-            {mode === "login" ? (
-              <>Нет аккаунта? <span className="text-[#ffb300] font-semibold">Зарегистрироваться</span></>
-            ) : (
-              <>Уже есть аккаунт? <span className="text-[#ffb300] font-semibold">Войти</span></>
-            )}
-          </button>
-        </div>
       </ScorpionAuthShell>
     </>
   );
