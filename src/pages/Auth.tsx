@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { authApi, setToken, ApiError } from "@/lib/api";
 import { toast } from "sonner";
-import { Loader2, User as UserIcon, Lock, Eye, EyeOff, ShieldCheck, Zap, BadgeCheck } from "lucide-react";
+import { Loader2, User as UserIcon, Lock, Eye, EyeOff, ShieldCheck, Zap, BadgeCheck, Send } from "lucide-react";
 import Seo from "@/components/Seo";
 import { useAuth } from "@/hooks/useAuth";
 import { ScorpionAuthShell } from "@/components/ScorpionAuthShell";
