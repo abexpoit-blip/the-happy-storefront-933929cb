@@ -69,7 +69,7 @@ const Shop = () => {
     });
   }, [all, q, searched]);
 
-  const [perPage, setPerPage] = useState(25);
+  const [perPage, setPerPage] = useState(20);
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(cards.length / perPage));
   useEffect(() => { setPage(1); }, [q, all.length, perPage]);
@@ -364,7 +364,7 @@ const Shop = () => {
       </div>
 
       {/* PAGINATION */}
-      {!loading && cards.length > perPage && (
+      {!loading && cards.length > 0 && (
         <div className="mt-3 flex items-center justify-end gap-1 text-[12px]">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
