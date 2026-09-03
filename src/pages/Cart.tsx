@@ -124,7 +124,7 @@ const Cart = () => {
         eyebrowIcon={ShoppingCart}
         title="Your"
         highlight="cart"
-        description={`Refund cards are checked automatically after purchase — $${checkFee.toFixed(2)} per card. DEAD cards are refunded to your main balance instantly.`}
+        description={`Only refund cards can be checked — the $${checkFee.toFixed(2)} per-card fee is charged at purchase and you start the checker yourself with the "Check cards" button. DEAD cards are refunded to your main balance instantly.`}
       />
 
       <div className="grid gap-3 sm:grid-cols-3 mb-4">
@@ -132,6 +132,31 @@ const Cart = () => {
         <StatCard label="Order total" icon={ShoppingCart} tone="green" value={`$${(total + fees).toFixed(2)}`} hint={`cards $${total.toFixed(2)} + checking $${fees.toFixed(2)}`} />
         <StatCard label="Available balance" icon={Wallet} tone="amber" value={`$${(Number(profile?.balance ?? 0) + Number(profile?.bonus_balance ?? 0)).toFixed(2)}`} hint="bonus is spent first" />
       </div>
+
+      {pending.length > 0 && (
+        <div className="mb-4 rounded-xl border border-[#2196f3]/30 bg-gradient-to-r from-[#0f1a33] via-[#132244] to-[#0f1a33] px-4 py-3.5 flex flex-wrap items-center gap-3 shadow-[0_10px_30px_rgba(15,26,51,0.35)]">
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#2196f3]/15 border border-[#2196f3]/30">
+            <Radar className="h-4.5 w-4.5 text-[#5ac8fa]" />
+          </span>
+          <div className="min-w-[200px]">
+            <div className="text-[13.5px] font-semibold text-white">
+              {pending.length} refund card{pending.length === 1 ? "" : "s"} waiting for a check
+            </div>
+            <div className="text-[12px] text-white/60">
+              Checking is manual — press the button to open the checker. DEAD cards are refunded instantly.
+            </div>
+          </div>
+          <button
+            onClick={() => void runChecker()}
+            disabled={scanning}
+            className="ml-auto h-9 px-5 rounded-md bg-gradient-to-r from-[#2196f3] to-[#5ac8fa] text-white text-[13px] font-semibold shadow-[0_6px_18px_rgba(33,150,243,0.4)] hover:brightness-110 transition disabled:opacity-60 inline-flex items-center gap-2"
+          >
+            {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
+            Check cards
+          </button>
+        </div>
+      )}
+
 
       <div className="rounded-xl border border-[#e6e6e6] bg-gradient-to-r from-white via-[#fbfcff] to-[#f4f7ff] px-4 py-3 flex flex-wrap items-center gap-3 text-[13px] shadow-[0_2px_10px_rgba(20,30,60,0.06)]">
         <span className="font-semibold text-[#1f2d3d]">Cart</span>
