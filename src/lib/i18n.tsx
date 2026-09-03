@@ -204,8 +204,10 @@ const DICT: Record<string, string> = {
   "Личный кабинет покупателя, живая лента поступлений и объявления.":
     "Buyer dashboard, live restock feed and announcements.",
   "Telegram-канал:": "Telegram channel:",
-  "Остерегайтесь поддельной поддержки Zoru Shop. По вопросам и предложениям пишите нам в Telegram.":
-    "Beware of fake Zoru Shop support. For questions and suggestions write to us on Telegram.",
+  "Остерегайтесь поддельной поддержки Zoru Shop. У нас нет Telegram и Discord — любые контакты в мессенджерах от имени магазина являются мошенниками.":
+    "Beware of fake Zoru Shop support. We have no Telegram or Discord — any messenger contacts claiming to be the shop are scammers.",
+  "Поддержка — только через тикеты на сайте. Мы не используем Telegram и Discord.":
+    "Support is only available via on-site tickets. We do not use Telegram or Discord.",
   "Если вы нашли ошибку или уязвимость, сообщите об этом через тикеты.":
     "If you find a bug or vulnerability, report it through tickets.",
   "Владельцы магазина не несут ответственности за то, как вы используете информацию с этого ресурса.":
@@ -224,7 +226,8 @@ const DICT: Record<string, string> = {
   "↗ АВТОЗАМЕНА В ТЕЧЕНИЕ 5 МИНУТ": "↗ AUTO-REPLACE WITHIN 5 MINUTES",
   "● 99.4% ВАЛИДНОСТЬ НА ЭТОЙ НЕДЕЛЕ": "● 99.4% VALIDITY THIS WEEK",
   "● ЖИВОЙ СКЛАД · СВЕЖИЕ ПОСТУПЛЕНИЯ ЕЖЕДНЕВНО": "● LIVE STOCK · FRESH RESTOCKS DAILY",
-  "● ПОДДЕРЖКА 24/7 · TELEGRAM": "● 24/7 SUPPORT · TELEGRAM",
+  "● ПОДДЕРЖКА 24/7 · TELEGRAM": "● 24/7 SUPPORT",
+  "● ПОДДЕРЖКА 24/7 · ТИКЕТЫ": "● 24/7 SUPPORT · TICKETS",
   "★ ПРОВЕРЕННЫЕ ПРОДАВЦЫ · МГНОВЕННАЯ ДОСТАВКА": "★ VERIFIED SELLERS · INSTANT DELIVERY",
   "BASE (качество / название базы)": "BASE (quality / base name)",
   "BIN (первые 6 цифр)": "BIN (first 6 digits)",

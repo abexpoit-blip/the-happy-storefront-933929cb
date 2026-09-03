@@ -123,19 +123,12 @@ const Index = () => {
 
         <Panel title="Контактная информация">
           <div className="px-6 py-5 space-y-3 text-[13px] text-[#333] border-l-2 border-[#e6e6e6] ml-3 leading-[1.7]">
-            <p>Остерегайтесь поддельной поддержки Zoru Shop. По вопросам и предложениям пишите нам в Telegram.</p>
+            <p>Остерегайтесь поддельной поддержки Zoru Shop. У нас нет Telegram и Discord — любые контакты в мессенджерах от имени магазина являются мошенниками.</p>
             <div>
-              <div className="text-[#333] mb-1">Telegram:</div>
-              <a href="https://t.me/zoru_support" target="_blank" rel="noreferrer" className="block text-[#1976d2] hover:underline">
-                @zoru_support
-              </a>
+              <div className="text-[#333] mb-1">Поддержка:</div>
+              <p className="block">Только через систему тикетов на сайте — раздел «Поддержка» в личном кабинете.</p>
             </div>
-            <div>
-              <div className="text-[#333] mb-1">Telegram-канал:</div>
-              <a href="https://t.me/zoru_shop" target="_blank" rel="noreferrer" className="block text-[#1976d2] hover:underline">
-                https://t.me/zoru_shop
-              </a>
-            </div>
+            <p>Ответы на вопросы, предложения и жалобы принимаются исключительно через тикеты на этом сайте.</p>
             <p className="text-[#d32f2f] font-semibold pt-2">Приглашаем продавцов присоединиться к нашей платформе</p>
           </div>
         </Panel>

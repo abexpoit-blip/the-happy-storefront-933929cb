@@ -30,7 +30,7 @@ export const DEFAULT_SETTINGS: SiteSettings = {
     "★ ПРОВЕРЕННЫЕ ПРОДАВЦЫ · МГНОВЕННАЯ ДОСТАВКА",
     "● 99.4% ВАЛИДНОСТЬ НА ЭТОЙ НЕДЕЛЕ",
     "↗ АВТОЗАМЕНА В ТЕЧЕНИЕ 5 МИНУТ",
-    "● ПОДДЕРЖКА 24/7 · TELEGRAM",
+    "● ПОДДЕРЖКА 24/7 · ТИКЕТЫ",
   ],
   default_commission_percent: 20,
   min_card_price: 1,
