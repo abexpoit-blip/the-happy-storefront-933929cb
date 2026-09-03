@@ -850,6 +850,7 @@ export interface CardCheck {
   price: number;
   status: "live" | "dead";
   refunded: number;
+  fee: number;
   created_at: string;
 }
 
@@ -867,6 +868,7 @@ const mapCheck = (r: Record<string, unknown>): CardCheck => ({
   price: num(r.price),
   status: r.status === "dead" ? "dead" : "live",
   refunded: num(r.refunded),
+  fee: num(r.fee),
   created_at: String(r.created_at ?? ""),
 });
 

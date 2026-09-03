@@ -9,6 +9,8 @@ import { purchaseProduct, listChecksForOrders, type CardCheck } from "@/lib/stor
 import { useAuth } from "@/hooks/useAuth";
 import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode } from "@/lib/brands";
 
+const CHECK_FEE = 0.03;
+
 const Cart = () => {
   const { profile, refresh } = useAuth();
   const nav = useNavigate();
@@ -25,7 +27,8 @@ const Cart = () => {
 
   const buyNow = async () => {
     if (!items.length) return toast.error("Корзина пуста");
-    if (Number(profile?.balance ?? 0) < total)
+    const spendable = Number(profile?.balance ?? 0) + Number(profile?.bonus_balance ?? 0);
+    if (spendable < total + CHECK_FEE * items.length)
       return toast.error("Недостаточно средств. Пополните баланс.");
     setBusy(true);
     let ok = 0;
@@ -63,6 +66,7 @@ const Cart = () => {
         <span className="font-medium text-[#333]">Корзина</span>
         <span className="text-[#888]">Позиций: {items.length}</span>
         <span className="text-[#888]">Итого: <span className="font-mono text-[#2e7d32]">${total.toFixed(2)}</span></span>
+        <span className="text-[#888]">Проверка: <span className="font-mono text-[#f56c6c]">${CHECK_FEE.toFixed(2)}</span> / карта (только refund)</span>
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={() => { clearCart(); toast.success("Корзина очищена"); }}
@@ -149,6 +153,7 @@ const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: 
   const dead = checks.filter((c) => c.status === "dead");
   const refunded = dead.reduce((s, c) => s + Number(c.refunded), 0);
   const rate = checks.length ? Math.round((live.length / checks.length) * 100) : 0;
+  const fee = checks.reduce((s, c) => s + Number((c as { fee?: number }).fee ?? 0), 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -193,7 +198,9 @@ const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: 
         </div>
 
         <div className="px-5 py-3 border-t border-[#eee] flex items-center justify-between gap-3">
-          <span className="text-[11px] text-[#888]">Сумма за DEAD карты возвращена на основной баланс.</span>
+          <span className="text-[11px] text-[#888]">
+            Сумма за DEAD карты возвращена на основной баланс. Комиссия проверки: ${fee.toFixed(2)}
+          </span>
           <button onClick={onClose} className="h-8 px-5 bg-[#e8f5e9] border border-[#c8e6c9] text-[#2e7d32] text-[13px] hover:bg-[#dcedc8]">
             Ок
           </button>
