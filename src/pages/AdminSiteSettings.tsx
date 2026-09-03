@@ -139,6 +139,14 @@ const AdminSiteSettings = () => {
                 Dead cards are refunded automatically to the buyer's main balance. Non-refundable cards are never checked.
               </p>
             </Field>
+            <Field label="Check fee ($ per card)">
+              <Input type="number" step="0.01" min="0" value={s.check_fee} onChange={(e) => set("check_fee", Number(e.target.value))} />
+              <p className="text-[10px] text-muted-foreground mt-1">Charged for every checked (refundable) card, on top of the card price.</p>
+            </Field>
+            <Field label="Referral bonus ($)">
+              <Input type="number" step="0.01" min="0" value={s.referral_bonus} onChange={(e) => set("referral_bonus", Number(e.target.value))} />
+              <p className="text-[10px] text-muted-foreground mt-1">One-time bonus for both inviter and invited user after the invited user's first approved deposit. Paid to the separate bonus balance.</p>
+            </Field>
             <div className="grid grid-cols-3 gap-3 self-end">
               <Stat label="Checked" value={String(checkStats.total)} />
               <Stat label="Live / Dead" value={`${checkStats.live} / ${checkStats.dead}`} />
