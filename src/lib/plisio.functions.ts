@@ -15,6 +15,7 @@ export const createCryptoInvoice = createServerFn({ method: "POST" })
 
     const { credit, fee, charged } = withFee(data.amount);
     const origin = getRequestUrl().origin;
+    const claimEmail = typeof context.claims.email === "string" ? context.claims.email : undefined;
 
     // clean up anything stale first
     await supabaseAdmin.rpc("expire_stale_deposits");
@@ -43,6 +44,7 @@ export const createCryptoInvoice = createServerFn({ method: "POST" })
         callbackUrl: `${origin}/api/public/deposit-callback`,
         successUrl: `${origin}/recharge?payment=success&deposit=${dep.id}`,
         failUrl: `${origin}/recharge?payment=failed&deposit=${dep.id}`,
+        email: claimEmail,
       });
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
