@@ -120,7 +120,20 @@ async function request<T = unknown>(
   }
 
   if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+
+  const raw = await res.text();
+  if (!raw) return undefined as T;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new ApiError(
+      res.status,
+      "Сервер вернул неверный ответ (не JSON). Попробуйте позже.",
+      ct,
+      raw.slice(0, 300),
+    );
+  }
+
 }
 
 // ── Convenience verbs ──
