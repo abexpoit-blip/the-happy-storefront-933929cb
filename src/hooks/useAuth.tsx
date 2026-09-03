@@ -49,11 +49,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
       return;
     }
-    if (loadedForUid.current === uid) return;
+    if (loadedForUid.current === uid) { setLoading(false); return; }
     loadedForUid.current = uid;
 
     setLoading(true);
     setProfileError(null);
+    // Watchdog: never let the app hang on "Загрузка…" if the network stalls.
+    const watchdog = setTimeout(() => setLoading(false), 8000);
+
     try {
       const [{ data: p, error: pErr }, { data: roles }] = await Promise.all([
         supabase.from("profiles").select("id, username, email, avatar_url, balance, bonus_balance, blocked").eq("id", uid).maybeSingle(),
@@ -82,8 +85,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setProfile(null);
       loadedForUid.current = null;
     } finally {
+      clearTimeout(watchdog);
       setLoading(false);
     }
+
   }, []);
 
   useEffect(() => {
@@ -96,9 +101,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
 
-    supabase.auth.getSession().then(({ data }) => {
-      void loadProfile(data.session?.user?.id ?? null, data.session?.user?.email ?? null);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        void loadProfile(data.session?.user?.id ?? null, data.session?.user?.email ?? null);
+      })
+      .catch(() => setLoading(false));
+
 
     return () => { sub.subscription.unsubscribe(); };
   }, [loadProfile]);

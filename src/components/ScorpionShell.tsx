@@ -9,7 +9,9 @@ const NAV = [
   { to: "/cart", label: "CAR" },
   { to: "/orders", label: "ORDER" },
   { to: "/recharge", label: "RECHARGE CENTER" },
+  { to: "/referrals", label: "REFERRAL" },
 ];
+
 
 export function ScorpionShell({ children }: { children: ReactNode }) {
   const { profile, signOut } = useAuth();
