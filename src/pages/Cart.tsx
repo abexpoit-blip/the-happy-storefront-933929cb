@@ -272,12 +272,13 @@ const Cart = () => {
                       </span>
                       <button
                         onClick={() => void runChecker()}
-                        disabled={scanning || !pending.length}
-                        title={pending.length ? "Run live/dead check" : "Buy this card first — then the checker unlocks"}
+                        disabled={scanning}
+                        title={pending.length ? "Run live/dead check" : "Buy this card first — then the checker runs"}
                         className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white bg-gradient-to-r from-[#2196f3] to-[#5ac8fa] shadow-[0_4px_12px_rgba(33,150,243,0.35)] hover:brightness-110 transition disabled:opacity-45 disabled:shadow-none"
                       >
                         {scanning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Radar className="h-3 w-3" />} Check
                       </button>
+
                     </div>
                   ) : (
                     <span className="inline-flex items-center gap-1 rounded-full bg-[#f6f6f6] text-[#999] border border-[#e6e6e6] px-2 py-0.5 text-[11px]">
