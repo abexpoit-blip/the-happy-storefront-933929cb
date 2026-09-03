@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import Seo from "@/components/Seo";
 import { toast } from "sonner";
-import { Search, RotateCcw, Loader2, Copy, CheckCircle2, X, ShoppingCart } from "lucide-react";
+import { Search, RotateCcw, Loader2, Copy, CheckCircle2, X, ShoppingCart, ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { listProducts, type Product } from "@/lib/store";
 import { addToCart, cartCount, onCartChange } from "@/lib/cart";
 import { Link } from "react-router-dom";
@@ -69,7 +70,7 @@ const Shop = () => {
     });
   }, [all, q, searched]);
 
-  const [perPage, setPerPage] = useState(20);
+  const [perPage, setPerPage] = useState(10);
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(cards.length / perPage));
   useEffect(() => { setPage(1); }, [q, all.length, perPage]);
@@ -365,39 +366,53 @@ const Shop = () => {
 
       {/* PAGINATION */}
       {!loading && cards.length > 0 && (
-        <div className="mt-3 flex items-center justify-end gap-1 text-[12px]">
-          <button
+        <nav aria-label="Shop pages" className="mt-4 mb-2 flex w-full flex-wrap items-center justify-center gap-2 text-[13px]">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="h-7 px-3 rounded-md border border-[#dcdcdc] bg-white text-[#555] hover:bg-[#f7f7f7] disabled:opacity-40"
+            className="h-9 min-w-[92px] border-[#dcdcdc] bg-white text-[#37474f] hover:bg-[#f2f8ff]"
           >
-            ‹
-          </button>
+            <ChevronLeft className="h-4 w-4" /> Prev
+          </Button>
           {pageNumbers(page, totalPages).map((n, i) =>
             n === "…" ? (
               <span key={`e${i}`} className="px-2 text-[#aaa]">…</span>
             ) : (
-              <button
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
                 key={n}
                 onClick={() => setPage(n as number)}
-                className={`h-7 min-w-[28px] px-2 rounded-md border transition ${
+                aria-current={n === page ? "page" : undefined}
+                aria-label={`Page ${n}`}
+                className={`h-9 w-9 rounded-md border transition ${
                   n === page
                     ? "border-[#1976d2] bg-gradient-to-b from-[#42a5f5] to-[#1976d2] text-white shadow-[0_4px_10px_-5px_rgba(25,118,210,0.9)]"
                     : "border-[#dcdcdc] bg-white text-[#555] hover:bg-[#f7f7f7]"
                 }`}
               >
                 {n}
-              </button>
+              </Button>
             ),
           )}
-          <button
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className="h-7 px-3 rounded-md border border-[#dcdcdc] bg-white text-[#555] hover:bg-[#f7f7f7] disabled:opacity-40"
+            className="h-9 min-w-[92px] border-[#dcdcdc] bg-white text-[#37474f] hover:bg-[#f2f8ff]"
           >
-            ›
-          </button>
-        </div>
+            Next <ChevronRight className="h-4 w-4" />
+          </Button>
+          <span className="basis-full text-center text-[12px] text-[#777]">
+            Page {page} of {totalPages} · {cards.length} cards
+          </span>
+        </nav>
       )}
 
       {buying && (
