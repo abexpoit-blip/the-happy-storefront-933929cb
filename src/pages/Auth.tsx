@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { authApi, setToken, ApiError } from "@/lib/api";
 import { toast } from "sonner";
-import { Loader2, User as UserIcon, Lock, Mail, Eye, EyeOff, ShieldCheck, Zap, BadgeCheck } from "lucide-react";
+import { Loader2, User as UserIcon, Lock, Eye, EyeOff, ShieldCheck, Zap, BadgeCheck } from "lucide-react";
 import Seo from "@/components/Seo";
 import { useAuth } from "@/hooks/useAuth";
 import { ScorpionAuthShell } from "@/components/ScorpionAuthShell";
@@ -16,9 +16,7 @@ const Auth = () => {
   const nav = useNavigate();
   const loc = useLocation();
   const { refresh } = useAuth();
-  const [mode, setMode] = useState<"login" | "signup">("login");
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -40,24 +38,14 @@ const Auth = () => {
     setStatusBanner(null);
     setLoading(true);
     try {
-      if (mode === "signup") {
-        const fakeEmail = email || `${username.toLowerCase()}@zoru.cc`;
-        const result = await authApi.signup({ email: fakeEmail, username, password });
-        setToken(result.token);
-        await refresh();
-        toast.success("Аккаунт создан");
-        setFire(true);
-        setTimeout(() => nav("/shop", { replace: true }), 950);
-      } else {
-        const result = await authApi.login({ identifier: username.trim(), password });
-        setToken(result.token);
-        await refresh();
-        const destination = safeFrom ?? (result.user.role === "admin" ? "/admin" : "/shop");
+      const result = await authApi.login({ identifier: username.trim(), password });
+      setToken(result.token);
+      await refresh();
+      const destination = safeFrom ?? (result.user.role === "admin" ? "/admin" : "/shop");
 
-        toast.success("С возвращением");
-        setFire(true);
-        setTimeout(() => nav(destination, { replace: true }), 950);
-      }
+      toast.success("С возвращением");
+      setFire(true);
+      setTimeout(() => nav(destination, { replace: true }), 950);
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         if (err.status === 403 && err.message === "Use admin login") {
@@ -91,30 +79,6 @@ const Auth = () => {
         fire={fire}
         tagline="Поддержка — только через тикеты на сайте. Мы не используем Telegram и Discord."
       >
-
-        {/* Tabs */}
-        <div className="relative flex mb-6 p-1 rounded-xl bg-white/[0.04] border border-white/10 backdrop-blur-sm">
-          <span
-            className="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg transition-all duration-300 ease-out"
-            style={{
-              left: mode === "login" ? 4 : "calc(50%)",
-              background: "linear-gradient(135deg, #ff2d2d 0%, #ff6b1a 50%, #ffb300 100%)",
-              boxShadow: "0 4px 15px rgba(255,80,20,0.4)",
-            }}
-          />
-          {(["login", "signup"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              className={`relative z-10 flex-1 py-2 text-[12px] font-semibold tracking-[0.15em] uppercase rounded-lg transition-colors ${
-                mode === m ? "text-white" : "text-white/60 hover:text-white/90"
-              }`}
-            >
-              {m === "login" ? "Вход" : "Регистрация"}
-            </button>
-          ))}
-        </div>
 
         {statusBanner && (
           <div className="mb-5 rounded-lg border border-red-400/40 bg-red-500/10 backdrop-blur-sm px-3 py-2.5 text-xs text-red-200" role="alert">
