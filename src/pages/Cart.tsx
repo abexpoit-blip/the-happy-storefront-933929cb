@@ -22,6 +22,12 @@ const Cart = () => {
   const [busy, setBusy] = useState(false);
   const [checks, setChecks] = useState<CardCheck[] | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [pending, setPending] = useState<CardCheck[]>([]);
+
+  const loadPending = async () => {
+    try { setPending(await listPendingChecks()); } catch { /* ignore */ }
+  };
+  useEffect(() => { void loadPending(); }, []);
 
   useEffect(() => {
     const sync = () => {
