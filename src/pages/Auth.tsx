@@ -191,13 +191,6 @@ const Auth = () => {
           </button>
         </div>
       </ScorpionAuthShell>
-
-      <ForgotPasswordDialog
-        open={forgotOpen}
-        onOpenChange={setForgotOpen}
-        defaultEmail={username.includes("@") ? username : ""}
-        redirectPath="/reset-password"
-      />
     </>
   );
 };
