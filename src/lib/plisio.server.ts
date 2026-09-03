@@ -26,7 +26,16 @@ async function call<T>(path: string, params: Record<string, string>): Promise<T>
   const url = new URL(`${API}${path}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   url.searchParams.set("api_key", apiKey());
-  const res = await fetch(url.toString(), { headers: { accept: "application/json" } });
+  // Invoice API calls must return JSON. Never follow a hosted-checkout
+  // redirect, otherwise fetch turns the redirect into an HTTP 200 HTML page.
+  const res = await fetch(url.toString(), {
+    headers: { accept: "application/json" },
+    redirect: "manual",
+  });
+  if (res.status >= 300 && res.status < 400) {
+    console.error("plisio unexpected redirect", res.status);
+    throw new Error(`payment_gateway_error: Unexpected redirect (HTTP ${res.status})`);
+  }
   const raw = await res.text();
   let json: { status?: string; data?: unknown; message?: string } = {};
   try {
@@ -75,9 +84,9 @@ export async function createLtcInvoice(input: {
     fail_callback_url: input.callbackUrl,
     success_invoice_url: input.successUrl,
     fail_invoice_url: input.failUrl,
-    // Server-side calls must receive invoice JSON. When true, fetch follows
-    // the hosted checkout redirect and returns an HTTP 200 HTML page instead.
-    redirect_to_invoice: "false",
+    // Do not send redirect_to_invoice at all. Some provider versions treat
+    // the mere presence of this query parameter as enabled, even when its
+    // string value is "false".
     expire_min: "30",
     email: input.email,
   });
