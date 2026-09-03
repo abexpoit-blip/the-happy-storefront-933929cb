@@ -22,6 +22,10 @@ for v in SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY; do
   fi
 done
 
+# self-hosted guard: refuse to boot against hosted supabase.co
+bash "$APP_DIR/selfhost/check-env.sh" "$APP_DIR/.env"
+
+
 if pm2 describe "$APP_NAME" >/dev/null 2>&1; then
   pm2 restart "$APP_NAME" --update-env
 else
