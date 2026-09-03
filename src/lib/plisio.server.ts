@@ -62,6 +62,7 @@ export async function createLtcInvoice(input: {
   failUrl: string;
   email?: string;
 }): Promise<NewInvoice> {
+  if (!input.email) throw new Error("payment_gateway_error: Customer email is missing");
   return call<NewInvoice>("/invoices/new", {
     source_currency: "USD",
     source_amount: input.usdAmount.toFixed(2),
@@ -76,7 +77,7 @@ export async function createLtcInvoice(input: {
     fail_invoice_url: input.failUrl,
     redirect_to_invoice: "true",
     expire_min: "30",
-    ...(input.email ? { email: input.email } : {}),
+    email: input.email,
   });
 }
 
