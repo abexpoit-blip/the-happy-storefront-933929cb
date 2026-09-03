@@ -90,6 +90,60 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* SELLERS & RATES */}
+      <section id="sellers" className="border-t border-[#e6e6e6] bg-white">
+        <div className="mx-auto max-w-[1200px] px-6 py-16">
+          <h2 className="text-2xl font-bold text-[#1f2d3d]">Sellers &amp; validity rates</h2>
+          <p className="mt-3 text-[14px] text-[#4a5568] max-w-3xl leading-relaxed">
+            Every base on Zoru Shop is uploaded by a vetted seller and published with its own
+            live-check percentage. The percentage shown next to a base is the share of cards that
+            passed the last checker run — for example, a base marked <strong>80%</strong> means
+            roughly 8 out of 10 cards come back live. Refundable bases are marked
+            <strong> REFUND: YES</strong> in the shop table and are covered by the replacement policy;
+            bases marked <strong>REFUND: NO</strong> are sold as-is at a lower price.
+          </p>
+
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              { t: "Seller share", d: "Sellers keep 80% of every sale. Zoru Shop keeps a 20% platform fee that covers checking, hosting and support." },
+              { t: "Live rate on every base", d: "Each base carries a published live percentage (e.g. 70–90%). Buy 10 cards from an 80% base and about 7–8 should check live." },
+              { t: "Refund coverage", d: "Refundable bases: dead cards replaced within the refund window. Non-refundable bases are priced lower and sold final." },
+            ].map((c) => (
+              <div key={c.t} className="rounded-lg border border-[#e6e6e6] bg-gradient-to-b from-white to-[#f7f9fb] p-5 shadow-[0_12px_30px_-22px_rgba(31,45,61,0.7)]">
+                <div className="h-1 w-8 bg-[#2196f3] mb-3 rounded-full" />
+                <div className="font-semibold text-[#1f2d3d]">{c.t}</div>
+                <p className="text-[13px] text-[#4a5568] mt-2 leading-relaxed">{c.d}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 overflow-x-auto rounded-lg border border-[#e6e6e6]">
+            <table className="w-full min-w-[520px] text-[13px]">
+              <thead>
+                <tr className="bg-gradient-to-b from-[#f7f9fb] to-[#eceff1] text-[#455a64] text-[12px]">
+                  {["Seller tier", "Live rate", "Refund", "Seller share"].map((h) => (
+                    <th key={h} className="p-2.5 text-left font-semibold uppercase tracking-wide border-b border-[#e0e0e0]">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  ["Verified Pro", "85–95%", "Yes", "80%"],
+                  ["Verified", "70–85%", "Yes", "80%"],
+                  ["Standard", "50–70%", "No", "75%"],
+                ].map((r) => (
+                  <tr key={r[0]} className="border-b border-[#f0f0f0] odd:bg-white even:bg-[#fcfdfe]">
+                    {r.map((cell, i) => (
+                      <td key={i} className="p-2.5 text-[#37474f]">{cell}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       {/* TRUST */}
       <section id="trust" className="border-t border-[#e6e6e6] bg-white">
         <div className="mx-auto max-w-[1200px] px-6 py-16">
