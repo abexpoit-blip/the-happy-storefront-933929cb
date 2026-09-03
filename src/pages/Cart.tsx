@@ -250,10 +250,11 @@ const ScanOverlay = ({ count }: { count: number }) => (
           <Radar className="h-9 w-9 text-[#5ac8fa] animate-spin [animation-duration:2.4s]" />
         </span>
       </div>
-      <div className="mt-6 text-white text-[15px] font-semibold tracking-wide">Проверка карт…</div>
+      <div className="mt-6 text-white text-[15px] font-semibold tracking-wide">Checking cards…</div>
       <div className="mt-1 text-[12.5px] text-white/60">
-        Идёт live-проверка {count} refund-карт{count === 1 ? "ы" : ""}. Не закрывайте окно.
+        Running live check on {count} refund card{count === 1 ? "" : "s"}. Please don't close this window.
       </div>
+
       <div className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
         <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#2196f3] via-[#5ac8fa] to-[#43a047]" style={{ animation: "cartScan 1.4s ease-in-out infinite" }} />
       </div>
