@@ -109,42 +109,6 @@ const Auth = () => {
           ))}
         </div>
 
-        {savedAccounts.length > 0 && mode === "login" && (
-          <div className="mb-5">
-            <div className="text-[10px] uppercase tracking-[0.2em] text-[#ffb300]/80 font-semibold mb-2">
-              Сменить аккаунт
-            </div>
-            <div className="space-y-1.5">
-              {savedAccounts.map((acc) => (
-                <button
-                  key={acc.email}
-                  type="button"
-                  onClick={() => pickAccount(acc)}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#ffb300]/50 hover:bg-white/[0.07] transition-all group text-left"
-                >
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#ff2d2d] to-[#ffb300] text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-[0_2px_8px_rgba(255,80,20,0.4)]">
-                    {acc.username[0]?.toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-white truncate">{acc.username}</div>
-                    <div className="text-[11px] text-white/50 truncate">{acc.role} · {acc.email}</div>
-                  </div>
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => removeAccount(e, acc.email)}
-                    onKeyDown={(e) => { if (e.key === "Enter") removeAccount(e as unknown as React.MouseEvent, acc.email); }}
-                    className="opacity-0 group-hover:opacity-100 text-white/60 hover:text-white p-1 transition"
-                    aria-label="Удалить сохранённый аккаунт"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {statusBanner && (
           <div className="mb-5 rounded-lg border border-red-400/40 bg-red-500/10 backdrop-blur-sm px-3 py-2.5 text-xs text-red-200" role="alert">
             <div className="font-semibold">{statusBanner.title}</div>
