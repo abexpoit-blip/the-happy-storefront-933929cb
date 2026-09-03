@@ -24,6 +24,7 @@ const AdminSiteSettings = lazy(() => import("./pages/AdminSiteSettings"));
 const Cart = lazy(() => import("./pages/Cart"));
 const Orders = lazy(() => import("./pages/Orders"));
 const Recharge = lazy(() => import("./pages/Recharge"));
+const Referrals = lazy(() => import("./pages/Referrals"));
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminCards = lazy(() => import("./pages/AdminCards"));
 const AdminPaymentGateway = lazy(() => import("./pages/AdminPaymentGateway"));
