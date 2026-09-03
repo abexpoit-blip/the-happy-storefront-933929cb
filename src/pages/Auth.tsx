@@ -142,6 +142,21 @@ const Auth = () => {
             </div>
           )}
 
+          {mode === "signup" && (
+            <div className="relative group">
+              <Gift className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 group-focus-within:text-[#ffb300] transition-colors" />
+              <input
+                type="text"
+                value={refCode}
+                onChange={(e) => setRefCode(e.target.value.toUpperCase())}
+                placeholder="Реферальный код (необязательно)"
+                className={inputCls}
+              />
+            </div>
+          )}
+
+
+
 
           <div className="relative group">
             <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 group-focus-within:text-[#ffb300] transition-colors" />
