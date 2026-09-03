@@ -3,7 +3,8 @@ import { useNavigate, Link } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import Seo from "@/components/Seo";
 import { toast } from "sonner";
-import { Trash2, Loader2, ShieldCheck, ShieldOff, Radar, Sparkles } from "lucide-react";
+import { Trash2, Loader2, ShieldCheck, ShieldOff, Radar, Sparkles, ShoppingCart, Wallet, CreditCard } from "lucide-react";
+import { PageHero, StatCard } from "@/components/PageHero";
 import { getCart, removeFromCart, clearCart, onCartChange, type CartLine } from "@/lib/cart";
 import { purchaseProduct, listChecksForOrders, type CardCheck } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
@@ -92,6 +93,20 @@ const Cart = () => {
   return (
     <AppShell>
       <Seo title="Cart | Zoru Shop" description="Your shopping cart." path="/cart" />
+
+      <PageHero
+        eyebrow="Checkout"
+        eyebrowIcon={ShoppingCart}
+        title="Your"
+        highlight="cart"
+        description={`Refund cards are checked automatically after purchase — $${checkFee.toFixed(2)} per card. DEAD cards are refunded to your main balance instantly.`}
+      />
+
+      <div className="grid gap-3 sm:grid-cols-3 mb-4">
+        <StatCard label="Selected cards" icon={CreditCard} tone="blue" value={chosen.length} hint={`${items.length} in cart`} />
+        <StatCard label="Order total" icon={ShoppingCart} tone="green" value={`$${(total + fees).toFixed(2)}`} hint={`cards $${total.toFixed(2)} + checking $${fees.toFixed(2)}`} />
+        <StatCard label="Available balance" icon={Wallet} tone="amber" value={`$${(Number(profile?.balance ?? 0) + Number(profile?.bonus_balance ?? 0)).toFixed(2)}`} hint="bonus is spent first" />
+      </div>
 
       <div className="rounded-xl border border-[#e6e6e6] bg-gradient-to-r from-white via-[#fbfcff] to-[#f4f7ff] px-4 py-3 flex flex-wrap items-center gap-3 text-[13px] shadow-[0_2px_10px_rgba(20,30,60,0.06)]">
         <span className="font-semibold text-[#1f2d3d]">Cart</span>

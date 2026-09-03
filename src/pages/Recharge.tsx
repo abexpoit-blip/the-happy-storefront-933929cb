@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
+import { PageHero, StatCard } from "@/components/PageHero";
 
 interface Deposit { id: string; amount: number; method: string; txid: string | null; status: string; created_at: string; crypto_currency?: string; plisio_wallet?: string; confirmations?: number; }
 interface Transaction { id: string; type: string; amount: number; note?: string; method?: string; ref_id?: string; meta?: string; created_at: string; }
@@ -230,6 +231,25 @@ const Recharge = () => {
   return (
     <AppShell>
       <div className="space-y-4 max-w-6xl">
+        <PageHero
+          eyebrow="Пополнение баланса"
+          eyebrowIcon={Wallet}
+          title="Пополняй счёт в"
+          highlight="Litecoin (LTC)"
+          description={
+            <>
+              Создайте счёт, оплатите на указанный адрес — баланс зачисляется автоматически после
+              подтверждения сети. Средства сразу доступны для покупки карт.
+            </>
+          }
+        />
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <StatCard label="Основной баланс" icon={Wallet} tone="green" value={`$${Number(profile?.balance ?? 0).toFixed(2)}`} />
+          <StatCard label="Бонусный баланс" icon={ShieldCheck} tone="amber" value={`$${Number(profile?.bonus_balance ?? 0).toFixed(2)}`} hint="Списывается первым при покупке" />
+          <StatCard label="Всего пополнений" icon={Receipt} tone="blue" value={history.filter((h) => h.status === "approved").length} />
+        </div>
+
         {isActivation && (
           <div className="bg-white border border-[#e6e6e6] px-4 py-3 flex items-start gap-3 text-[13px]">
             <div className="shrink-0 h-8 w-8 bg-[#2196f3] text-white flex items-center justify-center text-sm font-bold">$</div>

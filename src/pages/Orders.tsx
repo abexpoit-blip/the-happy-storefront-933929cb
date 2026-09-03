@@ -3,7 +3,8 @@ import { AppShell } from "@/components/AppShell";
 import { listMyOrders, listProducts, type Product } from "@/lib/store";
 import { CARD_TXT_HEADER, formatCardTxtLine, isPipeLine } from "@/lib/cardFormat";
 import { useAuth } from "@/hooks/useAuth";
-import { Search, RotateCcw, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, RotateCcw, AlertCircle, ChevronLeft, ChevronRight, Package, Receipt, CreditCard } from "lucide-react";
+import { PageHero, StatCard } from "@/components/PageHero";
 import { toast } from "sonner";
 
 interface OrderItem {
@@ -152,6 +153,20 @@ const Orders = () => {
 
   return (
     <AppShell>
+      <PageHero
+        eyebrow="Мои заказы"
+        eyebrowIcon={Package}
+        title="История"
+        highlight="покупок"
+        description="Все ваши заказы, выданные карты и выгрузка в .txt — в одном месте."
+      />
+
+      <div className="grid gap-3 sm:grid-cols-3 mb-4">
+        <StatCard label="Всего заказов" icon={Package} tone="blue" value={orders.length} />
+        <StatCard label="Куплено карт" icon={CreditCard} tone="amber" value={orders.reduce((n, o) => n + (o.order_items?.length ?? 0), 0)} />
+        <StatCard label="Потрачено" icon={Receipt} tone="green" value={`$${orders.reduce((n, o) => n + Number(o.total ?? 0), 0).toFixed(2)}`} />
+      </div>
+
       <div className="text-[13px] text-[#333]">
         {/* Search bar */}
         <div className="bg-white border border-[#e6e6e6] px-4 py-3 flex flex-wrap items-center gap-3">
