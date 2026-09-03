@@ -848,7 +848,7 @@ export interface CardCheck {
   bin: string | null;
   last_digits: string | null;
   price: number;
-  status: "live" | "dead";
+  status: "live" | "dead" | "pending";
   refunded: number;
   fee: number;
   created_at: string;
@@ -866,7 +866,7 @@ const mapCheck = (r: Record<string, unknown>): CardCheck => ({
   bin: (r.bin as string) ?? null,
   last_digits: (r.last_digits as string) ?? null,
   price: num(r.price),
-  status: r.status === "dead" ? "dead" : "live",
+  status: r.status === "dead" ? "dead" : r.status === "pending" ? "pending" : "live",
   refunded: num(r.refunded),
   fee: num(r.fee),
   created_at: String(r.created_at ?? ""),
@@ -882,6 +882,27 @@ export const listChecksForOrders = async (orderIds: string[]): Promise<CardCheck
     .order("created_at", { ascending: true });
   if (error) return [];
   return ((data ?? []) as Record<string, unknown>[]).map(mapCheck);
+};
+
+/** Checks the buyer bought but has not run yet. */
+export const listPendingChecks = async (): Promise<CardCheck[]> => {
+  const { data, error } = await rawDb
+    .from("card_checks")
+    .select("*")
+    .eq("status", "pending")
+    .order("created_at", { ascending: true });
+  if (error) return [];
+  return ((data ?? []) as Record<string, unknown>[]).map(mapCheck);
+};
+
+/** Manually run the checker for the given orders (or every pending check when empty). */
+export const runCardChecks = async (orderIds: string[]): Promise<CardCheck[]> => {
+  const { error } = await rawDb.rpc("run_card_checks", {
+    _order_ids: orderIds.length ? orderIds : null,
+  });
+  if (error) throw new Error(error.message);
+  if (!orderIds.length) return [];
+  return listChecksForOrders(orderIds);
 };
 
 /** Admin: latest checker results across all users. */
