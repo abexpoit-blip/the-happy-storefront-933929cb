@@ -2,24 +2,11 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { authApi, setToken, ApiError } from "@/lib/api";
 import { toast } from "sonner";
-import { RefreshCw, X, Loader2, User as UserIcon, Lock, ShieldCheck } from "lucide-react";
-import { getSavedAccounts, removeSavedAccount, type SavedAccount } from "@/lib/accountSwitcher";
-import { ForgotPasswordDialog } from "@/components/ForgotPasswordDialog";
+import { Loader2, User as UserIcon, Lock } from "lucide-react";
 import Seo from "@/components/Seo";
 import { useAuth } from "@/hooks/useAuth";
 import { ScorpionAuthShell } from "@/components/ScorpionAuthShell";
 import { useLanguage } from "@/lib/i18n";
-
-/** Simple human check: only + and - with a non-negative answer. */
-function makeChallenge() {
-  const ai = Math.floor(Math.random() * 9) + 1;
-  const bi = Math.floor(Math.random() * 9) + 1;
-  const op = Math.random() < 0.5 ? "+" : "-";
-  const [x, y] = op === "-" && bi > ai ? [bi, ai] : [ai, bi];
-  return { a: x, b: y, op, expected: op === "+" ? x + y : x - y };
-}
-
-
 
 const Auth = () => {
   const { lang, setLang } = useLanguage();
@@ -30,23 +17,12 @@ const Auth = () => {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [captcha, setCaptcha] = useState("");
-
-  const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const [statusBanner, setStatusBanner] = useState<{ title: string; hint?: string } | null>(null);
-  const [forgotOpen, setForgotOpen] = useState(false);
-  const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([]);
   const fromPath = (loc.state as { from?: { pathname?: string } } | null)?.from?.pathname;
   const safeFrom = fromPath && fromPath !== "/auth" ? fromPath : null;
 
-  const [challenge, setChallenge] = useState(() => makeChallenge());
-  const { a, b, op, expected } = challenge;
-  const captchaOk = captcha.trim() !== "" && Number(captcha) === expected;
-
-
   useEffect(() => {
-    setSavedAccounts(getSavedAccounts());
     const prefill = sessionStorage.getItem("cruzercc.prefillEmail");
     if (prefill) {
       setUsername(prefill);
@@ -54,25 +30,9 @@ const Auth = () => {
     }
   }, []);
 
-  const pickAccount = (acc: SavedAccount) => {
-    setUsername(acc.email);
-    setMode("login");
-    setTimeout(() => document.getElementById("auth-password")?.focus(), 50);
-  };
-
-  const removeAccount = (e: React.MouseEvent, mail: string) => {
-    e.stopPropagation();
-    removeSavedAccount(mail);
-    setSavedAccounts(getSavedAccounts());
-  };
-
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatusBanner(null);
-    if (!captchaOk) {
-      setStatusBanner({ title: "Неверный проверочный код", hint: "Введите ответ, показанный на кнопке." });
-      return toast.error("Неверный проверочный код");
-    }
     setLoading(true);
     try {
       if (mode === "signup") {
