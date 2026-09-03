@@ -198,7 +198,7 @@ const ScanOverlay = ({ count }: { count: number }) => (
         Идёт live-проверка {count} refund-карт{count === 1 ? "ы" : ""}. Не закрывайте окно.
       </div>
       <div className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-        <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#2196f3] via-[#5ac8fa] to-[#43a047] animate-[shimmer_1.2s_linear_infinite]" style={{ animation: "cartScan 1.4s ease-in-out infinite" }} />
+        <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#2196f3] via-[#5ac8fa] to-[#43a047]" style={{ animation: "cartScan 1.4s ease-in-out infinite" }} />
       </div>
       <style>{`@keyframes cartScan{0%{transform:translateX(-100%)}100%{transform:translateX(320%)}}`}</style>
     </div>
@@ -214,7 +214,7 @@ const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#060b18]/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#101a33] to-[#0b1striped] shadow-[0_20px_60px_rgba(0,0,0,0.6)]" style={{ background: "linear-gradient(180deg,#101a33,#0a1122)" }}>
+      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#101a33] to-[#0a1122] shadow-[0_20px_60px_rgba(0,0,0,0.6)]">
         <div className="px-5 py-3.5 border-b border-white/10 flex items-center justify-between">
           <span className="text-[14px] font-semibold text-white inline-flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-[#f9a825]" /> Результат проверки (refund)
