@@ -101,9 +101,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
 
-    supabase.auth.getSession().then(({ data }) => {
-      void loadProfile(data.session?.user?.id ?? null, data.session?.user?.email ?? null);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        void loadProfile(data.session?.user?.id ?? null, data.session?.user?.email ?? null);
+      })
+      .catch(() => setLoading(false));
+
 
     return () => { sub.subscription.unsubscribe(); };
   }, [loadProfile]);
