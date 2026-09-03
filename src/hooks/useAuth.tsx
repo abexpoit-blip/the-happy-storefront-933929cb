@@ -85,8 +85,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setProfile(null);
       loadedForUid.current = null;
     } finally {
+      clearTimeout(watchdog);
       setLoading(false);
     }
+
   }, []);
 
   useEffect(() => {
