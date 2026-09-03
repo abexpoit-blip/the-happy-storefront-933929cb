@@ -161,19 +161,6 @@ const Auth = () => {
           ))}
         </div>
 
-        <div className="mt-6 pt-5 border-t border-white/10 text-center">
-          <button
-            type="button"
-            onClick={() => setMode(mode === "login" ? "signup" : "login")}
-            className="text-[12px] text-white/60 hover:text-[#ffb300] transition tracking-wide"
-          >
-            {mode === "login" ? (
-              <>Нет аккаунта? <span className="text-[#ffb300] font-semibold">Зарегистрироваться</span></>
-            ) : (
-              <>Уже есть аккаунт? <span className="text-[#ffb300] font-semibold">Войти</span></>
-            )}
-          </button>
-        </div>
       </ScorpionAuthShell>
     </>
   );
