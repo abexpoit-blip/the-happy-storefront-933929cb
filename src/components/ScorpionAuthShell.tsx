@@ -1,8 +1,8 @@
 import { ReactNode, useMemo } from "react";
-import dragonBgAsset from "@/assets/dragon-bg.jpg.asset.json";
+import dragonBg from "@/assets/dragon-bg.webp";
 import dragonLogo from "@/assets/dragon-logo.png";
 
-const heroBg = dragonBgAsset.url;
+const heroBg = dragonBg;
 
 type Props = {
   children: ReactNode;
