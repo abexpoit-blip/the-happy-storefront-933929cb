@@ -30,20 +30,24 @@ const Cart = () => {
     setBusy(true);
     let ok = 0;
     const failed: string[] = [];
+    const orderIds: string[] = [];
     try {
       for (const it of items) {
         try {
-          await purchaseProduct(it.id, 1);
+          const orderId = await purchaseProduct(it.id, 1);
+          if (orderId) orderIds.push(orderId);
           removeFromCart(it.id);
           ok++;
         } catch (e) {
           failed.push(it.bin ?? it.title);
         }
       }
+      const results = await listChecksForOrders(orderIds);
       void refresh?.();
       if (ok > 0) {
         toast.success(`Куплено: ${ok}`);
-        nav("/orders");
+        if (results.length > 0) setChecks(results);
+        else nav("/orders");
       }
       if (failed.length) toast.error(`Не удалось: ${failed.join(", ")}`);
     } finally {
