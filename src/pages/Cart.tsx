@@ -5,7 +5,7 @@ import Seo from "@/components/Seo";
 import { toast } from "sonner";
 import { Trash2, Loader2 } from "lucide-react";
 import { getCart, removeFromCart, clearCart, onCartChange, type CartLine } from "@/lib/cart";
-import { purchaseProduct } from "@/lib/store";
+import { purchaseProduct, listChecksForOrders, type CardCheck } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
 import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode } from "@/lib/brands";
 
