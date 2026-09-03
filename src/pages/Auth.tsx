@@ -19,6 +19,7 @@ const Auth = () => {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [username, setUsername] = useState("");
   const [telegram, setTelegram] = useState("");
+  const [refCode, setRefCode] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -33,6 +34,11 @@ const Auth = () => {
       setUsername(prefill);
       sessionStorage.removeItem("zorushop.prefillEmail");
     }
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref) {
+      setRefCode(ref.trim().toUpperCase());
+      setMode("signup");
+    }
   }, []);
 
   const submit = async (e: React.FormEvent) => {
@@ -45,7 +51,9 @@ const Auth = () => {
           username: username.trim(),
           password,
           telegram: telegram.trim() || undefined,
+          ref: refCode.trim() || undefined,
         });
+
         if (!result.token) {
           setMode("login");
           toast.success("Аккаунт создан. Войдите в систему.");
