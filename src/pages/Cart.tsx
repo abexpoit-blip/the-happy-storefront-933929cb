@@ -65,6 +65,7 @@ const Cart = () => {
     setBusy(true);
     let ok = 0;
     const failed: string[] = [];
+    let lastError = "";
     let hadRefundable = false;
     try {
       for (const it of chosen) {
@@ -73,7 +74,8 @@ const Cart = () => {
           if (it.refundable) hadRefundable = true;
           removeFromCart(it.id);
           ok++;
-        } catch {
+        } catch (e) {
+          lastError = e instanceof Error ? e.message : String(e);
           failed.push(it.bin ?? it.title);
         }
       }
@@ -87,7 +89,9 @@ const Cart = () => {
         );
         if (!hadRefundable) nav("/orders");
       }
-      if (failed.length) toast.error(`Failed: ${failed.join(", ")}`);
+      if (failed.length) {
+        toast.error(`Failed: ${failed.join(", ")}${lastError ? ` — ${lastError}` : ""}`, { duration: 8000 });
+      }
     } finally {
       setBusy(false);
     }
@@ -95,8 +99,15 @@ const Cart = () => {
 
   /** Manual checker — only refund cards, started by the buyer. */
   const runChecker = async () => {
-    if (!pending.length) return toast.error("No refund cards waiting for a check");
-    const orderIds = [...new Set(pending.map((p) => p.order_id).filter(Boolean) as string[])];
+    let queue = pending;
+    if (!queue.length) {
+      // pending list may be stale (just purchased in another tab / slow refresh)
+      try { queue = await listPendingChecks(); setPending(queue); } catch { /* ignore */ }
+    }
+    if (!queue.length) {
+      return toast.error("No refund cards waiting for a check. Buy a refund card first.");
+    }
+    const orderIds = [...new Set(queue.map((p) => p.order_id).filter(Boolean) as string[])];
     setScanning(true);
     try {
       await runCardChecks(orderIds);
@@ -104,15 +115,14 @@ const Cart = () => {
       const results = await listChecksForOrders(orderIds);
       void refresh?.();
       await loadPending();
-      setScanning(false);
       setChecks(results.filter((r) => r.status !== "pending"));
     } catch (e) {
-      setScanning(false);
-      toast.error(e instanceof Error ? e.message : "Check failed");
+      toast.error(e instanceof Error ? e.message : "Check failed", { duration: 8000 });
     } finally {
       setScanning(false);
     }
   };
+
 
 
   return (
