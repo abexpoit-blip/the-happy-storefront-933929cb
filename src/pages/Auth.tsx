@@ -16,7 +16,9 @@ const Auth = () => {
   const nav = useNavigate();
   const loc = useLocation();
   const { refresh } = useAuth();
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [username, setUsername] = useState("");
+  const [telegram, setTelegram] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
