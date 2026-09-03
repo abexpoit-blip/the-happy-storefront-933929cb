@@ -2,11 +2,14 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { authApi, setToken, ApiError } from "@/lib/api";
 import { toast } from "sonner";
-import { Loader2, User as UserIcon, Lock } from "lucide-react";
+import { Loader2, User as UserIcon, Lock, Mail, Eye, EyeOff, ShieldCheck, Zap, BadgeCheck } from "lucide-react";
 import Seo from "@/components/Seo";
 import { useAuth } from "@/hooks/useAuth";
 import { ScorpionAuthShell } from "@/components/ScorpionAuthShell";
 import { useLanguage } from "@/lib/i18n";
+
+const inputCls =
+  "w-full pl-11 pr-11 py-3 rounded-xl bg-white/[0.05] border border-white/10 text-white text-sm placeholder-white/35 focus:outline-none focus:border-[#ffb300]/70 focus:bg-white/[0.08] focus:shadow-[0_0_0_3px_rgba(255,179,0,0.12)] transition-all backdrop-blur-sm";
 
 const Auth = () => {
   const { lang, setLang } = useLanguage();
@@ -17,16 +20,17 @@ const Auth = () => {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [statusBanner, setStatusBanner] = useState<{ title: string; hint?: string } | null>(null);
   const fromPath = (loc.state as { from?: { pathname?: string } } | null)?.from?.pathname;
   const safeFrom = fromPath && fromPath !== "/auth" ? fromPath : null;
 
   useEffect(() => {
-    const prefill = sessionStorage.getItem("cruzercc.prefillEmail");
+    const prefill = sessionStorage.getItem("zorushop.prefillEmail");
     if (prefill) {
       setUsername(prefill);
-      sessionStorage.removeItem("cruzercc.prefillEmail");
+      sessionStorage.removeItem("zorushop.prefillEmail");
     }
   }, []);
 
@@ -36,7 +40,7 @@ const Auth = () => {
     setLoading(true);
     try {
       if (mode === "signup") {
-        const fakeEmail = email || `${username.toLowerCase()}@cruzercc.shop`;
+        const fakeEmail = email || `${username.toLowerCase()}@zoru.cc`;
         const result = await authApi.signup({ email: fakeEmail, username, password });
         setToken(result.token);
         await refresh();
@@ -54,7 +58,7 @@ const Auth = () => {
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         if (err.status === 403 && err.message === "Use admin login") {
-          sessionStorage.setItem("cruzercc.prefillAdminEmail", username.trim());
+          sessionStorage.setItem("zorushop.prefillAdminEmail", username.trim());
           toast.error("Только для администраторов. Перенаправление…");
           nav("/crzr-x9k2-panel", { replace: true });
           return;
@@ -90,18 +94,23 @@ const Auth = () => {
           </>
         }
       >
-
         {/* Tabs */}
-        <div className="flex mb-6 p-1 rounded-xl bg-white/[0.04] border border-white/10 backdrop-blur-sm">
+        <div className="relative flex mb-6 p-1 rounded-xl bg-white/[0.04] border border-white/10 backdrop-blur-sm">
+          <span
+            className="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg transition-all duration-300 ease-out"
+            style={{
+              left: mode === "login" ? 4 : "calc(50%)",
+              background: "linear-gradient(135deg, #ff2d2d 0%, #ff6b1a 50%, #ffb300 100%)",
+              boxShadow: "0 4px 15px rgba(255,80,20,0.4)",
+            }}
+          />
           {(["login", "signup"] as const).map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => setMode(m)}
-              className={`flex-1 py-2 text-[12px] font-semibold tracking-[0.15em] uppercase rounded-lg transition-all ${
-                mode === m
-                  ? "bg-gradient-to-r from-[#ff2d2d] via-[#ff6b1a] to-[#ffb300] text-white shadow-[0_4px_15px_rgba(255,80,20,0.4)]"
-                  : "text-white/60 hover:text-white/90"
+              className={`relative z-10 flex-1 py-2 text-[12px] font-semibold tracking-[0.15em] uppercase rounded-lg transition-colors ${
+                mode === m ? "text-white" : "text-white/60 hover:text-white/90"
               }`}
             >
               {m === "login" ? "Вход" : "Регистрация"}
@@ -125,47 +134,61 @@ const Auth = () => {
               onChange={(e) => setUsername(e.target.value)}
               required
               placeholder="Имя пользователя"
-              className="w-full pl-11 pr-3 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white text-sm placeholder-white/35 focus:outline-none focus:border-[#ffb300]/60 focus:bg-white/[0.07] focus:shadow-[0_0_0_3px_rgba(255,179,0,0.1)] transition-all backdrop-blur-sm"
+              className={inputCls}
             />
           </div>
 
-          {mode === "signup" && (
-            <div className="relative group">
-              <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 group-focus-within:text-[#ffb300] transition-colors" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email (необязательно)"
-                className="w-full pl-11 pr-3 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white text-sm placeholder-white/35 focus:outline-none focus:border-[#ffb300]/60 focus:bg-white/[0.07] focus:shadow-[0_0_0_3px_rgba(255,179,0,0.1)] transition-all backdrop-blur-sm"
-              />
+          <div
+            className="grid transition-all duration-300 ease-out"
+            style={{ gridTemplateRows: mode === "signup" ? "1fr" : "0fr", opacity: mode === "signup" ? 1 : 0 }}
+          >
+            <div className="overflow-hidden">
+              <div className="relative group">
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 group-focus-within:text-[#ffb300] transition-colors" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email (необязательно)"
+                  tabIndex={mode === "signup" ? 0 : -1}
+                  className={inputCls}
+                />
+              </div>
             </div>
-          )}
+          </div>
 
           <div className="relative group">
             <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 group-focus-within:text-[#ffb300] transition-colors" />
             <input
               id="auth-password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
               placeholder="Пароль"
-              className="w-full pl-11 pr-3 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white text-sm placeholder-white/35 focus:outline-none focus:border-[#ffb300]/60 focus:bg-white/[0.07] focus:shadow-[0_0_0_3px_rgba(255,179,0,0.1)] transition-all backdrop-blur-sm"
+              className={inputCls}
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-[#ffb300] transition-colors"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="relative w-full py-3.5 mt-3 rounded-lg text-white text-sm font-bold tracking-[0.2em] uppercase transition-all disabled:opacity-60 flex items-center justify-center gap-2 overflow-hidden group shadow-[0_10px_30px_-5px_rgba(255,45,45,0.5)] hover:shadow-[0_15px_40px_-5px_rgba(255,80,20,0.7)] active:scale-[0.98]"
+            className="relative w-full py-3.5 mt-3 rounded-xl text-white text-sm font-bold tracking-[0.2em] uppercase transition-all disabled:opacity-60 flex items-center justify-center gap-2 overflow-hidden group shadow-[0_10px_30px_-5px_rgba(255,45,45,0.5)] hover:shadow-[0_15px_40px_-5px_rgba(255,80,20,0.7)] active:scale-[0.98]"
             style={{
               background: "linear-gradient(135deg, #ff2d2d 0%, #ff6b1a 50%, #ffb300 100%)",
             }}
           >
             <span
-              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
               style={{
                 background: "linear-gradient(135deg, #ffb300 0%, #ff6b1a 50%, #ff2d2d 100%)",
               }}
@@ -176,6 +199,23 @@ const Auth = () => {
             </span>
           </button>
         </form>
+
+        {/* Trust badges */}
+        <div className="mt-6 grid grid-cols-3 gap-2 text-center">
+          {[
+            { icon: ShieldCheck, label: "Безопасно" },
+            { icon: Zap, label: "Мгновенно" },
+            { icon: BadgeCheck, label: "Проверено" },
+          ].map(({ icon: Icon, label }) => (
+            <div
+              key={label}
+              className="flex flex-col items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] py-2.5 backdrop-blur-sm"
+            >
+              <Icon className="h-4 w-4 text-[#ffb300]" />
+              <span className="text-[10px] tracking-[0.12em] uppercase text-white/55">{label}</span>
+            </div>
+          ))}
+        </div>
 
         <div className="mt-6 pt-5 border-t border-white/10 text-center">
           <button
