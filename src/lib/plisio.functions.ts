@@ -45,9 +45,10 @@ export const createCryptoInvoice = createServerFn({ method: "POST" })
         failUrl: `${origin}/recharge?payment=failed&deposit=${dep.id}`,
       });
     } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
       await supabaseAdmin
         .from("deposits")
-        .update({ status: "rejected", admin_note: "Gateway error while creating invoice" })
+        .update({ status: "rejected", admin_note: `Gateway error: ${detail}`.slice(0, 400) })
         .eq("id", dep.id);
       throw e;
     }
