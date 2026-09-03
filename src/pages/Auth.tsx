@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { authApi, setToken, ApiError } from "@/lib/api";
 import { toast } from "sonner";
-import { Loader2, User as UserIcon, Lock, Eye, EyeOff, ShieldCheck, Zap, BadgeCheck } from "lucide-react";
+import { Loader2, User as UserIcon, Lock, Eye, EyeOff, ShieldCheck, Zap, BadgeCheck, Send } from "lucide-react";
 import Seo from "@/components/Seo";
 import { useAuth } from "@/hooks/useAuth";
 import { ScorpionAuthShell } from "@/components/ScorpionAuthShell";
@@ -16,7 +16,9 @@ const Auth = () => {
   const nav = useNavigate();
   const loc = useLocation();
   const { refresh } = useAuth();
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [username, setUsername] = useState("");
+  const [telegram, setTelegram] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -38,6 +40,25 @@ const Auth = () => {
     setStatusBanner(null);
     setLoading(true);
     try {
+      if (mode === "signup") {
+        const result = await authApi.signup({
+          username: username.trim(),
+          password,
+          telegram: telegram.trim() || undefined,
+        });
+        if (!result.token) {
+          setMode("login");
+          toast.success("Аккаунт создан. Войдите в систему.");
+          return;
+        }
+        setToken(result.token);
+        await refresh();
+        toast.success("Аккаунт создан");
+        setFire(true);
+        setTimeout(() => nav("/shop", { replace: true }), 950);
+        return;
+      }
+
       const result = await authApi.login({ identifier: username.trim(), password });
       setToken(result.token);
       await refresh();
@@ -100,6 +121,19 @@ const Auth = () => {
             />
           </div>
 
+          {mode === "signup" && (
+            <div className="relative group">
+              <Send className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 group-focus-within:text-[#ffb300] transition-colors" />
+              <input
+                type="text"
+                value={telegram}
+                onChange={(e) => setTelegram(e.target.value)}
+                placeholder="Telegram (необязательно)"
+                className={inputCls}
+              />
+            </div>
+          )}
+
 
           <div className="relative group">
             <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 group-focus-within:text-[#ffb300] transition-colors" />
@@ -139,9 +173,32 @@ const Auth = () => {
             />
             <span className="relative flex items-center gap-2">
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {loading ? "Выполняется вход…" : "Войти"}
+              {loading
+                ? mode === "signup" ? "Создание аккаунта…" : "Выполняется вход…"
+                : mode === "signup" ? "Зарегистрироваться" : "Войти"}
             </span>
           </button>
+
+          <div className="pt-1 text-center">
+            <button
+              type="button"
+              onClick={() => nav("/reset-password")}
+              className="text-[12px] text-white/55 hover:text-[#ffb300] transition-colors"
+            >
+              Забыли пароль?
+            </button>
+          </div>
+
+          <div className="pt-2 text-center text-[12px] text-white/55">
+            {mode === "login" ? "Нет аккаунта?" : "Уже есть аккаунт?"}{" "}
+            <button
+              type="button"
+              onClick={() => { setMode(mode === "login" ? "signup" : "login"); setStatusBanner(null); }}
+              className="font-semibold text-[#ffb300] hover:text-[#ff6b1a] transition-colors"
+            >
+              {mode === "login" ? "Зарегистрироваться" : "Войти"}
+            </button>
+          </div>
         </form>
 
         {/* Trust badges */}
