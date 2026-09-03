@@ -7,38 +7,60 @@ import { Trash2, Loader2, ShieldCheck, ShieldOff, Radar, Sparkles } from "lucide
 import { getCart, removeFromCart, clearCart, onCartChange, type CartLine } from "@/lib/cart";
 import { purchaseProduct, listChecksForOrders, type CardCheck } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode } from "@/lib/brands";
-
-const CHECK_FEE = 0.03;
 
 const Cart = () => {
   const { profile, refresh } = useAuth();
+  const settings = useSiteSettings();
+  const checkFee = Number(settings.check_fee ?? 0.03);
   const nav = useNavigate();
   const [items, setItems] = useState<CartLine[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [checks, setChecks] = useState<CardCheck[] | null>(null);
   const [scanning, setScanning] = useState(false);
 
   useEffect(() => {
-    setItems(getCart());
-    return onCartChange(() => setItems(getCart()));
+    const sync = () => {
+      const next = getCart();
+      setItems(next);
+      setSelected((prev) => {
+        const ids = new Set(next.map((n) => n.id));
+        const kept = prev.filter((id) => ids.has(id));
+        // default: everything selected
+        return prev.length === 0 ? next.map((n) => n.id) : kept;
+      });
+    };
+    sync();
+    return onCartChange(sync);
   }, []);
 
-  const total = items.reduce((s, i) => s + Number(i.price), 0);
-  const refundables = useMemo(() => items.filter((i) => i.refundable), [items]);
-  const fees = refundables.length * CHECK_FEE;
+  const chosen = useMemo(
+    () => items.filter((i) => selected.includes(i.id)),
+    [items, selected],
+  );
+  const total = chosen.reduce((s, i) => s + Number(i.price), 0);
+  const refundables = useMemo(() => chosen.filter((i) => i.refundable), [chosen]);
+  const fees = refundables.length * checkFee;
+  const allSelected = items.length > 0 && chosen.length === items.length;
+
+  const toggle = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const toggleAll = () => setSelected(allSelected ? [] : items.map((i) => i.id));
 
   const buyNow = async () => {
-    if (!items.length) return toast.error("Корзина пуста");
+    if (!chosen.length) return toast.error("Select at least one card");
     const spendable = Number(profile?.balance ?? 0) + Number(profile?.bonus_balance ?? 0);
-    if (spendable < total + fees) return toast.error("Недостаточно средств. Пополните баланс.");
+    if (spendable < total + fees) return toast.error("Insufficient funds. Please top up your balance.");
     setBusy(true);
     if (refundables.length) setScanning(true);
     let ok = 0;
     const failed: string[] = [];
     const orderIds: string[] = [];
     try {
-      for (const it of items) {
+      for (const it of chosen) {
         try {
           const orderId = await purchaseProduct(it.id, 1);
           if (orderId) orderIds.push(orderId);
@@ -56,11 +78,11 @@ const Cart = () => {
       }
       setScanning(false);
       if (ok > 0) {
-        toast.success(`Куплено: ${ok}`);
+        toast.success(`Purchased: ${ok}`);
         if (results.length > 0) setChecks(results);
         else nav("/orders");
       }
-      if (failed.length) toast.error(`Не удалось: ${failed.join(", ")}`);
+      if (failed.length) toast.error(`Failed: ${failed.join(", ")}`);
     } finally {
       setScanning(false);
       setBusy(false);
@@ -69,36 +91,44 @@ const Cart = () => {
 
   return (
     <AppShell>
-      <Seo title="Корзина | Zoru Shop" description="Ваша корзина покупок." path="/cart" />
+      <Seo title="Cart | Zoru Shop" description="Your shopping cart." path="/cart" />
 
       <div className="rounded-xl border border-[#e6e6e6] bg-gradient-to-r from-white via-[#fbfcff] to-[#f4f7ff] px-4 py-3 flex flex-wrap items-center gap-3 text-[13px] shadow-[0_2px_10px_rgba(20,30,60,0.06)]">
-        <span className="font-semibold text-[#1f2d3d]">Корзина</span>
-        <span className="text-[#888]">Позиций: {items.length}</span>
+        <span className="font-semibold text-[#1f2d3d]">Cart</span>
+        <span className="text-[#888]">Items: {items.length}</span>
+        <span className="text-[#888]">Selected: {chosen.length}</span>
         <span className="text-[#888]">
-          Товар: <span className="font-mono text-[#2e7d32]">${total.toFixed(2)}</span>
+          Cards: <span className="font-mono text-[#2e7d32]">${total.toFixed(2)}</span>
         </span>
         <span className="text-[#888]">
-          Проверка: <span className="font-mono text-[#f56c6c]">${fees.toFixed(2)}</span>{" "}
-          ({refundables.length} × ${CHECK_FEE.toFixed(2)}, только refund)
+          Checking: <span className="font-mono text-[#f56c6c]">${fees.toFixed(2)}</span>{" "}
+          ({refundables.length} × ${checkFee.toFixed(2)}, refund cards only)
         </span>
         <span className="text-[#1f2d3d] font-medium">
-          Итого: <span className="font-mono">${(total + fees).toFixed(2)}</span>
+          Total: <span className="font-mono">${(total + fees).toFixed(2)}</span>
         </span>
         <div className="ml-auto flex items-center gap-2">
           <button
-            onClick={() => { clearCart(); toast.success("Корзина очищена"); }}
+            onClick={toggleAll}
             disabled={!items.length || busy}
             className="h-8 px-4 rounded-md border border-[#dcdcdc] text-[#555] hover:bg-[#f7f7f7] text-[13px] transition disabled:opacity-50"
           >
-            Очистить
+            {allSelected ? "Deselect all" : "Select all"}
+          </button>
+          <button
+            onClick={() => { clearCart(); setSelected([]); toast.success("Cart cleared"); }}
+            disabled={!items.length || busy}
+            className="h-8 px-4 rounded-md border border-[#dcdcdc] text-[#555] hover:bg-[#f7f7f7] text-[13px] transition disabled:opacity-50"
+          >
+            Clear
           </button>
           <button
             onClick={() => void buyNow()}
-            disabled={!items.length || busy}
+            disabled={!chosen.length || busy}
             className="h-8 px-5 rounded-md bg-gradient-to-r from-[#2e7d32] to-[#43a047] text-white text-[13px] shadow-[0_4px_14px_rgba(46,125,50,0.35)] hover:brightness-110 transition disabled:opacity-60 inline-flex items-center gap-2"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
-            Купить{refundables.length ? " и проверить" : " сейчас"}
+            Buy {chosen.length || ""}{refundables.length ? " & check" : " now"}
           </button>
         </div>
       </div>
@@ -107,14 +137,39 @@ const Cart = () => {
         <table className="w-full min-w-[900px] text-[13px] border-collapse">
           <thead>
             <tr className="bg-gradient-to-r from-[#f7f9fc] to-[#eef2fa] text-[#555] text-[12px]">
-              {["BIN", "month", "year", "city", "state", "zip", "country", "refund", "prices", "base", "operation"].map((h) => (
+              <th className="p-2 text-center font-normal border-b border-[#eee] w-10">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  disabled={!items.length || busy}
+                  className="h-3.5 w-3.5 accent-[#2e7d32] cursor-pointer"
+                  aria-label="Select all cards"
+                />
+              </th>
+              {["BIN", "month", "year", "city", "state", "zip", "country", "refund", "price", "base", "action"].map((h) => (
                 <th key={h} className="p-2 text-center font-normal border-b border-[#eee]">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {items.map((c) => (
-              <tr key={c.id} className="border-b border-[#f0f0f0] hover:bg-[#fafcff] transition">
+            {items.map((c) => {
+              const isOn = selected.includes(c.id);
+              return (
+              <tr
+                key={c.id}
+                className={`border-b border-[#f0f0f0] transition ${isOn ? "bg-[#f4fbf5]" : "hover:bg-[#fafcff]"}`}
+              >
+                <td className="p-2 text-center">
+                  <input
+                    type="checkbox"
+                    checked={isOn}
+                    onChange={() => toggle(c.id)}
+                    disabled={busy}
+                    className="h-3.5 w-3.5 accent-[#2e7d32] cursor-pointer"
+                    aria-label={`Select card ${c.bin ?? c.title}`}
+                  />
+                </td>
                 <td className="p-2 text-center font-mono text-[#333]">
                   <span className="inline-flex items-center gap-2">
                     <BrandLogo brand={c.brand || detectBrandFromBin(c.bin ?? "")} className="h-5 w-8 shrink-0" />
@@ -137,11 +192,11 @@ const Cart = () => {
                 <td className="p-2 text-center">
                   {c.refundable ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-[#e8f5e9] text-[#2e7d32] border border-[#c8e6c9] px-2 py-0.5 text-[11px]">
-                      <ShieldCheck className="h-3 w-3" /> проверка
+                      <ShieldCheck className="h-3 w-3" /> auto-check
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 rounded-full bg-[#f6f6f6] text-[#999] border border-[#e6e6e6] px-2 py-0.5 text-[11px]">
-                      <ShieldOff className="h-3 w-3" /> нет
+                      <ShieldOff className="h-3 w-3" /> no
                     </span>
                   )}
                 </td>
@@ -155,15 +210,16 @@ const Cart = () => {
                     disabled={busy}
                     className="text-[#f56c6c] hover:underline text-[12px] inline-flex items-center gap-1 disabled:opacity-50"
                   >
-                    <Trash2 className="h-3 w-3" /> Удалить
+                    <Trash2 className="h-3 w-3" /> Delete
                   </button>
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {items.length === 0 && (
               <tr>
-                <td colSpan={11} className="p-10 text-center text-[#888] text-[13px]">
-                  Корзина пуста. <Link to="/shop" className="text-[#2196f3] hover:underline">Перейти в магазин</Link>
+                <td colSpan={12} className="p-10 text-center text-[#888] text-[13px]">
+                  Your cart is empty. <Link to="/shop" className="text-[#2196f3] hover:underline">Go to shop</Link>
                 </td>
               </tr>
             )}
@@ -172,8 +228,8 @@ const Cart = () => {
       </div>
 
       <p className="mt-3 text-[12px] text-[#777]">
-        Проверка (checker) выполняется <b>только для refund-карт</b> — сразу после покупки, ${CHECK_FEE.toFixed(2)} за карту.
-        DEAD карты автоматически возвращаются на основной баланс. Карты без refund не проверяются и не возвращаются.
+        Checking runs <b>automatically for refund cards only</b> — right after purchase, ${checkFee.toFixed(2)} per card.
+        DEAD cards are instantly refunded to your main balance. Non-refund cards are never checked and never refunded.
       </p>
 
       {scanning && <ScanOverlay count={refundables.length} />}
@@ -181,6 +237,7 @@ const Cart = () => {
     </AppShell>
   );
 };
+
 
 const ScanOverlay = ({ count }: { count: number }) => (
   <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#060b18]/85 backdrop-blur-sm p-4">
