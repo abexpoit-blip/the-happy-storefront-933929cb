@@ -52,6 +52,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (loadedForUid.current === uid) { setLoading(false); return; }
     loadedForUid.current = uid;
 
+    // Optimistic user from the session: keeps protected routes mounted even if
+    // the profile request is slow or fails (no more random bounce to /auth).
+    setUser((prev) =>
+      prev?.id === uid ? prev : { id: uid, email: email ?? "", username: email ? email.split("@")[0] : "user", role: "buyer" },
+    );
+
     setLoading(true);
     setProfileError(null);
     // Watchdog: never let the app hang on "Загрузка…" if the network stalls.
@@ -81,8 +87,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         banned: Boolean(p?.blocked),
       });
     } catch (err: unknown) {
+      // Keep the optimistic session user — only the profile data is missing.
       setProfileError(err instanceof Error ? err.message : "Не удалось загрузить профиль");
-      setProfile(null);
       loadedForUid.current = null;
     } finally {
       clearTimeout(watchdog);

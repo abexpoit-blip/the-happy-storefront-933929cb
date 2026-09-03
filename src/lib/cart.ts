@@ -13,6 +13,8 @@ export interface CartLine {
   state: string | null;
   zip: string | null;
   price: number;
+  refundable?: boolean;
+  last_digits?: string | null;
 }
 
 const KEY = "zoru_cart_v1";
@@ -47,6 +49,8 @@ export const toLine = (p: Product): CartLine => ({
   state: p.state,
   zip: p.zip,
   price: Number(p.price),
+  refundable: Boolean((p as { refundable?: boolean }).refundable),
+  last_digits: (p as { last_digits?: string | null }).last_digits ?? null,
 });
 
 /** Adds products to cart, ignoring duplicates. Returns how many were added. */

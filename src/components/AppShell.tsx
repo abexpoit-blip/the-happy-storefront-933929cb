@@ -188,6 +188,10 @@ export const AdminRoute = ({ children }: { children: ReactNode }) => {
     return <div className="min-h-screen flex items-center justify-center text-[#666]">Загрузка…</div>;
   }
   if (!user) return <Navigate to="/crzr-x9k2-panel" replace state={{ from: loc }} />;
+  // Profile not loaded yet (slow/failed request) — don't bounce a signed-in admin out.
+  if (!profile) {
+    return <div className="min-h-screen flex items-center justify-center text-[#666]">Загрузка…</div>;
+  }
   if (profile?.role !== "admin") {
     return <Navigate to="/crzr-x9k2-panel" replace state={{ from: loc, reason: "not-admin" }} />;
   }
