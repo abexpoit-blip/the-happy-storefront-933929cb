@@ -275,7 +275,7 @@ const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: 
       <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#101a33] to-[#0a1122] shadow-[0_20px_60px_rgba(0,0,0,0.6)]">
         <div className="px-5 py-3.5 border-b border-white/10 flex items-center justify-between">
           <span className="text-[14px] font-semibold text-white inline-flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-[#f9a825]" /> Результат проверки (refund)
+            <Sparkles className="h-4 w-4 text-[#f9a825]" /> Check result (refund cards)
           </span>
           <span className="rounded-full bg-[#2e7d32]/20 text-[#7ee08a] border border-[#2e7d32]/40 px-2.5 py-0.5 text-[11.5px] font-mono">
             LIVE {rate}%
@@ -284,7 +284,7 @@ const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: 
 
         <div className="grid grid-cols-3 text-center text-[13px] border-b border-white/10">
           <div className="p-3.5 border-r border-white/5">
-            <div className="text-[11px] text-white/50">Проверено</div>
+            <div className="text-[11px] text-white/50">Checked</div>
             <div className="font-mono text-white text-lg">{checks.length}</div>
           </div>
           <div className="p-3.5 border-r border-white/5">
@@ -296,7 +296,7 @@ const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: 
             </div>
           </div>
           <div className="p-3.5">
-            <div className="text-[11px] text-white/50">Возврат</div>
+            <div className="text-[11px] text-white/50">Refunded</div>
             <div className="font-mono text-[#7ee08a] text-lg">${refunded.toFixed(2)}</div>
           </div>
         </div>
@@ -332,13 +332,13 @@ const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: 
 
         <div className="px-5 py-3.5 border-t border-white/10 flex items-center justify-between gap-3">
           <span className="text-[11px] text-white/50">
-            DEAD карты возвращены на основной баланс. Комиссия проверки: ${fee.toFixed(2)}
+            DEAD cards were refunded to your main balance. Checking fee: ${fee.toFixed(2)}
           </span>
           <button
             onClick={onClose}
             className="h-8 px-5 rounded-md bg-gradient-to-r from-[#2e7d32] to-[#43a047] text-white text-[13px] shadow-[0_4px_14px_rgba(46,125,50,0.35)] hover:brightness-110"
           >
-            Ок
+            OK
           </button>
         </div>
       </div>
