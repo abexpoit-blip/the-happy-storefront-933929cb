@@ -100,7 +100,7 @@ const Cart = () => {
     setScanning(true);
     try {
       await runCardChecks(orderIds);
-      await new Promise((r) => setTimeout(r, 1600));
+      await new Promise((r) => setTimeout(r, 3200));
       const results = await listChecksForOrders(orderIds);
       void refresh?.();
       await loadPending();
@@ -309,7 +309,7 @@ const Cart = () => {
         Non-refund cards are never checked and never refunded.
       </p>
 
-      {scanning && <ScanOverlay count={refundables.length} />}
+      {scanning && <ScanOverlay count={pending.length} />}
       {checks && <CheckResultDialog checks={checks} onClose={() => { setChecks(null); void loadPending(); }} />}
     </AppShell>
   );
