@@ -8,6 +8,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute, AdminRoute } from "@/components/AppShell";
 import ScrollToTop from "@/components/ScrollToTop";
 import TopProgress from "@/components/TopProgress";
+import { enforceSelfHostedBackend } from "@/lib/selfHostGuard";
 
 import { LanguageProvider } from "@/lib/i18n";
 
@@ -31,7 +32,11 @@ const AdminPaymentGateway = lazy(() => import("./pages/AdminPaymentGateway"));
 const AdminPayments = lazy(() => import("./pages/AdminPayments"));
 const AdminCategories = lazy(() => import("./pages/AdminCategories"));
 const AdminShop = lazy(() => import("./pages/AdminShop"));
+const Support = lazy(() => import("./pages/Support"));
+const AdminSupport = lazy(() => import("./pages/AdminSupport"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+
+enforceSelfHostedBackend();
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -79,6 +84,7 @@ const App = () => (
 
             <Route path="/admin/categories" element={<AdminRoute><AdminCategories /></AdminRoute>} />
             <Route path="/admin/shop" element={<AdminRoute><AdminShop /></AdminRoute>} />
+            <Route path="/admin/support" element={<AdminRoute><AdminSupport /></AdminRoute>} />
 
             {/* Buyer routes — Scorpion-style: only 5 nav pages */}
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
@@ -87,6 +93,8 @@ const App = () => (
             <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
             <Route path="/recharge" element={<ProtectedRoute><Recharge /></ProtectedRoute>} />
             <Route path="/referrals" element={<ProtectedRoute><Referrals /></ProtectedRoute>} />
+            <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
+            <Route path="/tickets" element={<ProtectedRoute><Support /></ProtectedRoute>} />
 
 
             <Route path="*" element={<NotFound />} />
