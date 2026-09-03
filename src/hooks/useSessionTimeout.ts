@@ -5,8 +5,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { SESSION_MINUTES, SESSION_START_KEY, clearSessionStart, markSessionStart } from "@/lib/session";
 
 /**
- * 30-minute session limit for regular users (admins are exempt).
- * Counts from login time; on expiry the user is signed out and sent to /auth.
+ * 30-minute INACTIVITY limit for regular users (admins are exempt).
+ * Any user activity refreshes the timer, so an active user is never logged out.
  */
 export function useSessionTimeout(enabled: boolean) {
   const { signOut } = useAuth();
@@ -14,26 +14,36 @@ export function useSessionTimeout(enabled: boolean) {
 
   useEffect(() => {
     if (!enabled) return;
-    let raw = localStorage.getItem(SESSION_START_KEY);
-    if (!raw) { markSessionStart(); raw = String(Date.now()); }
+    if (!localStorage.getItem(SESSION_START_KEY)) markSessionStart();
 
     const limitMs = SESSION_MINUTES * 60 * 1000;
+    let lastTouch = 0;
 
-    const check = async () => {
-      const start = Number(localStorage.getItem(SESSION_START_KEY) ?? raw);
-      if (!Number.isFinite(start)) return;
-      if (Date.now() - start >= limitMs) {
-        clearSessionStart();
-        await signOut();
-        toast.info(`Сессия истекла (${SESSION_MINUTES} минут). Войдите снова.`);
-        nav("/auth", { replace: true });
-      }
+    const touch = () => {
+      const now = Date.now();
+      if (now - lastTouch < 30_000) return; // throttle writes
+      lastTouch = now;
+      markSessionStart();
     };
 
-    void check();
-    const id = window.setInterval(check, 15_000);
-    const onFocus = () => { void check(); };
-    window.addEventListener("focus", onFocus);
-    return () => { window.clearInterval(id); window.removeEventListener("focus", onFocus); };
+    const check = async () => {
+      const raw = localStorage.getItem(SESSION_START_KEY);
+      const start = Number(raw);
+      if (!raw || !Number.isFinite(start)) { markSessionStart(); return; }
+      if (Date.now() - start < limitMs) return;
+      clearSessionStart();
+      await signOut();
+      toast.info(`Сессия истекла (${SESSION_MINUTES} минут без активности). Войдите снова.`);
+      nav("/auth", { replace: true });
+    };
+
+    const events: (keyof WindowEventMap)[] = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "click", "focus"];
+    events.forEach((e) => window.addEventListener(e, touch, { passive: true }));
+
+    const id = window.setInterval(check, 30_000);
+    return () => {
+      window.clearInterval(id);
+      events.forEach((e) => window.removeEventListener(e, touch));
+    };
   }, [enabled, signOut, nav]);
 }
