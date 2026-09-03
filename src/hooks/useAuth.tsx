@@ -52,6 +52,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (loadedForUid.current === uid) { setLoading(false); return; }
     loadedForUid.current = uid;
 
+    // Optimistic user from the session: keeps protected routes mounted even if
+    // the profile request is slow or fails (no more random bounce to /auth).
+    setUser((prev) =>
+      prev?.id === uid ? prev : { id: uid, email: email ?? "", username: email ? email.split("@")[0] : "user", role: "buyer" },
+    );
+
     setLoading(true);
     setProfileError(null);
     // Watchdog: never let the app hang on "Загрузка…" if the network stalls.
