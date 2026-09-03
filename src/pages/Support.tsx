@@ -12,6 +12,7 @@ import {
   type SupportTicket,
   type SupportMessage,
 } from "@/lib/support";
+import { PageHero } from "@/components/PageHero";
 
 const statusStyle: Record<string, string> = {
   open: "bg-[#fff5e6] text-[#e6892b] border-[#ffdcae]",
