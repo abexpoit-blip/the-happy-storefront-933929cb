@@ -22,6 +22,7 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [fire, setFire] = useState(false);
   const [statusBanner, setStatusBanner] = useState<{ title: string; hint?: string } | null>(null);
   const fromPath = (loc.state as { from?: { pathname?: string } } | null)?.from?.pathname;
   const safeFrom = fromPath && fromPath !== "/auth" ? fromPath : null;
@@ -45,7 +46,8 @@ const Auth = () => {
         setToken(result.token);
         await refresh();
         toast.success("Аккаунт создан");
-        nav("/shop", { replace: true });
+        setFire(true);
+        setTimeout(() => nav("/shop", { replace: true }), 950);
       } else {
         const result = await authApi.login({ identifier: username.trim(), password });
         setToken(result.token);
@@ -53,7 +55,8 @@ const Auth = () => {
         const destination = safeFrom ?? (result.user.role === "admin" ? "/admin" : "/shop");
 
         toast.success("С возвращением");
-        nav(destination, { replace: true });
+        setFire(true);
+        setTimeout(() => nav(destination, { replace: true }), 950);
       }
     } catch (err: unknown) {
       if (err instanceof ApiError) {
@@ -85,6 +88,7 @@ const Auth = () => {
         {lang === "en" ? "RU" : "EN"}
       </button>
       <ScorpionAuthShell
+        fire={fire}
         tagline="Поддержка — только через тикеты на сайте. Мы не используем Telegram и Discord."
       >
 
