@@ -892,3 +892,61 @@ export const adminListChecks = async (limit = 200): Promise<CardCheck[]> => {
   if (error) throw error;
   return ((data ?? []) as Record<string, unknown>[]).map(mapCheck);
 };
+
+/* ───────────────────────── Referral program ───────────────────────── */
+
+export interface ReferralRow {
+  id: string;
+  referrer_id: string;
+  referee_id: string;
+  bonus_amount: number;
+  paid_at: string;
+}
+
+export interface ReferralSummary {
+  code: string;
+  bonus: number;
+  paidCount: number;
+  earned: number;
+  pendingCount: number;
+}
+
+/** Own referral code + payout stats for the signed-in user. */
+export const getMyReferralSummary = async (): Promise<ReferralSummary> => {
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) throw new Error("not_authenticated");
+
+  const { data: prof } = await rawDb
+    .from("profiles")
+    .select("referral_code")
+    .eq("id", uid)
+    .maybeSingle();
+
+  const { data: paidRows } = await rawDb
+    .from("referrals")
+    .select("bonus_amount")
+    .eq("referrer_id", uid);
+
+  const { count: invited } = await rawDb
+    .from("profiles")
+    .select("id", { count: "exact", head: true })
+    .eq("referred_by", uid);
+
+  const { data: setting } = await rawDb
+    .from("site_settings")
+    .select("value")
+    .eq("key", "referral_bonus")
+    .maybeSingle();
+
+  const rows = (paidRows ?? []) as { bonus_amount: number | string }[];
+  const earned = rows.reduce((s, r) => s + num(r.bonus_amount), 0);
+
+  return {
+    code: String((prof as { referral_code?: string } | null)?.referral_code ?? ""),
+    bonus: num((setting as { value?: string } | null)?.value ?? 5) || 5,
+    paidCount: rows.length,
+    earned,
+    pendingCount: Math.max(0, (invited ?? 0) - rows.length),
+  };
+};
