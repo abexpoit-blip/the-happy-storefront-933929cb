@@ -429,6 +429,10 @@ const Recharge = () => {
                     <span>Текущий баланс</span>
                     <span className="font-mono font-semibold text-[#1f2d3d]">${Number(profile?.balance ?? 0).toFixed(2)}</span>
                   </div>
+                  <div className="flex items-center justify-between">
+                    <span>Бонусный баланс (рефералы)</span>
+                    <span className="font-mono font-semibold text-[#f9a825]">${Number(profile?.bonus_balance ?? 0).toFixed(2)}</span>
+                  </div>
                 </div>
 
 

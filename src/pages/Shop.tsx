@@ -256,6 +256,9 @@ const Shop = () => {
           {profile ? (
             <span className="hidden sm:inline font-semibold text-[#1f2d3d]">
               Balance: {Number(profile.balance ?? 0).toFixed(2)}$
+              {Number(profile.bonus_balance ?? 0) > 0 ? (
+                <span className="ml-2 text-[#f9a825]">Bonus: {Number(profile.bonus_balance ?? 0).toFixed(2)}$</span>
+              ) : null}
             </span>
           ) : null}
         </div>

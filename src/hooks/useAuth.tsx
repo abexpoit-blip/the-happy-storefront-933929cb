@@ -16,6 +16,7 @@ export interface Profile {
   display_name: string | null;
   avatar_url: string | null;
   balance: number;
+  bonus_balance: number;
   role: string;
   is_seller: boolean;
   banned: boolean;
@@ -55,7 +56,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setProfileError(null);
     try {
       const [{ data: p, error: pErr }, { data: roles }] = await Promise.all([
-        supabase.from("profiles").select("id, username, email, avatar_url, balance, blocked").eq("id", uid).maybeSingle(),
+        supabase.from("profiles").select("id, username, email, avatar_url, balance, bonus_balance, blocked").eq("id", uid).maybeSingle(),
         supabase.from("user_roles").select("role").eq("user_id", uid),
       ]);
       if (pErr) throw pErr;
@@ -71,6 +72,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         display_name: username,
         avatar_url: p?.avatar_url ?? null,
         balance: Number(p?.balance ?? 0),
+        bonus_balance: Number((p as { bonus_balance?: number } | null)?.bonus_balance ?? 0),
         role,
         is_seller: role === "seller" || role === "admin",
         banned: Boolean(p?.blocked),
