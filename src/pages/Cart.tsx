@@ -316,29 +316,64 @@ const Cart = () => {
 };
 
 
-const ScanOverlay = ({ count }: { count: number }) => (
-  <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#060b18]/85 backdrop-blur-sm p-4">
-    <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-gradient-to-b from-[#101a33] to-[#0a1122] p-8 text-center shadow-[0_20px_60px_rgba(0,0,0,0.6)] overflow-hidden">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#2196f3]/25 to-transparent animate-pulse" />
-      <div className="relative mx-auto h-24 w-24">
-        <span className="absolute inset-0 rounded-full border-2 border-[#2196f3]/30 animate-ping" />
-        <span className="absolute inset-2 rounded-full border-2 border-[#43a047]/40 animate-ping [animation-delay:300ms]" />
-        <span className="absolute inset-0 grid place-items-center">
-          <Radar className="h-9 w-9 text-[#5ac8fa] animate-spin [animation-duration:2.4s]" />
-        </span>
-      </div>
-      <div className="mt-6 text-white text-[15px] font-semibold tracking-wide">Checking cards…</div>
-      <div className="mt-1 text-[12.5px] text-white/60">
-        Running live check on {count} refund card{count === 1 ? "" : "s"}. Please don't close this window.
-      </div>
+const SCAN_STEPS = [
+  "Opening secure checker session…",
+  "Connecting to gateway node…",
+  "Authorizing refund cards…",
+  "Reading live / dead response…",
+  "Finalizing results…",
+];
 
-      <div className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-        <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#2196f3] via-[#5ac8fa] to-[#43a047]" style={{ animation: "cartScan 1.4s ease-in-out infinite" }} />
+const ScanOverlay = ({ count }: { count: number }) => {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setStep((s) => Math.min(s + 1, SCAN_STEPS.length - 1)), 700);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#060b18]/80 backdrop-blur-xl p-4">
+      <div className="relative w-full max-w-md rounded-3xl border border-white/15 bg-white/[0.06] p-8 text-center shadow-[0_30px_80px_rgba(0,0,0,0.65)] overflow-hidden backdrop-blur-2xl">
+        <div className="pointer-events-none absolute -top-24 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-[#2196f3]/30 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 right-0 h-48 w-48 rounded-full bg-[#43a047]/25 blur-3xl" />
+
+        <div className="relative mx-auto h-24 w-24">
+          <span className="absolute inset-0 rounded-full border border-white/20 animate-ping" />
+          <span className="absolute inset-2 rounded-full border border-[#5ac8fa]/40 animate-ping [animation-delay:400ms]" />
+          <span className="absolute inset-4 rounded-full bg-white/10 backdrop-blur-md" />
+          <span className="absolute inset-0 grid place-items-center">
+            <Radar className="h-9 w-9 text-[#5ac8fa] animate-spin [animation-duration:2.4s]" />
+          </span>
+        </div>
+
+        <div className="relative mt-6 text-white text-[15.5px] font-semibold tracking-wide">Checking cards…</div>
+        <div className="relative mt-1 text-[12.5px] text-white/65">
+          Live check running on {count} refund card{count === 1 ? "" : "s"}. Please don't close this window.
+        </div>
+
+        <div className="relative mt-5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+          <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#2196f3] via-[#5ac8fa] to-[#43a047]" style={{ animation: "cartScan 1.4s ease-in-out infinite" }} />
+        </div>
+
+        <ul className="relative mt-5 space-y-1.5 text-left">
+          {SCAN_STEPS.map((s, i) => (
+            <li
+              key={s}
+              className={`flex items-center gap-2 text-[12px] transition ${i <= step ? "text-white/85" : "text-white/30"}`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${i < step ? "bg-[#7ee08a]" : i === step ? "bg-[#5ac8fa] animate-pulse" : "bg-white/25"}`}
+              />
+              {s}
+            </li>
+          ))}
+        </ul>
+        <style>{`@keyframes cartScan{0%{transform:translateX(-100%)}100%{transform:translateX(320%)}}`}</style>
       </div>
-      <style>{`@keyframes cartScan{0%{transform:translateX(-100%)}100%{transform:translateX(320%)}}`}</style>
     </div>
-  </div>
-);
+  );
+};
+
 
 const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: () => void }) => {
   const live = checks.filter((c) => c.status === "live");
