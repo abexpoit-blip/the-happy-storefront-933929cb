@@ -63,39 +63,57 @@ const Cart = () => {
     const spendable = Number(profile?.balance ?? 0) + Number(profile?.bonus_balance ?? 0);
     if (spendable < total + fees) return toast.error("Insufficient funds. Please top up your balance.");
     setBusy(true);
-    if (refundables.length) setScanning(true);
     let ok = 0;
     const failed: string[] = [];
-    const orderIds: string[] = [];
+    let hadRefundable = false;
     try {
       for (const it of chosen) {
         try {
-          const orderId = await purchaseProduct(it.id, 1);
-          if (orderId) orderIds.push(orderId);
+          await purchaseProduct(it.id, 1);
+          if (it.refundable) hadRefundable = true;
           removeFromCart(it.id);
           ok++;
         } catch {
           failed.push(it.bin ?? it.title);
         }
       }
-      const results = await listChecksForOrders(orderIds);
       void refresh?.();
-      if (refundables.length) {
-        // Let the scan animation breathe before revealing results.
-        await new Promise((r) => setTimeout(r, 1600));
-      }
-      setScanning(false);
+      await loadPending();
       if (ok > 0) {
-        toast.success(`Purchased: ${ok}`);
-        if (results.length > 0) setChecks(results);
-        else nav("/orders");
+        toast.success(
+          hadRefundable
+            ? `Purchased: ${ok}. Refund cards are ready — press "Check cards" to run the checker.`
+            : `Purchased: ${ok}`,
+        );
+        if (!hadRefundable) nav("/orders");
       }
       if (failed.length) toast.error(`Failed: ${failed.join(", ")}`);
     } finally {
-      setScanning(false);
       setBusy(false);
     }
   };
+
+  /** Manual checker — only refund cards, started by the buyer. */
+  const runChecker = async () => {
+    if (!pending.length) return toast.error("No refund cards waiting for a check");
+    const orderIds = [...new Set(pending.map((p) => p.order_id).filter(Boolean) as string[])];
+    setScanning(true);
+    try {
+      await runCardChecks(orderIds);
+      await new Promise((r) => setTimeout(r, 1600));
+      const results = await listChecksForOrders(orderIds);
+      void refresh?.();
+      await loadPending();
+      setScanning(false);
+      setChecks(results.filter((r) => r.status !== "pending"));
+    } catch (e) {
+      setScanning(false);
+      toast.error(e instanceof Error ? e.message : "Check failed");
+    } finally {
+      setScanning(false);
+    }
+  };
+
 
   return (
     <AppShell>
