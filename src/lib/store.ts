@@ -837,3 +837,58 @@ export const adminHideExpiredCards = async () => {
   await adminUpdateCards(ids, { active: false });
   return ids.length;
 };
+
+/* ---------------- refund checker (card_checks) ---------------- */
+
+export interface CardCheck {
+  id: string;
+  user_id: string;
+  order_id: string | null;
+  product_id: string | null;
+  bin: string | null;
+  last_digits: string | null;
+  price: number;
+  status: "live" | "dead";
+  refunded: number;
+  created_at: string;
+}
+
+// card_checks is created by selfhost/refund-checker.sql, so it is not in the generated types yet.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rawDb = supabase as any;
+
+const mapCheck = (r: Record<string, unknown>): CardCheck => ({
+  id: String(r.id),
+  user_id: String(r.user_id ?? ""),
+  order_id: (r.order_id as string) ?? null,
+  product_id: (r.product_id as string) ?? null,
+  bin: (r.bin as string) ?? null,
+  last_digits: (r.last_digits as string) ?? null,
+  price: num(r.price),
+  status: r.status === "dead" ? "dead" : "live",
+  refunded: num(r.refunded),
+  created_at: String(r.created_at ?? ""),
+});
+
+/** Checker results for the orders that were just created. */
+export const listChecksForOrders = async (orderIds: string[]): Promise<CardCheck[]> => {
+  if (orderIds.length === 0) return [];
+  const { data, error } = await rawDb
+    .from("card_checks")
+    .select("*")
+    .in("order_id", orderIds)
+    .order("created_at", { ascending: true });
+  if (error) return [];
+  return ((data ?? []) as Record<string, unknown>[]).map(mapCheck);
+};
+
+/** Admin: latest checker results across all users. */
+export const adminListChecks = async (limit = 200): Promise<CardCheck[]> => {
+  const { data, error } = await rawDb
+    .from("card_checks")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return ((data ?? []) as Record<string, unknown>[]).map(mapCheck);
+};
