@@ -100,24 +100,6 @@ const Auth = () => {
             />
           </div>
 
-          <div
-            className="grid transition-all duration-300 ease-out"
-            style={{ gridTemplateRows: mode === "signup" ? "1fr" : "0fr", opacity: mode === "signup" ? 1 : 0 }}
-          >
-            <div className="overflow-hidden">
-              <div className="relative group">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 group-focus-within:text-[#ffb300] transition-colors" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Email (необязательно)"
-                  tabIndex={mode === "signup" ? 0 : -1}
-                  className={inputCls}
-                />
-              </div>
-            </div>
-          </div>
 
           <div className="relative group">
             <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 group-focus-within:text-[#ffb300] transition-colors" />
@@ -157,7 +139,7 @@ const Auth = () => {
             />
             <span className="relative flex items-center gap-2">
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {loading ? "Выполняется вход…" : mode === "login" ? "Войти" : "Создать аккаунт"}
+              {loading ? "Выполняется вход…" : "Войти"}
             </span>
           </button>
         </form>
