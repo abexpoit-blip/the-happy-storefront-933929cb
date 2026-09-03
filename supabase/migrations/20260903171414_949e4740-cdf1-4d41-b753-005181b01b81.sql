@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.trg_support_message_activity() FROM PUBLIC, anon, authenticated;

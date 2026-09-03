@@ -85,8 +85,8 @@ export function ScorpionShell({ children }: { children: ReactNode }) {
                 <Link to="/referrals" className="block px-3 py-2 hover:bg-[#f7f7f7]" onClick={() => setMenuOpen(false)}>
                   Referrals
                 </Link>
-                <Link to="/tickets" className="block px-3 py-2 hover:bg-[#f7f7f7]" onClick={() => setMenuOpen(false)}>
-                  Tickets
+                <Link to="/support" className="block px-3 py-2 hover:bg-[#f7f7f7]" onClick={() => setMenuOpen(false)}>
+                  Support
                 </Link>
                 <button
                   onClick={() => { setMenuOpen(false); signOut(); }}
