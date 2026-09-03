@@ -4,8 +4,10 @@ import Seo from "@/components/Seo";
 import { getMyReferralSummary, type ReferralSummary } from "@/lib/store";
 import { Copy, Check, Users, Gift, Clock } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 const Referrals = () => {
+  const { profile } = useAuth();
   const [data, setData] = useState<ReferralSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
@@ -114,6 +116,31 @@ const Referrals = () => {
                   Копировать
                 </button>
               </div>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 max-w-4xl">
+            <div className="bg-white border border-[#e6e6e6] p-4">
+              <div className="text-[13px] font-semibold text-[#1f2d3d] mb-2">Как это работает</div>
+              <ol className="list-decimal pl-4 space-y-1.5 text-[12.5px] text-[#555]">
+                <li>Скопируйте свою ссылку или код выше.</li>
+                <li>Друг регистрируется по ссылке (код подставляется автоматически).</li>
+                <li>Друг делает <b>первое пополнение</b> — платёж должен быть подтверждён.</li>
+                <li>Вы и друг сразу получаете по <b>${bonus}</b> на <b>бонусный баланс</b>.</li>
+                <li>Бонус выплачивается <b>один раз</b> за каждого приглашённого.</li>
+              </ol>
+            </div>
+            <div className="bg-white border border-[#e6e6e6] p-4">
+              <div className="text-[13px] font-semibold text-[#1f2d3d] mb-2">Бонусный баланс</div>
+              <div className="text-2xl font-semibold text-[#f9a825]">
+                ${Number(profile?.bonus_balance ?? 0).toFixed(2)}
+              </div>
+              <ul className="list-disc pl-4 mt-2 space-y-1.5 text-[12.5px] text-[#555]">
+                <li>Бонусные деньги отображаются отдельно от основного баланса.</li>
+                <li>Ими <b>можно покупать карты</b> — при покупке бонус списывается первым.</li>
+                <li>Вывод бонусов недоступен, только покупки.</li>
+                <li>Проверка refund-карты стоит <b>$0.03</b> за карту (сверх цены карты).</li>
+              </ul>
             </div>
           </div>
         </>
