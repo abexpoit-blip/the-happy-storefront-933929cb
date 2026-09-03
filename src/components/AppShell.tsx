@@ -15,7 +15,9 @@ const buyerNav = [
   { to: "/cart", label: "КОРЗИНА" },
   { to: "/orders", label: "ЗАКАЗЫ" },
   { to: "/recharge", label: "ПОПОЛНЕНИЕ" },
+  { to: "/referrals", label: "РЕФЕРАЛЫ" },
 ];
+
 
 export const AppShell = ({ children }: { children: ReactNode }) => {
   const { profile, signOut, user } = useAuth();
