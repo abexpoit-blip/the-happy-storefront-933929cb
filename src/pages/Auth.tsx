@@ -38,6 +38,25 @@ const Auth = () => {
     setStatusBanner(null);
     setLoading(true);
     try {
+      if (mode === "signup") {
+        const result = await authApi.signup({
+          username: username.trim(),
+          password,
+          telegram: telegram.trim() || undefined,
+        });
+        if (!result.token) {
+          setMode("login");
+          toast.success("Аккаунт создан. Войдите в систему.");
+          return;
+        }
+        setToken(result.token);
+        await refresh();
+        toast.success("Аккаунт создан");
+        setFire(true);
+        setTimeout(() => nav("/shop", { replace: true }), 950);
+        return;
+      }
+
       const result = await authApi.login({ identifier: username.trim(), password });
       setToken(result.token);
       await refresh();
