@@ -87,8 +87,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         banned: Boolean(p?.blocked),
       });
     } catch (err: unknown) {
+      // Keep the optimistic session user — only the profile data is missing.
       setProfileError(err instanceof Error ? err.message : "Не удалось загрузить профиль");
-      setProfile(null);
       loadedForUid.current = null;
     } finally {
       clearTimeout(watchdog);
