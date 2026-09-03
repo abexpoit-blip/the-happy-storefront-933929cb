@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import Seo from "@/components/Seo";
 import { toast } from "sonner";
-import { Trash2, Loader2 } from "lucide-react";
+import { Trash2, Loader2, ShieldCheck, ShieldOff, Radar, Sparkles } from "lucide-react";
 import { getCart, removeFromCart, clearCart, onCartChange, type CartLine } from "@/lib/cart";
 import { purchaseProduct, listChecksForOrders, type CardCheck } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,6 +17,7 @@ const Cart = () => {
   const [items, setItems] = useState<CartLine[]>([]);
   const [busy, setBusy] = useState(false);
   const [checks, setChecks] = useState<CardCheck[] | null>(null);
+  const [scanning, setScanning] = useState(false);
 
   useEffect(() => {
     setItems(getCart());
@@ -24,13 +25,15 @@ const Cart = () => {
   }, []);
 
   const total = items.reduce((s, i) => s + Number(i.price), 0);
+  const refundables = useMemo(() => items.filter((i) => i.refundable), [items]);
+  const fees = refundables.length * CHECK_FEE;
 
   const buyNow = async () => {
     if (!items.length) return toast.error("Корзина пуста");
     const spendable = Number(profile?.balance ?? 0) + Number(profile?.bonus_balance ?? 0);
-    if (spendable < total + CHECK_FEE * items.length)
-      return toast.error("Недостаточно средств. Пополните баланс.");
+    if (spendable < total + fees) return toast.error("Недостаточно средств. Пополните баланс.");
     setBusy(true);
+    if (refundables.length) setScanning(true);
     let ok = 0;
     const failed: string[] = [];
     const orderIds: string[] = [];
@@ -41,12 +44,17 @@ const Cart = () => {
           if (orderId) orderIds.push(orderId);
           removeFromCart(it.id);
           ok++;
-        } catch (e) {
+        } catch {
           failed.push(it.bin ?? it.title);
         }
       }
       const results = await listChecksForOrders(orderIds);
       void refresh?.();
+      if (refundables.length) {
+        // Let the scan animation breathe before revealing results.
+        await new Promise((r) => setTimeout(r, 1600));
+      }
+      setScanning(false);
       if (ok > 0) {
         toast.success(`Куплено: ${ok}`);
         if (results.length > 0) setChecks(results);
@@ -54,6 +62,7 @@ const Cart = () => {
       }
       if (failed.length) toast.error(`Не удалось: ${failed.join(", ")}`);
     } finally {
+      setScanning(false);
       setBusy(false);
     }
   };
@@ -62,35 +71,43 @@ const Cart = () => {
     <AppShell>
       <Seo title="Корзина | Zoru Shop" description="Ваша корзина покупок." path="/cart" />
 
-      <div className="bg-white border border-[#e6e6e6] px-4 py-3 flex flex-wrap items-center gap-3 text-[13px]">
-        <span className="font-medium text-[#333]">Корзина</span>
+      <div className="rounded-xl border border-[#e6e6e6] bg-gradient-to-r from-white via-[#fbfcff] to-[#f4f7ff] px-4 py-3 flex flex-wrap items-center gap-3 text-[13px] shadow-[0_2px_10px_rgba(20,30,60,0.06)]">
+        <span className="font-semibold text-[#1f2d3d]">Корзина</span>
         <span className="text-[#888]">Позиций: {items.length}</span>
-        <span className="text-[#888]">Итого: <span className="font-mono text-[#2e7d32]">${total.toFixed(2)}</span></span>
-        <span className="text-[#888]">Проверка: <span className="font-mono text-[#f56c6c]">${CHECK_FEE.toFixed(2)}</span> / карта (только refund)</span>
+        <span className="text-[#888]">
+          Товар: <span className="font-mono text-[#2e7d32]">${total.toFixed(2)}</span>
+        </span>
+        <span className="text-[#888]">
+          Проверка: <span className="font-mono text-[#f56c6c]">${fees.toFixed(2)}</span>{" "}
+          ({refundables.length} × ${CHECK_FEE.toFixed(2)}, только refund)
+        </span>
+        <span className="text-[#1f2d3d] font-medium">
+          Итого: <span className="font-mono">${(total + fees).toFixed(2)}</span>
+        </span>
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={() => { clearCart(); toast.success("Корзина очищена"); }}
             disabled={!items.length || busy}
-            className="h-8 px-4 border border-[#dcdcdc] text-[#555] hover:bg-[#f7f7f7] text-[13px] transition disabled:opacity-50"
+            className="h-8 px-4 rounded-md border border-[#dcdcdc] text-[#555] hover:bg-[#f7f7f7] text-[13px] transition disabled:opacity-50"
           >
             Очистить
           </button>
           <button
             onClick={() => void buyNow()}
             disabled={!items.length || busy}
-            className="h-8 px-5 bg-[#e8f5e9] hover:bg-[#dcedc8] border border-[#c8e6c9] text-[#2e7d32] text-[13px] transition disabled:opacity-60 inline-flex items-center gap-2"
+            className="h-8 px-5 rounded-md bg-gradient-to-r from-[#2e7d32] to-[#43a047] text-white text-[13px] shadow-[0_4px_14px_rgba(46,125,50,0.35)] hover:brightness-110 transition disabled:opacity-60 inline-flex items-center gap-2"
           >
-            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Купить сейчас
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
+            Купить{refundables.length ? " и проверить" : " сейчас"}
           </button>
         </div>
       </div>
 
-      <div className="mt-3 border border-[#e6e6e6] bg-white overflow-x-auto -mx-3 sm:mx-0">
-        <table className="w-full min-w-[820px] text-[13px] border-collapse">
-
+      <div className="mt-3 rounded-xl border border-[#e6e6e6] bg-white overflow-x-auto -mx-3 sm:mx-0 shadow-[0_2px_10px_rgba(20,30,60,0.05)]">
+        <table className="w-full min-w-[900px] text-[13px] border-collapse">
           <thead>
-            <tr className="bg-[#fafafa] text-[#555] text-[12px]">
-              {["BIN", "month", "year", "city", "state", "zip", "country", "prices", "base", "operation"].map((h) => (
+            <tr className="bg-gradient-to-r from-[#f7f9fc] to-[#eef2fa] text-[#555] text-[12px]">
+              {["BIN", "month", "year", "city", "state", "zip", "country", "refund", "prices", "base", "operation"].map((h) => (
                 <th key={h} className="p-2 text-center font-normal border-b border-[#eee]">{h}</th>
               ))}
             </tr>
@@ -101,7 +118,7 @@ const Cart = () => {
                 <td className="p-2 text-center font-mono text-[#333]">
                   <span className="inline-flex items-center gap-2">
                     <BrandLogo brand={c.brand || detectBrandFromBin(c.bin ?? "")} className="h-5 w-8 shrink-0" />
-                    <span>{c.bin ?? "—"}<span className="text-[#bbb]">••••••</span></span>
+                    <span>{c.bin ?? "—"}<span className="text-[#bbb]">••••</span>{c.last_digits ?? "••"}</span>
                   </span>
                 </td>
                 <td className="p-2 text-center font-mono">{c.exp_month ?? "—"}</td>
@@ -116,6 +133,17 @@ const Cart = () => {
                       <span>{countryCode(c.country)}</span>
                     </span>
                   ) : "—"}
+                </td>
+                <td className="p-2 text-center">
+                  {c.refundable ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#e8f5e9] text-[#2e7d32] border border-[#c8e6c9] px-2 py-0.5 text-[11px]">
+                      <ShieldCheck className="h-3 w-3" /> проверка
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#f6f6f6] text-[#999] border border-[#e6e6e6] px-2 py-0.5 text-[11px]">
+                      <ShieldOff className="h-3 w-3" /> нет
+                    </span>
+                  )}
                 </td>
                 <td className="p-2 text-center font-mono">{Number(c.price).toFixed(2)}</td>
                 <td className="p-2 text-center text-[11px] text-[#666] max-w-[180px]">
@@ -134,7 +162,7 @@ const Cart = () => {
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={10} className="p-10 text-center text-[#888] text-[13px]">
+                <td colSpan={11} className="p-10 text-center text-[#888] text-[13px]">
                   Корзина пуста. <Link to="/shop" className="text-[#2196f3] hover:underline">Перейти в магазин</Link>
                 </td>
               </tr>
@@ -143,52 +171,99 @@ const Cart = () => {
         </table>
       </div>
 
+      <p className="mt-3 text-[12px] text-[#777]">
+        Проверка (checker) выполняется <b>только для refund-карт</b> — сразу после покупки, ${CHECK_FEE.toFixed(2)} за карту.
+        DEAD карты автоматически возвращаются на основной баланс. Карты без refund не проверяются и не возвращаются.
+      </p>
+
+      {scanning && <ScanOverlay count={refundables.length} />}
       {checks && <CheckResultDialog checks={checks} onClose={() => { setChecks(null); nav("/orders"); }} />}
     </AppShell>
   );
 };
+
+const ScanOverlay = ({ count }: { count: number }) => (
+  <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#060b18]/85 backdrop-blur-sm p-4">
+    <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-gradient-to-b from-[#101a33] to-[#0a1122] p-8 text-center shadow-[0_20px_60px_rgba(0,0,0,0.6)] overflow-hidden">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#2196f3]/25 to-transparent animate-pulse" />
+      <div className="relative mx-auto h-24 w-24">
+        <span className="absolute inset-0 rounded-full border-2 border-[#2196f3]/30 animate-ping" />
+        <span className="absolute inset-2 rounded-full border-2 border-[#43a047]/40 animate-ping [animation-delay:300ms]" />
+        <span className="absolute inset-0 grid place-items-center">
+          <Radar className="h-9 w-9 text-[#5ac8fa] animate-spin [animation-duration:2.4s]" />
+        </span>
+      </div>
+      <div className="mt-6 text-white text-[15px] font-semibold tracking-wide">Проверка карт…</div>
+      <div className="mt-1 text-[12.5px] text-white/60">
+        Идёт live-проверка {count} refund-карт{count === 1 ? "ы" : ""}. Не закрывайте окно.
+      </div>
+      <div className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+        <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#2196f3] via-[#5ac8fa] to-[#43a047] animate-[shimmer_1.2s_linear_infinite]" style={{ animation: "cartScan 1.4s ease-in-out infinite" }} />
+      </div>
+      <style>{`@keyframes cartScan{0%{transform:translateX(-100%)}100%{transform:translateX(320%)}}`}</style>
+    </div>
+  </div>
+);
 
 const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: () => void }) => {
   const live = checks.filter((c) => c.status === "live");
   const dead = checks.filter((c) => c.status === "dead");
   const refunded = dead.reduce((s, c) => s + Number(c.refunded), 0);
   const rate = checks.length ? Math.round((live.length / checks.length) * 100) : 0;
-  const fee = checks.reduce((s, c) => s + Number((c as { fee?: number }).fee ?? 0), 0);
+  const fee = checks.reduce((s, c) => s + Number(c.fee ?? 0), 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-lg bg-white border border-[#e6e6e6] shadow-xl">
-        <div className="px-5 py-3 border-b border-[#eee] flex items-center justify-between">
-          <span className="text-[14px] font-medium text-[#333]">Результат проверки (refund карты)</span>
-          <span className="text-[12px] text-[#888]">LIVE {rate}%</span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#060b18]/80 backdrop-blur-sm p-4">
+      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#101a33] to-[#0b1striped] shadow-[0_20px_60px_rgba(0,0,0,0.6)]" style={{ background: "linear-gradient(180deg,#101a33,#0a1122)" }}>
+        <div className="px-5 py-3.5 border-b border-white/10 flex items-center justify-between">
+          <span className="text-[14px] font-semibold text-white inline-flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-[#f9a825]" /> Результат проверки (refund)
+          </span>
+          <span className="rounded-full bg-[#2e7d32]/20 text-[#7ee08a] border border-[#2e7d32]/40 px-2.5 py-0.5 text-[11.5px] font-mono">
+            LIVE {rate}%
+          </span>
         </div>
 
-        <div className="grid grid-cols-3 text-center text-[13px] border-b border-[#eee]">
-          <div className="p-3 border-r border-[#f0f0f0]">
-            <div className="text-[11px] text-[#888]">Проверено</div>
-            <div className="font-mono text-[#333]">{checks.length}</div>
+        <div className="grid grid-cols-3 text-center text-[13px] border-b border-white/10">
+          <div className="p-3.5 border-r border-white/5">
+            <div className="text-[11px] text-white/50">Проверено</div>
+            <div className="font-mono text-white text-lg">{checks.length}</div>
           </div>
-          <div className="p-3 border-r border-[#f0f0f0]">
-            <div className="text-[11px] text-[#888]">Live / Dead</div>
-            <div className="font-mono"><span className="text-[#2e7d32]">{live.length}</span> / <span className="text-[#f56c6c]">{dead.length}</span></div>
+          <div className="p-3.5 border-r border-white/5">
+            <div className="text-[11px] text-white/50">Live / Dead</div>
+            <div className="font-mono text-lg">
+              <span className="text-[#7ee08a]">{live.length}</span>
+              <span className="text-white/30"> / </span>
+              <span className="text-[#ff8a80]">{dead.length}</span>
+            </div>
           </div>
-          <div className="p-3">
-            <div className="text-[11px] text-[#888]">Возврат</div>
-            <div className="font-mono text-[#2e7d32]">${refunded.toFixed(2)}</div>
+          <div className="p-3.5">
+            <div className="text-[11px] text-white/50">Возврат</div>
+            <div className="font-mono text-[#7ee08a] text-lg">${refunded.toFixed(2)}</div>
           </div>
         </div>
 
-        <div className="max-h-[260px] overflow-y-auto">
+        <div className="max-h-[280px] overflow-y-auto">
           <table className="w-full text-[12px]">
             <tbody>
               {checks.map((c) => (
-                <tr key={c.id} className="border-b border-[#f5f5f5]">
-                  <td className="p-2 font-mono text-[#333]">{c.bin ?? "—"}<span className="text-[#bbb]">••••</span>{c.last_digits ?? ""}</td>
-                  <td className="p-2 text-center font-mono">${Number(c.price).toFixed(2)}</td>
-                  <td className={`p-2 text-center font-medium ${c.status === "live" ? "text-[#2e7d32]" : "text-[#f56c6c]"}`}>
-                    {c.status === "live" ? "LIVE" : "DEAD"}
+                <tr key={c.id} className="border-b border-white/5">
+                  <td className="p-2.5 font-mono text-white/85">
+                    {c.bin ?? "—"}<span className="text-white/30">••••</span>{c.last_digits ?? ""}
                   </td>
-                  <td className="p-2 text-right font-mono text-[#2e7d32]">
+                  <td className="p-2.5 text-center font-mono text-white/60">${Number(c.price).toFixed(2)}</td>
+                  <td className="p-2.5 text-center">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold border ${
+                        c.status === "live"
+                          ? "bg-[#2e7d32]/20 text-[#7ee08a] border-[#2e7d32]/40"
+                          : "bg-[#c62828]/20 text-[#ff8a80] border-[#c62828]/40"
+                      }`}
+                    >
+                      {c.status === "live" ? "LIVE" : "DEAD"}
+                    </span>
+                  </td>
+                  <td className="p-2.5 text-right font-mono text-[#7ee08a]">
                     {c.status === "dead" ? `+$${Number(c.refunded).toFixed(2)}` : "—"}
                   </td>
                 </tr>
@@ -197,11 +272,14 @@ const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: 
           </table>
         </div>
 
-        <div className="px-5 py-3 border-t border-[#eee] flex items-center justify-between gap-3">
-          <span className="text-[11px] text-[#888]">
-            Сумма за DEAD карты возвращена на основной баланс. Комиссия проверки: ${fee.toFixed(2)}
+        <div className="px-5 py-3.5 border-t border-white/10 flex items-center justify-between gap-3">
+          <span className="text-[11px] text-white/50">
+            DEAD карты возвращены на основной баланс. Комиссия проверки: ${fee.toFixed(2)}
           </span>
-          <button onClick={onClose} className="h-8 px-5 bg-[#e8f5e9] border border-[#c8e6c9] text-[#2e7d32] text-[13px] hover:bg-[#dcedc8]">
+          <button
+            onClick={onClose}
+            className="h-8 px-5 rounded-md bg-gradient-to-r from-[#2e7d32] to-[#43a047] text-white text-[13px] shadow-[0_4px_14px_rgba(46,125,50,0.35)] hover:brightness-110"
+          >
             Ок
           </button>
         </div>
