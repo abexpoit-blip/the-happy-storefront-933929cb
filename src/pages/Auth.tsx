@@ -85,15 +85,9 @@ const Auth = () => {
         {lang === "en" ? "RU" : "EN"}
       </button>
       <ScorpionAuthShell
-        tagline={
-          <>
-            Наш Telegram-канал:{" "}
-            <a href="https://t.me/scorpionccstore02" className="text-[#ffd54f] font-semibold hover:underline">
-              @scorpionccstore02
-            </a>
-          </>
-        }
+        tagline="Поддержка — только через тикеты на сайте. Мы не используем Telegram и Discord."
       >
+
         {/* Tabs */}
         <div className="relative flex mb-6 p-1 rounded-xl bg-white/[0.04] border border-white/10 backdrop-blur-sm">
           <span

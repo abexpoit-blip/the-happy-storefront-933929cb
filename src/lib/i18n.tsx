@@ -204,8 +204,10 @@ const DICT: Record<string, string> = {
   "Личный кабинет покупателя, живая лента поступлений и объявления.":
     "Buyer dashboard, live restock feed and announcements.",
   "Telegram-канал:": "Telegram channel:",
-  "Остерегайтесь поддельной поддержки Zoru Shop. По вопросам и предложениям пишите нам в Telegram.":
-    "Beware of fake Zoru Shop support. For questions and suggestions write to us on Telegram.",
+  "Остерегайтесь поддельной поддержки Zoru Shop. У нас нет Telegram и Discord — любые контакты в мессенджерах от имени магазина являются мошенниками.":
+    "Beware of fake Zoru Shop support. We have no Telegram or Discord — any messenger contacts claiming to be the shop are scammers.",
+  "Поддержка — только через тикеты на сайте. Мы не используем Telegram и Discord.":
+    "Support is only available via on-site tickets. We do not use Telegram or Discord.",
   "Если вы нашли ошибку или уязвимость, сообщите об этом через тикеты.":
     "If you find a bug or vulnerability, report it through tickets.",
   "Владельцы магазина не несут ответственности за то, как вы используете информацию с этого ресурса.":

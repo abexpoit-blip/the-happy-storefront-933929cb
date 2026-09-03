@@ -169,12 +169,10 @@ export default function Landing() {
         <div className="mx-auto max-w-[1200px] px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
           <div>© {new Date().getFullYear()} Zoru Shop. All rights reserved.</div>
           <a
-            href="https://t.me/scorpionccstore02"
-            target="_blank"
-            rel="noreferrer"
+            href="/tickets"
             className="hover:text-[#4fc3f7]"
           >
-            Telegram · @scorpionccstore02
+            Поддержка · Тикеты на сайте
           </a>
         </div>
       </footer>
