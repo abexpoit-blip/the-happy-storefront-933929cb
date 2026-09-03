@@ -173,9 +173,32 @@ const Auth = () => {
             />
             <span className="relative flex items-center gap-2">
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {loading ? "Выполняется вход…" : "Войти"}
+              {loading
+                ? mode === "signup" ? "Создание аккаунта…" : "Выполняется вход…"
+                : mode === "signup" ? "Зарегистрироваться" : "Войти"}
             </span>
           </button>
+
+          <div className="pt-1 text-center">
+            <button
+              type="button"
+              onClick={() => nav("/reset-password")}
+              className="text-[12px] text-white/55 hover:text-[#ffb300] transition-colors"
+            >
+              Забыли пароль?
+            </button>
+          </div>
+
+          <div className="pt-2 text-center text-[12px] text-white/55">
+            {mode === "login" ? "Нет аккаунта?" : "Уже есть аккаунт?"}{" "}
+            <button
+              type="button"
+              onClick={() => { setMode(mode === "login" ? "signup" : "login"); setStatusBanner(null); }}
+              className="font-semibold text-[#ffb300] hover:text-[#ff6b1a] transition-colors"
+            >
+              {mode === "login" ? "Зарегистрироваться" : "Войти"}
+            </button>
+          </div>
         </form>
 
         {/* Trust badges */}
