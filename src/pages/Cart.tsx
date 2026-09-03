@@ -65,6 +65,7 @@ const Cart = () => {
     setBusy(true);
     let ok = 0;
     const failed: string[] = [];
+    let lastError = "";
     let hadRefundable = false;
     try {
       for (const it of chosen) {
@@ -73,7 +74,8 @@ const Cart = () => {
           if (it.refundable) hadRefundable = true;
           removeFromCart(it.id);
           ok++;
-        } catch {
+        } catch (e) {
+          lastError = e instanceof Error ? e.message : String(e);
           failed.push(it.bin ?? it.title);
         }
       }
@@ -87,7 +89,9 @@ const Cart = () => {
         );
         if (!hadRefundable) nav("/orders");
       }
-      if (failed.length) toast.error(`Failed: ${failed.join(", ")}`);
+      if (failed.length) {
+        toast.error(`Failed: ${failed.join(", ")}${lastError ? ` — ${lastError}` : ""}`, { duration: 8000 });
+      }
     } finally {
       setBusy(false);
     }
@@ -95,8 +99,15 @@ const Cart = () => {
 
   /** Manual checker — only refund cards, started by the buyer. */
   const runChecker = async () => {
-    if (!pending.length) return toast.error("No refund cards waiting for a check");
-    const orderIds = [...new Set(pending.map((p) => p.order_id).filter(Boolean) as string[])];
+    let queue = pending;
+    if (!queue.length) {
+      // pending list may be stale (just purchased in another tab / slow refresh)
+      try { queue = await listPendingChecks(); setPending(queue); } catch { /* ignore */ }
+    }
+    if (!queue.length) {
+      return toast.error("No refund cards waiting for a check. Buy a refund card first.");
+    }
+    const orderIds = [...new Set(queue.map((p) => p.order_id).filter(Boolean) as string[])];
     setScanning(true);
     try {
       await runCardChecks(orderIds);
@@ -104,15 +115,14 @@ const Cart = () => {
       const results = await listChecksForOrders(orderIds);
       void refresh?.();
       await loadPending();
-      setScanning(false);
       setChecks(results.filter((r) => r.status !== "pending"));
     } catch (e) {
-      setScanning(false);
-      toast.error(e instanceof Error ? e.message : "Check failed");
+      toast.error(e instanceof Error ? e.message : "Check failed", { duration: 8000 });
     } finally {
       setScanning(false);
     }
   };
+
 
 
   return (
@@ -262,12 +272,13 @@ const Cart = () => {
                       </span>
                       <button
                         onClick={() => void runChecker()}
-                        disabled={scanning || !pending.length}
-                        title={pending.length ? "Run live/dead check" : "Buy this card first — then the checker unlocks"}
+                        disabled={scanning}
+                        title={pending.length ? "Run live/dead check" : "Buy this card first — then the checker runs"}
                         className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white bg-gradient-to-r from-[#2196f3] to-[#5ac8fa] shadow-[0_4px_12px_rgba(33,150,243,0.35)] hover:brightness-110 transition disabled:opacity-45 disabled:shadow-none"
                       >
                         {scanning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Radar className="h-3 w-3" />} Check
                       </button>
+
                     </div>
                   ) : (
                     <span className="inline-flex items-center gap-1 rounded-full bg-[#f6f6f6] text-[#999] border border-[#e6e6e6] px-2 py-0.5 text-[11px]">
