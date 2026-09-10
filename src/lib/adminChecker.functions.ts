@@ -120,7 +120,8 @@ export const adminDeleteCheckerLogs = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    const { data: n, error } = await context.supabase.rpc("admin_delete_checks", {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: n, error } = await (context.supabase as any).rpc("admin_delete_checks", {
       _task_id: data.taskId ?? null,
       _day: data.day ?? null,
     });

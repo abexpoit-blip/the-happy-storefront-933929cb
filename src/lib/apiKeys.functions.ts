@@ -115,7 +115,8 @@ export const updateApiKey = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
     }
     if (data.addCredits) {
-      const { error } = await context.supabase.rpc("admin_adjust_api_credits", {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (context.supabase as any).rpc("admin_adjust_api_credits", {
         _key_id: data.id,
         _credits: data.addCredits,
       });
