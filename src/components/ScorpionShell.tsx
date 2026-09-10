@@ -2,6 +2,7 @@ import { ReactNode, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { ChevronDown, LogOut } from "lucide-react";
+import { SystemStatusBadge } from "@/components/SystemStatus";
 
 const NAV = [
   { to: "/", label: "HOME", end: true },
@@ -18,6 +19,7 @@ export function ScorpionShell({ children }: { children: ReactNode }) {
   const { profile, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const balance = Number(profile?.balance ?? 0).toFixed(2);
+  const credits = Number(profile?.check_credits ?? 0);
   const uname = profile?.username ?? "member";
 
   return (
@@ -52,6 +54,13 @@ export function ScorpionShell({ children }: { children: ReactNode }) {
       {/* SUB BAR — balance + user */}
       <div className="bg-white border-b border-[#e6e6e6]">
         <div className="mx-auto max-w-[1400px] px-4 sm:px-6 h-12 flex items-center justify-end gap-3 text-[13px]">
+          <SystemStatusBadge className="mr-auto" />
+          <Link
+            to="/checker"
+            className="px-3 py-1.5 border border-[#e6e6e6] text-[#f9a825] hover:bg-[#fffaf0] transition font-medium"
+          >
+            {credits} cr
+          </Link>
           <Link
             to="/recharge"
             className="px-3 py-1.5 border border-[#e6e6e6] text-[#2196f3] hover:bg-[#f5faff] transition"
