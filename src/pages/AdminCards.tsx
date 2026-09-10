@@ -6,7 +6,8 @@ import {
 } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CreditCard, Trash2, Search, EyeOff, Eye, DollarSign, Check, X, ChevronLeft, ChevronRight, AlertTriangle, LayoutGrid } from "lucide-react";
+import { CreditCard, Trash2, Search, EyeOff, Eye, DollarSign, Check, X, ChevronLeft, ChevronRight, AlertTriangle, LayoutGrid, Layers } from "lucide-react";
+import { publicBase, sortBasesLatestFirst } from "@/lib/baseLabel";
 import { toast } from "sonner";
 
 type Card = AdminCardRow;
@@ -108,6 +109,23 @@ const AdminCards = () => {
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Failed"); }
   };
 
+  // Manual BASE assignment — lets admins backdate an upload (e.g. 2026_07_25_VISA).
+  const [bulkBase, setBulkBase] = useState("");
+  const knownBases = sortBasesLatestFirst(
+    [...new Set(allCards.map((c) => c.base).filter(Boolean) as string[])],
+  );
+  const bulkSetBase = async () => {
+    const ids = Array.from(selected);
+    const b = bulkBase.trim();
+    if (ids.length === 0 || !b) return toast.error("Select cards and type a base name");
+    try {
+      await adminUpdateCards(ids, { base: b });
+      setAllCards((cs) => cs.map((c) => (ids.includes(c.id) ? { ...c, base: b } : c)));
+      toast.success(`Base \u2192 ${b} on ${ids.length} cards`);
+      setBulkBase(""); setSelected(new Set());
+    } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Failed"); }
+  };
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editPrice, setEditPrice] = useState("");
   const saveEdit = async (id: string) => {
@@ -133,7 +151,7 @@ const AdminCards = () => {
 
   return (
     <AdminLayout title="Card Moderation">
-      <section className="glass rounded-2xl p-6">
+      <section className="glass rounded-2xl p-6 border border-primary/20 bg-gradient-to-b from-primary/[0.06] to-transparent shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
         <div className="flex items-center gap-2 mb-4 flex-wrap justify-between">
           <div className="flex items-center gap-2">
             <CreditCard className="h-4 w-4 text-primary-glow" />
@@ -181,18 +199,34 @@ const AdminCards = () => {
                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
+            <div className="flex items-center gap-1 ml-2 pl-2 border-l border-border/40">
+              <Layers className="h-3.5 w-3.5 text-primary-glow" />
+              <Input
+                value={bulkBase}
+                onChange={(e) => setBulkBase(e.target.value)}
+                list="admin-base-list"
+                placeholder="BASE e.g. 2026_07_25_VISA"
+                className="bg-input/60 h-8 w-52 text-xs"
+                onKeyDown={(e) => { if (e.key === "Enter") bulkSetBase(); }}
+              />
+              <datalist id="admin-base-list">
+                {knownBases.map((b) => <option key={b} value={b} />)}
+              </datalist>
+              <Button size="sm" onClick={bulkSetBase} className="bg-gradient-to-r from-amber-500 to-orange-600 text-white">Set base</Button>
+            </div>
             <button onClick={() => setSelected(new Set())} className="ml-auto text-xs text-muted-foreground">Clear</button>
           </div>
         )}
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-sm">
-            <thead className="text-xs uppercase tracking-wider text-muted-foreground bg-secondary/40">
+            <thead className="text-xs uppercase tracking-wider text-primary-glow/80 bg-gradient-to-r from-primary/20 via-primary/10 to-transparent">
               <tr>
                 <th className="p-2 w-10 text-center"><input type="checkbox" checked={allSelected} onChange={toggleAll} className="accent-primary" /></th>
                 <th className="p-2 text-left">BIN</th>
                 <th className="p-2 text-left">Brand</th>
                 <th className="p-2 text-left">Country</th>
+                <th className="p-2 text-left">Base</th>
                 <th className="p-2 text-center">Expiry</th>
                 <th className="p-2 text-right">Price</th>
                 <th className="p-2 text-center">Status</th>
@@ -206,6 +240,7 @@ const AdminCards = () => {
                   <td className="p-2 font-mono">{c.bin}</td>
                   <td className="p-2">{c.brand}</td>
                   <td className="p-2">{c.country}</td>
+                  <td className="p-2 text-xs font-mono text-primary-glow/90">{c.base ? publicBase(c.base) : "\u2014"}</td>
                   <td className="p-2 text-center font-mono text-xs">
                     {c.exp_month && c.exp_year ? `${c.exp_month}/${c.exp_year}` : "—"}
                   </td>
@@ -236,7 +271,7 @@ const AdminCards = () => {
                 </tr>
               ))}
               {!loading && cards.length === 0 && (
-                <tr><td colSpan={8} className="p-6 text-center text-muted-foreground text-xs">No cards match filters.</td></tr>
+                <tr><td colSpan={9} className="p-6 text-center text-muted-foreground text-xs">No cards match filters.</td></tr>
               )}
             </tbody>
           </table>
