@@ -143,6 +143,32 @@ const Checker = () => {
     <AppShell>
       <Seo title="Card Checker | Zoru Shop" description="Check your own cards live/dead with your balance." path="/checker" />
 
+      <PageHero
+        eyebrow="Card checker"
+        eyebrowIcon={Radar}
+        title="Check your cards"
+        highlight="live or dead"
+        description={`Paste your cards, pick a gate and pay from your balance — $${price.toFixed(2)} per card. Bonus balance is spent first.`}
+        right={
+          <div className="flex flex-wrap gap-2">
+            <div className="rounded-xl border border-white/12 bg-white/[0.06] px-4 py-3 text-right">
+              <div className="flex items-center justify-end gap-1.5 text-[11px] uppercase tracking-wider text-white/55">
+                <Wallet className="h-3 w-3" /> Your balance
+              </div>
+              <div className="font-mono text-xl text-white">${spendable.toFixed(2)}</div>
+            </div>
+            <div className="rounded-xl border border-white/12 bg-white/[0.06] px-4 py-3 text-right">
+              <div className="flex items-center justify-end gap-1.5 text-[11px] uppercase tracking-wider text-white/55">
+                <Zap className="h-3 w-3" /> Gateway credit
+              </div>
+              <div className={`font-mono text-xl ${credit?.ok ? "text-[#7ee08a]" : "text-[#ff8a80]"}`}>
+                {credit ? (credit.ok ? credit.credit.toFixed(2) : "offline") : "…"}
+              </div>
+            </div>
+          </div>
+        }
+      />
+
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)]">
         {/* LIST CARD */}
         <Panel
