@@ -244,20 +244,22 @@ const Shop = () => {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 text-[12px] text-[#777]">
+        <div className="flex items-center gap-3 text-[13px] text-[#607d8b]">
           <label className="inline-flex items-center gap-1.5">
             Rows
             <select
               value={perPage}
               onChange={(e) => setPerPage(Number(e.target.value))}
-              className="h-8 rounded-md border border-[#dcdcdc] bg-white px-2 text-[12px] outline-none focus:border-[#2196f3]"
+              className="h-8 rounded-md border border-[#dcdcdc] bg-white px-2 text-[13px] outline-none focus:border-[#2196f3]"
             >
               {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
-          {cards.length > 0 ? <span>{cards.length} results · стр. {page}/{totalPages}</span> : null}
+          {cards.length > 0 ? (
+            <span>{cards.length} results · page {page}/{totalPages} · stock value {resultsTotal.toFixed(2)}$</span>
+          ) : null}
           <Link to="/cart" className="text-[#2196f3] hover:underline">
-            Корзина{count > 0 ? ` (${count})` : ""}
+            Cart{count > 0 ? ` (${count})` : ""}
           </Link>
           {profile ? (
             <span className="hidden sm:inline font-semibold text-[#1f2d3d]">
