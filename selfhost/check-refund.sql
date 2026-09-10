@@ -29,3 +29,7 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.refund_check_credits(uuid, integer) FROM PUBLIC, anon, authenticated;
+
+-- One-time credit refund marker per bought refund card.
+ALTER TABLE public.card_checks
+  ADD COLUMN IF NOT EXISTS credits_refunded boolean NOT NULL DEFAULT false;
