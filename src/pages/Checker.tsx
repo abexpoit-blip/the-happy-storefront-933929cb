@@ -42,6 +42,7 @@ const Checker = () => {
   const { profile, refresh } = useAuth();
   const getConfig = useServerFn(selfCheckConfig);
   const getGates = useServerFn(checkerGates);
+  const getCredit = useServerFn(checkerCredit);
   const start = useServerFn(startSelfCheck);
   const poll = useServerFn(pollSelfCheck);
 
@@ -55,12 +56,14 @@ const Checker = () => {
   const [tab, setTab] = useState<Tab>("live");
   const [taskId, setTaskId] = useState<string | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [credit, setCredit] = useState<{ credit: number; ok: boolean } | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     void getConfig({}).then((c) => { setPrice(c.price); setGate((g) => g || c.gate); }).catch(() => undefined);
     void getGates({}).then((g) => setGates(g as Gate[])).catch(() => undefined);
-  }, [getConfig, getGates]);
+    void getCredit({}).then((c) => setCredit({ credit: c.credit, ok: c.ok })).catch(() => setCredit({ credit: 0, ok: false }));
+  }, [getConfig, getGates, getCredit]);
 
   useEffect(() => {
     const close = (e: MouseEvent) => {
