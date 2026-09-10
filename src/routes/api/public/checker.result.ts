@@ -99,7 +99,8 @@ export const Route = createFileRoute("/api/public/checker/result")({
           task_status: gwStatus,
           total,
           answered,
-          credits_refunded: refunded,
+          credits_refunded: refundedCredits,
+          balance_refunded: refundedUsd,
           results: out,
         });
       },
