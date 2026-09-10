@@ -13,6 +13,10 @@ export interface SelfCheckRow {
   msg: string;
 }
 
+export interface SelfCheckTaskRow extends SelfCheckRow {
+  pending?: boolean;
+}
+
 /** Parse a user-pasted line into `PAN|MM|YYYY|CVV`. */
 function parseLine(raw: string): string | null {
   const p = raw.trim().split(/[|:/\s,]+/).filter(Boolean);
@@ -29,6 +33,14 @@ function parseLine(raw: string): string | null {
 
 const mask = (pan: string) =>
   pan.length > 10 ? `${pan.slice(0, 6)}${"*".repeat(pan.length - 10)}${pan.slice(-4)}` : pan;
+
+const pendingRows = (lines: string[]): SelfCheckTaskRow[] => lines.map((line) => ({
+  card: mask(digits(line.split("|")[0] ?? "")),
+  status: "skipped",
+  category: "Pending",
+  msg: "Waiting for gateway result",
+  pending: true,
+}));
 
 /** Price + gate shown in the checker UI. */
 export const selfCheckConfig = createServerFn({ method: "POST" })
@@ -117,16 +129,22 @@ export const startSelfCheck = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabaseAdmin as any).from("self_checks").insert({
+    const { error: saveError } = await (supabaseAdmin as any).from("self_checks").insert({
       user_id: context.userId,
       task_id: taskId,
       gate,
       total: lines.length,
       cost: Number(cost ?? 0),
       status: "running",
+      submitted_cards: pendingRows(lines),
     });
 
-    return { taskId, total: lines.length, cost, credits, gate };
+    if (saveError) {
+      await (supabaseAdmin as any).rpc("refund_check_credits", { _user_id: context.userId, _credits: credits });
+      throw new Error(saveError.message || "task_save_failed");
+    }
+
+    return { taskId, total: lines.length, cost, credits, gate, rows: pendingRows(lines) };
   });
 
 /** Poll a self-check task and return masked results. */
@@ -144,6 +162,9 @@ export const pollSelfCheck = createServerFn({ method: "POST" })
     const { getResults, verdict } = await import("@/lib/checkerccv.server");
 
     // Results are cursor-paginated and arrive gradually — keep what we already stored.
+    const submitted: SelfCheckTaskRow[] = Array.isArray(task.submitted_cards)
+      ? (task.submitted_cards as SelfCheckTaskRow[])
+      : [];
     const stored: SelfCheckRow[] = Array.isArray(task.results) ? (task.results as SelfCheckRow[]) : [];
     const rows: SelfCheckRow[] = [...stored];
     let cursor = rows.length;
@@ -163,7 +184,11 @@ export const pollSelfCheck = createServerFn({ method: "POST" })
           msg: String(r.result?.msg ?? ""),
         };
       });
-      rows.push(...mapped);
+      for (const row of mapped) {
+        const index = rows.findIndex((current) => current.card === row.card);
+        if (index >= 0) rows[index] = row;
+        else rows.push(row);
+      }
       const next = res.nextCursor > cursor ? res.nextCursor : cursor + mapped.length;
       if (mapped.length === 0 || next <= cursor) break;
       cursor = next;
@@ -191,7 +216,10 @@ export const pollSelfCheck = createServerFn({ method: "POST" })
       .update({ results: rows, status: done ? "completed" : "running", refunded_credits: refunded })
       .eq("id", task.id);
 
-    return { done, status, total, rows, answered, refundedCredits: refunded };
+    const displayRows: SelfCheckTaskRow[] = submitted.length
+      ? submitted.map((pending) => rows.find((row) => row.card === pending.card) ?? pending)
+      : rows;
+    return { done, status, total, rows: displayRows, answered, refundedCredits: refunded };
 
   });
 
@@ -203,20 +231,23 @@ export const listSelfChecks = createServerFn({ method: "POST" })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data } = await (supabaseAdmin as any)
       .from("self_checks")
-      .select("task_id, gate, total, cost, status, results, created_at")
+      .select("task_id, gate, total, cost, status, results, submitted_cards, created_at")
       .eq("user_id", context.userId)
+      .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
       .order("created_at", { ascending: false })
       .limit(10);
     return ((data ?? []) as {
       task_id: string; gate: string; total: number; cost: number;
-      status: string; results: SelfCheckRow[] | null; created_at: string;
+       status: string; results: SelfCheckRow[] | null; submitted_cards: SelfCheckTaskRow[] | null; created_at: string;
     }[]).map((t) => ({
       taskId: t.task_id,
       gate: t.gate,
       total: Number(t.total ?? 0),
       cost: Number(t.cost ?? 0),
       status: t.status,
-      rows: Array.isArray(t.results) ? t.results : [],
+      rows: Array.isArray(t.submitted_cards) && t.submitted_cards.length
+        ? t.submitted_cards.map((pending) => (Array.isArray(t.results) ? t.results : []).find((row) => row.card === pending.card) ?? pending)
+        : Array.isArray(t.results) ? t.results : [],
       createdAt: t.created_at,
     }));
   });

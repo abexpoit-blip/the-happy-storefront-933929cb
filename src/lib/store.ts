@@ -906,9 +906,11 @@ export const listPendingChecks = async (): Promise<CardCheck[]> => {
 
 /** Recent checker history for the signed-in buyer (RLS scopes it to the user). */
 export const listMyChecks = async (limit = 50): Promise<CardCheck[]> => {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await rawDb
     .from("card_checks")
     .select("*")
+    .gte("created_at", since)
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) return [];

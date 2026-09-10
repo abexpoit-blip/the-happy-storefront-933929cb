@@ -41,7 +41,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [profileError, setProfileError] = useState<string | null>(null);
   const loadedForUid = useRef<string | null>(null);
 
-  const loadProfile = useCallback(async (uid: string | null, email: string | null) => {
+  const loadProfile = useCallback(async (uid: string | null, email: string | null, background = false) => {
     if (!uid) {
       setUser(null);
       setProfile(null);
@@ -59,10 +59,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       prev?.id === uid ? prev : { id: uid, email: email ?? "", username: email ? email.split("@")[0] : "user", role: "buyer" },
     );
 
-    setLoading(true);
+    if (!background) setLoading(true);
     setProfileError(null);
     // Watchdog: never let the app hang on "Загрузка…" if the network stalls.
-    const watchdog = setTimeout(() => setLoading(false), 8000);
+    const watchdog = setTimeout(() => { if (!background) setLoading(false); }, 8000);
 
     try {
       type ProfileRow = {
@@ -113,7 +113,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       loadedForUid.current = null;
     } finally {
       clearTimeout(watchdog);
-      setLoading(false);
+      if (!background) setLoading(false);
     }
 
   }, []);
@@ -142,7 +142,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const refresh = async () => {
     loadedForUid.current = null;
     const { data } = await supabase.auth.getSession();
-    await loadProfile(data.session?.user?.id ?? null, data.session?.user?.email ?? null);
+    await loadProfile(data.session?.user?.id ?? null, data.session?.user?.email ?? null, true);
   };
 
   const signOut = async () => {
