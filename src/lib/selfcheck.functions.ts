@@ -4,9 +4,11 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const digits = (s: string) => s.replace(/\D/g, "");
 
+export type SelfCheckStatus = "live" | "dead" | "error" | "skipped";
+
 export interface SelfCheckRow {
   card: string;
-  status: "live" | "dead" | "unknown";
+  status: SelfCheckStatus;
   category: string;
   msg: string;
 }
@@ -43,17 +45,30 @@ export const selfCheckConfig = createServerFn({ method: "POST" })
     };
   });
 
+/** Gates the user can pick in the checker UI. */
+export const checkerGates = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { listGates } = await import("@/lib/checkerccv.server");
+    const gates = await listGates(true);
+    return gates.map((g) => ({
+      id: String(g.id),
+      description: String(g.description ?? g.id),
+      credit: Number(g.creditGate ?? 0),
+    }));
+  });
+
 /** Charge the user and start a gateway task for their own cards. */
 export const startSelfCheck = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ cards: z.array(z.string()).min(1).max(500) }).parse(input))
+  .inputValidator((input) => z.object({ cards: z.array(z.string()).min(1).max(500), gate: z.string().optional() }).parse(input))
   .handler(async ({ data, context }) => {
     const lines = [...new Set(data.cards.map(parseLine).filter(Boolean) as string[])];
     if (!lines.length) throw new Error("no_valid_cards");
 
     const { data: gateRow } = await context.supabase
       .from("site_settings").select("value").eq("key", "self_check_gate").maybeSingle();
-    const gate = String((gateRow as { value?: string } | null)?.value || "CCV_Braintree_Auth");
+    const gate = data.gate?.trim() || String((gateRow as { value?: string } | null)?.value || "CCV_Braintree_Auth");
 
     const { createTask } = await import("@/lib/checkerccv.server");
     const taskId = await createTask(gate, lines);
@@ -93,9 +108,10 @@ export const pollSelfCheck = createServerFn({ method: "POST" })
     const rows: SelfCheckRow[] = page.results.map((r) => {
       const pan = digits(String(r.card ?? "").split("|")[0] ?? "");
       const v = verdict(r.category);
+      const cat = String(r.category ?? "").toLowerCase();
       return {
         card: mask(pan),
-        status: v ?? "unknown",
+        status: v ?? (cat.includes("skip") ? "skipped" : "error"),
         category: String(r.category ?? ""),
         msg: String(r.result?.msg ?? ""),
       };
