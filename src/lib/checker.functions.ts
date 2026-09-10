@@ -40,6 +40,20 @@ export const startCheckerTask = createServerFn({ method: "POST" })
       rpc: (f: string, a?: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
     };
 
+    const { data: activeTask } = await db
+      .from("checker_tasks")
+      .select("task_id, total, gate")
+      .eq("user_id", context.userId)
+      .eq("status", "running")
+      .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (activeTask) {
+      const existing = activeTask as { task_id: string; total: number; gate: string };
+      return { taskId: existing.task_id, total: Number(existing.total), gate: existing.gate, resumed: true };
+    }
+
     let q = db.from("card_checks").select("id, product_id, order_id").eq("user_id", context.userId).eq("status", "pending");
     if (data.orderIds?.length) q = q.in("order_id", data.orderIds);
     const { data: pendingRaw } = await q;
@@ -80,7 +94,30 @@ export const startCheckerTask = createServerFn({ method: "POST" })
       status: "running",
     });
 
-    return { taskId, total: lines.length, gate };
+    return { taskId, total: lines.length, gate, resumed: false };
+  });
+
+/** Restore the buyer's running cart checker task after navigation or a real reload. */
+export const activeCheckerTask = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabaseAdmin as any)
+      .from("checker_tasks")
+      .select("task_id, total, settled, status, created_at")
+      .eq("user_id", context.userId)
+      .eq("status", "running")
+      .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!data) return null;
+    return {
+      taskId: String(data.task_id),
+      total: Number(data.total ?? 0),
+      settled: Number(data.settled ?? 0),
+    };
   });
 
 /** Poll a running task, settle finished cards (DEAD is refunded instantly). */
@@ -105,8 +142,7 @@ export const pollCheckerTask = createServerFn({ method: "POST" })
 
     // Results arrive page by page — walk the cursor so nothing is missed.
     let cursor = 0;
-    let processed = 0;
-    let settled = 0;
+    const processedPans = new Set<string>();
     let status = String(taskRow.status ?? "running");
     for (let page = 0; page < 6; page++) {
       const res = await getResults(data.taskId, cursor, 500);
@@ -115,10 +151,9 @@ export const pollCheckerTask = createServerFn({ method: "POST" })
         const pan = String(row.card ?? "").split("|")[0]?.replace(/\D/g, "") ?? "";
         const checkId = mapping[pan];
         const v = verdict(row.category);
-        processed++;
+        if (pan) processedPans.add(pan);
         if (!checkId || !v) continue;
         await db.rpc("settle_card_check", { _check_id: checkId, _status: v });
-        settled++;
       }
       const next = res.nextCursor > cursor ? res.nextCursor : cursor + res.results.length;
       if (res.results.length === 0 || next <= cursor) break;
@@ -126,11 +161,16 @@ export const pollCheckerTask = createServerFn({ method: "POST" })
     }
 
     const done = status === "completed" || status === "cancelled";
+    const ids = Object.values(mapping);
+    let settled = 0;
+    if (ids.length) {
+      const { data: settledRaw } = await db.from("card_checks").select("id").in("id", ids).in("status", ["live", "dead"]);
+      settled = ((settledRaw ?? []) as { id: string }[]).length;
+    }
 
     // Cards the gateway never answered are not billed — give those credits back once.
     let refundedCredits = Number(taskRow.refunded_credits ?? 0);
     if (done) {
-      const ids = Object.values(mapping);
       if (ids.length) {
         const { data: leftRaw } = await db
           .from("card_checks")
@@ -163,7 +203,7 @@ export const pollCheckerTask = createServerFn({ method: "POST" })
       done,
       status,
       total: Number(taskRow.total ?? 0),
-      processed,
+      processed: processedPans.size,
       settled,
       refundedCredits,
     };

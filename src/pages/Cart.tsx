@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useServerFn } from "@tanstack/react-start";
-import { startCheckerTask, pollCheckerTask } from "@/lib/checker.functions";
+import { startCheckerTask, pollCheckerTask, activeCheckerTask } from "@/lib/checker.functions";
 import { AppShell } from "@/components/AppShell";
 import Seo from "@/components/Seo";
 import { toast } from "sonner";
-import { Trash2, Loader2, ShieldCheck, ShieldOff, Radar, Sparkles, ShoppingCart, Wallet, CreditCard } from "lucide-react";
+import { Trash2, Loader2, ShieldCheck, ShieldOff, Radar, Sparkles, ShoppingCart, Wallet, CreditCard, Copy } from "lucide-react";
 import { PageHero, StatCard } from "@/components/PageHero";
 import { getCart, removeFromCart, clearCart, onCartChange, type CartLine } from "@/lib/cart";
 import { purchaseProduct, listChecksForOrders, listPendingChecks, listMyChecks, runCardChecks, type CardCheck } from "@/lib/store";
@@ -31,12 +31,20 @@ const Cart = () => {
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const startTask = useServerFn(startCheckerTask);
   const pollTask = useServerFn(pollCheckerTask);
+  const getActiveTask = useServerFn(activeCheckerTask);
 
   const loadPending = async () => {
     try { setPending(await listPendingChecks()); } catch { /* ignore */ }
     try { setHistory(await listMyChecks(50)); } catch { /* ignore */ }
   };
-  useEffect(() => { void loadPending(); }, []);
+  useEffect(() => {
+    void loadPending();
+    void getActiveTask({}).then((task) => {
+      if (!task) return;
+      setProgress({ done: task.settled, total: task.total });
+      void watchCartTask(task.taskId, task.total);
+    }).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     const sync = () => {
@@ -68,6 +76,30 @@ const Cart = () => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const toggleAll = () => setSelected(allSelected ? [] : items.map((i) => i.id));
+
+  const watchCartTask = async (taskId: string, totalCards: number) => {
+    setScanning(true);
+    try {
+      for (let i = 0; i < 120; i++) {
+        await new Promise((r) => setTimeout(r, i === 0 ? 6000 : 12000));
+        try {
+          const st = await pollTask({ data: { taskId } });
+          setProgress({ done: st.settled, total: st.total || totalCards });
+          await loadPending();
+          if (st.done) {
+            if (st.refundedCredits > 0) toast.success(`${st.refundedCredits} credits refunded for cards the checker could not process`);
+            const latest = await listMyChecks(50);
+            setHistory(latest);
+            setChecks(latest.filter((row) => row.status !== "pending").slice(0, totalCards));
+            void refresh?.();
+            break;
+          }
+        } catch { /* transient gateway error — keep polling */ }
+      }
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const buyNow = async () => {
     if (!chosen.length) return toast.error("Select at least one card");
@@ -130,21 +162,7 @@ const Cart = () => {
         const started = await startTask({ data: { orderIds } });
         realOk = true;
         setProgress({ done: 0, total: started.total });
-        // the gateway needs >= 10s between result polls for the same task
-        for (let i = 0; i < 60; i++) {
-          await new Promise((r) => setTimeout(r, i === 0 ? 6000 : 12000));
-          try {
-            const st = await pollTask({ data: { taskId: started.taskId } });
-            setProgress({ done: st.processed, total: st.total || started.total });
-            if (st.done) {
-              if (st.refundedCredits > 0) {
-                toast.success(`${st.refundedCredits} credits refunded for cards the checker could not process`);
-              }
-              break;
-            }
-
-          } catch { /* transient gateway error — keep polling */ }
-        }
+        await watchCartTask(started.taskId, started.total);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (/checker_not_configured|no_card_data|checker_bad_response|checker_http/.test(msg)) {
@@ -368,7 +386,7 @@ const Cart = () => {
 
       <CheckHistory rows={history} onOpen={(rows) => setChecks(rows)} />
 
-      {scanning && <ScanOverlay count={progress.total || pending.length} done={progress.done} />}
+       {scanning && <ScanOverlay count={progress.total || pending.length} done={progress.done} cards={pending} />}
       {checks && <CheckResultDialog checks={checks} onClose={() => { setChecks(null); void loadPending(); }} />}
     </AppShell>
   );
@@ -383,7 +401,7 @@ const SCAN_STEPS = [
   "Finalizing results…",
 ];
 
-const ScanOverlay = ({ count, done = 0 }: { count: number; done?: number }) => {
+const ScanOverlay = ({ count, done = 0, cards }: { count: number; done?: number; cards: CardCheck[] }) => {
   const [step, setStep] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setStep((s) => Math.min(s + 1, SCAN_STEPS.length - 1)), 700);
@@ -410,6 +428,9 @@ const ScanOverlay = ({ count, done = 0 }: { count: number; done?: number }) => {
           Live check running on {count} refund card{count === 1 ? "" : "s"}. Please don't close this window.
         </div>
         <div className="relative mt-2 font-mono text-[13px] text-[#5ac8fa]">{done} / {count} checked</div>
+        <div className="relative mt-3 max-h-28 space-y-1 overflow-y-auto rounded-lg border border-white/10 bg-black/15 p-2 text-left font-mono text-[11px] text-white/60">
+          {cards.map((card) => <div key={card.id}>{card.bin || "—"}••••{card.last_digits || "••"} · {card.status.toUpperCase()}</div>)}
+        </div>
 
         <div className="relative mt-5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
           {done > 0 && count > 0 ? (
@@ -473,7 +494,7 @@ const CheckHistory = ({ rows, onOpen }: { rows: CardCheck[]; onOpen: (rows: Card
         <table className="w-full min-w-[520px] text-[12.5px]">
           <thead>
             <tr className="text-left text-[11px] uppercase tracking-wider text-white/40">
-              <th className="py-1.5">Date</th><th>BIN</th><th>Last</th><th>Price</th><th>Status</th><th>Refunded</th>
+              <th className="py-1.5">Date</th><th>BIN</th><th>Last</th><th>Price</th><th>Status</th><th>Refunded</th><th>Copy</th>
             </tr>
           </thead>
           <tbody className="text-white/75">
@@ -491,6 +512,7 @@ const CheckHistory = ({ rows, onOpen }: { rows: CardCheck[]; onOpen: (rows: Card
                   }>{r.status.toUpperCase()}</span>
                 </td>
                 <td className="font-mono">${Number(r.refunded ?? 0).toFixed(2)}</td>
+                <td><button onClick={() => void navigator.clipboard.writeText(`${r.bin || ""}••••${r.last_digits || ""} | ${r.status.toUpperCase()}`)} className="rounded p-1 text-white/45 hover:bg-white/10 hover:text-white" title="Copy card result" aria-label="Copy card result"><Copy className="h-3.5 w-3.5" /></button></td>
               </tr>
             ))}
           </tbody>
@@ -506,6 +528,11 @@ const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: 
   const refunded = dead.reduce((s, c) => s + Number(c.refunded), 0);
   const rate = checks.length ? Math.round((live.length / checks.length) * 100) : 0;
   const fee = checks.reduce((s, c) => s + Number(c.fee ?? 0), 0);
+  const copyAll = async () => {
+    const output = checks.map((c) => `${c.bin || ""}••••${c.last_digits || ""} | ${c.status.toUpperCase()}${c.status === "dead" ? ` | REFUND $${Number(c.refunded).toFixed(2)}` : ""}`).join("\n");
+    await navigator.clipboard.writeText(output);
+    toast.success("Results copied");
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#060b18]/80 backdrop-blur-sm p-4">
@@ -514,9 +541,10 @@ const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: 
           <span className="text-[14px] font-semibold text-white inline-flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-[#f9a825]" /> Check result (refund cards)
           </span>
-          <span className="rounded-full bg-[#2e7d32]/20 text-[#7ee08a] border border-[#2e7d32]/40 px-2.5 py-0.5 text-[11.5px] font-mono">
-            LIVE {rate}%
-          </span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => void copyAll()} className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1 text-[11.5px] text-white/65 hover:bg-white/10" title="Copy all results"><Copy className="h-3.5 w-3.5" /> Copy all</button>
+            <span className="rounded-full bg-[#2e7d32]/20 text-[#7ee08a] border border-[#2e7d32]/40 px-2.5 py-0.5 text-[11.5px] font-mono">LIVE {rate}%</span>
+          </div>
         </div>
 
         <div className="grid grid-cols-3 text-center text-[13px] border-b border-white/10">
@@ -561,6 +589,7 @@ const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: 
                   <td className="p-2.5 text-right font-mono text-[#7ee08a]">
                     {c.status === "dead" ? `+$${Number(c.refunded).toFixed(2)}` : "—"}
                   </td>
+                  <td className="p-2.5 text-right"><button onClick={() => void navigator.clipboard.writeText(`${c.bin || ""}••••${c.last_digits || ""} | ${c.status.toUpperCase()}`)} className="rounded p-1.5 text-white/45 hover:bg-white/10 hover:text-white" title="Copy card result" aria-label="Copy card result"><Copy className="h-3.5 w-3.5" /></button></td>
                 </tr>
               ))}
             </tbody>

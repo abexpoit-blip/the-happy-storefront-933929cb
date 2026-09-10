@@ -10,7 +10,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { PageHero } from "@/components/PageHero";
 import {
   selfCheckConfig, startSelfCheck, pollSelfCheck, checkerGates, checkerCredit, listSelfChecks,
-  type SelfCheckRow, type SelfCheckStatus,
+  type SelfCheckTaskRow, type SelfCheckStatus,
 } from "@/lib/selfcheck.functions";
 import { useAuth } from "@/hooks/useAuth";
 import { buyCheckCredits } from "@/lib/store";
@@ -60,12 +60,12 @@ const Checker = () => {
   const [gateOpen, setGateOpen] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [rows, setRows] = useState<SelfCheckRow[]>([]);
+  const [rows, setRows] = useState<SelfCheckTaskRow[]>([]);
   const [tab, setTab] = useState<Tab>("live");
   const [taskId, setTaskId] = useState<string | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [credit, setCredit] = useState<{ credit: number; ok: boolean; error?: string } | null>(null);
-  const [history, setHistory] = useState<{ taskId: string; total: number; status: string; rows: SelfCheckRow[]; createdAt: string }[]>([]);
+  const [history, setHistory] = useState<{ taskId: string; total: number; status: string; rows: SelfCheckTaskRow[]; createdAt: string }[]>([]);
   const [expected, setExpected] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
   const watching = useRef<string | null>(null);
@@ -152,17 +152,18 @@ const Checker = () => {
     }
   };
 
+  const finishedRows = useMemo(() => rows.filter((r) => !r.pending), [rows]);
   const counts = useMemo(() => ({
-    live: rows.filter((r) => r.status === "live").length,
-    dead: rows.filter((r) => r.status === "dead").length,
-    error: rows.filter((r) => r.status === "error").length,
-    skipped: rows.filter((r) => r.status === "skipped").length,
-  }), [rows]);
+    live: finishedRows.filter((r) => r.status === "live").length,
+    dead: finishedRows.filter((r) => r.status === "dead").length,
+    error: finishedRows.filter((r) => r.status === "error").length,
+    skipped: finishedRows.filter((r) => r.status === "skipped").length,
+  }), [finishedRows]);
 
   const total = Math.max(expected, rows.length, busy ? lines.length : 0) || lines.length;
-  const progress = total ? Math.round((rows.length / total) * 100) : 0;
-  const hitRate = rows.length ? Math.round((counts.live / rows.length) * 100) : 0;
-  const visible = rows.filter((r) => r.status === tab);
+  const progress = total ? Math.round((finishedRows.length / total) * 100) : 0;
+  const hitRate = finishedRows.length ? Math.round((counts.live / finishedRows.length) * 100) : 0;
+  const visible = rows.filter((r) => r.pending || r.status === tab);
 
   const gateLabel = gates.find((g) => g.id === gate)?.description || gate || "Select gate";
 
@@ -170,12 +171,17 @@ const Checker = () => {
     if (!lines.length) return toast.error("Paste at least one card (PAN|MM|YYYY|CVV)");
     if (lines.length > 500) return toast.error("Maximum 500 cards per run");
     if (myCredits < needCredits) return toast.error(`Not enough credits — you need ${needCredits}, you have ${myCredits}. Buy credits first.`);
-    setBusy(true); setRows([]); setStartedAt(Date.now()); setExpected(lines.length);
+    setBusy(true); setStartedAt(Date.now()); setExpected(lines.length);
+    setRows(lines.map((line) => {
+      const pan = line.split("|")[0]?.replace(/\D/g, "") ?? "";
+      return { card: pan.length > 10 ? `${pan.slice(0, 6)}${"*".repeat(pan.length - 10)}${pan.slice(-4)}` : pan, status: "skipped", category: "Pending", msg: "Waiting for gateway result", pending: true };
+    }));
     try {
       const task = await start({ data: { cards: lines, gate: gate || undefined } });
       setTaskId(task.taskId);
       setExpected(task.total);
-      toast.success(`Charged ${task.credits} credits ($${task.cost.toFixed(2)}) — checking ${task.total} card(s)`);
+      setRows(task.rows);
+      toast.success(`Reserved ${task.credits} credits — checking ${task.total} card(s)`);
       void refresh?.();
       await watch(task.taskId);
       void getHistory({}).then(setHistory).catch(() => undefined);
@@ -194,7 +200,11 @@ const Checker = () => {
     }
   };
 
-  const exportText = visible.map((r) => `${r.card} | ${r.status.toUpperCase()} | ${r.msg || r.category}`).join("\n");
+  const exportText = visible.map((r) => `${r.card} | ${r.pending ? "PENDING" : r.status.toUpperCase()} | ${r.msg || r.category}`).join("\n");
+  const copyCard = async (row: SelfCheckTaskRow) => {
+    await navigator.clipboard.writeText(`${row.card} | ${row.pending ? "PENDING" : row.status.toUpperCase()} | ${row.msg || row.category}`);
+    toast.success("Card copied");
+  };
   const copyOut = async () => {
     if (!exportText) return toast.error("Nothing to copy");
     await navigator.clipboard.writeText(exportText);
@@ -208,8 +218,8 @@ const Checker = () => {
     URL.revokeObjectURL(url);
   };
 
-  const eta = !busy ? "Done" : startedAt && rows.length
-    ? `${Math.max(1, Math.round(((Date.now() - startedAt) / 1000 / rows.length) * (total - rows.length)))}s`
+  const eta = !busy ? "Done" : startedAt && finishedRows.length
+    ? `${Math.max(1, Math.round(((Date.now() - startedAt) / 1000 / finishedRows.length) * (total - finishedRows.length)))}s`
     : "…";
 
   return (
@@ -375,10 +385,10 @@ const Checker = () => {
               </div>
 
               <dl className="mt-3 space-y-1.5 text-[12px]">
-                <div className="flex justify-between"><dt className="text-white/45">Progress</dt><dd className="font-mono text-white/80">{rows.length}/{total}</dd></div>
+                 <div className="flex justify-between"><dt className="text-white/45">Progress</dt><dd className="font-mono text-white/80">{finishedRows.length}/{total}</dd></div>
                 <div className="flex justify-between"><dt className="text-white/45">ETA</dt><dd className="font-mono text-white/80">{eta}</dd></div>
                 <div className="flex justify-between"><dt className="text-white/45">Hit rate</dt><dd className="font-mono text-[#7ee08a]">{hitRate}%</dd></div>
-                <div className="flex justify-between"><dt className="text-white/45">Charged</dt><dd className="font-mono text-white/80">{needCredits} cr (${cost.toFixed(2)})</dd></div>
+                <div className="flex justify-between"><dt className="text-white/45">Reserved</dt><dd className="font-mono text-white/80">{expected * creditCost} cr</dd></div>
               </dl>
             </div>
 
@@ -394,7 +404,7 @@ const Checker = () => {
                     }`}
                   >
                     <span className="font-mono">{h.taskId.slice(-8)}</span>
-                    <span className="font-mono">{h.rows.length}/{h.total}</span>
+                    <span className="font-mono">{h.rows.filter((r) => !r.pending).length}/{h.total}</span>
                     <span className={h.status === "completed" ? "text-[#7ee08a]" : "text-[#f9d27a]"}>{h.status}</span>
                   </button>
                 ))}
@@ -448,16 +458,17 @@ const Checker = () => {
               ) : (
                 <ul className="space-y-1">
                   {visible.map((r, i) => (
-                    <li key={`${r.card}-${i}`} className="flex flex-wrap items-center gap-2 font-mono text-[12.5px] text-white/85">
+                    <li key={`${r.card}-${i}`} className="flex flex-wrap items-center gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-2.5 py-2 font-mono text-[12.5px] text-white/85">
                       <span>{r.card}</span>
                       <span className="text-white/25">|</span>
                       <span className={
                         r.status === "live" ? "text-[#7ee08a]"
                         : r.status === "dead" ? "text-[#ff8a80]"
                         : r.status === "error" ? "text-[#f9d27a]" : "text-white/50"
-                      }>{r.status.toUpperCase()}</span>
+                      }>{r.pending ? "PENDING" : r.status.toUpperCase()}</span>
                       <span className="text-white/25">|</span>
                       <span className="text-white/50">{r.msg || r.category || "—"}</span>
+                      <button onClick={() => void copyCard(r)} className="ml-auto rounded-md p-1.5 text-white/45 hover:bg-white/10 hover:text-white" title="Copy card result" aria-label="Copy card result"><Copy className="h-3.5 w-3.5" /></button>
                     </li>
                   ))}
                 </ul>
@@ -484,7 +495,7 @@ const Checker = () => {
 
       <p className="mt-3 flex items-center gap-2 text-[12px] text-white/45">
         <ShieldCheck className="h-3.5 w-3.5 text-[#7ee08a]" />
-Credits are charged per submitted card whatever the result — no credits, no checking. Cards go straight to the gateway — nothing is stored in plain form.
+        Credits are reserved first. Only LIVE or DEAD gateway answers stay charged; failed, skipped, or unanswered checks are refunded. Card history remains for 24 hours and only masked card numbers are stored.
       </p>
     </AppShell>
   );

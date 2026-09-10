@@ -10,6 +10,11 @@
 ALTER TABLE public.self_checks
   ADD COLUMN IF NOT EXISTS refunded_credits integer NOT NULL DEFAULT 0;
 
+-- Masked snapshot of submitted cards keeps the active task visible across
+-- navigation/reloads without storing CVV or a full PAN.
+ALTER TABLE public.self_checks
+  ADD COLUMN IF NOT EXISTS submitted_cards jsonb NOT NULL DEFAULT '[]'::jsonb;
+
 ALTER TABLE public.checker_tasks
   ADD COLUMN IF NOT EXISTS refunded_credits integer NOT NULL DEFAULT 0;
 
