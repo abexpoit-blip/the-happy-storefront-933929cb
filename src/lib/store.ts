@@ -155,7 +155,16 @@ export const purchaseAndDeliver = async (
 };
 
 
+/** Buy checking credits with the account balance ($1 = 1000 credits). */
+export const buyCheckCredits = async (usd: number): Promise<number> => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc("buy_check_credits", { _usd: usd });
+  if (error) throw new Error(translatePurchaseError(error.message));
+  return Number(data ?? 0);
+};
+
 export const translatePurchaseError = (msg: string) => {
+  if (msg.includes("insufficient_credits")) return "Not enough check credits. Buy credits on the Checker page.";
   if (msg.includes("insufficient_balance")) return "Недостаточно средств на балансе.";
   if (msg.includes("out_of_stock")) return "Товар закончился.";
   if (msg.includes("product_unavailable")) return "Товар недоступен.";

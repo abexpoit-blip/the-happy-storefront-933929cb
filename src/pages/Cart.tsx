@@ -17,7 +17,9 @@ import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode } from "@/li
 const Cart = () => {
   const { profile, refresh } = useAuth();
   const settings = useSiteSettings();
-  const checkFee = Number(settings.check_fee ?? 0.03);
+  const creditCost = Number(settings.check_credit_cost ?? 30);
+  const creditsPerUsd = Number(settings.credits_per_usd ?? 1000) || 1000;
+  const checkFee = Math.round((creditCost / creditsPerUsd) * 10000) / 10000;
   const nav = useNavigate();
   const [items, setItems] = useState<CartLine[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -54,7 +56,9 @@ const Cart = () => {
   );
   const total = chosen.reduce((s, i) => s + Number(i.price), 0);
   const refundables = useMemo(() => chosen.filter((i) => i.refundable), [chosen]);
-  const fees = refundables.length * checkFee;
+  const needCredits = refundables.length * creditCost;
+  const myCredits = Number(profile?.check_credits ?? 0);
+  const fees = Math.round(refundables.length * checkFee * 100) / 100;
   const allSelected = items.length > 0 && chosen.length === items.length;
 
   const toggle = (id: string) =>
@@ -65,7 +69,9 @@ const Cart = () => {
   const buyNow = async () => {
     if (!chosen.length) return toast.error("Select at least one card");
     const spendable = Number(profile?.balance ?? 0) + Number(profile?.bonus_balance ?? 0);
-    if (spendable < total + fees) return toast.error("Insufficient funds. Please top up your balance.");
+    if (spendable < total) return toast.error("Insufficient funds. Please top up your balance.");
+    if (myCredits < needCredits)
+      return toast.error(`Refund cards need ${needCredits} check credits — you have ${myCredits}. Buy credits on the Checker page.`);
     setBusy(true);
     let ok = 0;
     const failed: string[] = [];
@@ -161,8 +167,8 @@ const Cart = () => {
 
       <div className="grid gap-3 sm:grid-cols-3 mb-4">
         <StatCard label="Selected cards" icon={CreditCard} tone="blue" value={chosen.length} hint={`${items.length} in cart`} />
-        <StatCard label="Order total" icon={ShoppingCart} tone="green" value={`$${(total + fees).toFixed(2)}`} hint={`cards $${total.toFixed(2)} + checking $${fees.toFixed(2)}`} />
-        <StatCard label="Available balance" icon={Wallet} tone="amber" value={`$${(Number(profile?.balance ?? 0) + Number(profile?.bonus_balance ?? 0)).toFixed(2)}`} hint="bonus is spent first" />
+        <StatCard label="Order total" icon={ShoppingCart} tone="green" value={`$${total.toFixed(2)}`} hint={`+ ${needCredits} check credits (${refundables.length} refund card${refundables.length === 1 ? "" : "s"})`} />
+        <StatCard label="Balance / credits" icon={Wallet} tone="amber" value={`$${(Number(profile?.balance ?? 0) + Number(profile?.bonus_balance ?? 0)).toFixed(2)}`} hint={`${myCredits} check credits · bonus spent first`} />
       </div>
 
       {pending.length > 0 && (
@@ -198,12 +204,13 @@ const Cart = () => {
           Cards: <span className="font-mono text-[#2e7d32]">${total.toFixed(2)}</span>
         </span>
         <span className="text-[#888]">
-          Checking: <span className="font-mono text-[#f56c6c]">${fees.toFixed(2)}</span>{" "}
-          ({refundables.length} × ${checkFee.toFixed(2)}, refund cards only)
+          Checking: <span className="font-mono text-[#f56c6c]">{needCredits} cr</span>{" "}
+          ({refundables.length} × {creditCost} cr ≈ ${fees.toFixed(2)}, refund cards only)
         </span>
         <span className="text-[#1f2d3d] font-medium">
-          Total: <span className="font-mono">${(total + fees).toFixed(2)}</span>
+          Total: <span className="font-mono">${total.toFixed(2)}</span> + {needCredits} cr
         </span>
+        <Link to="/checker" className="text-[#2196f3] hover:underline">Buy credits</Link>
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={toggleAll}

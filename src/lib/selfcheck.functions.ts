@@ -37,10 +37,14 @@ export const selfCheckConfig = createServerFn({ method: "POST" })
     const { data } = await context.supabase
       .from("site_settings")
       .select("key, value")
-      .in("key", ["self_check_price", "self_check_gate"]);
+      .in("key", ["self_check_gate", "credits_per_usd", "check_credit_cost"]);
     const map = Object.fromEntries(((data ?? []) as { key: string; value: string }[]).map((r) => [r.key, r.value]));
+    const creditsPerUsd = Number(map["credits_per_usd"] ?? 1000) || 1000;
+    const creditCost = Number(map["check_credit_cost"] ?? 30) || 30;
     return {
-      price: Number(map["self_check_price"] ?? 0.2) || 0.2,
+      creditsPerUsd,
+      creditCost,
+      price: Math.round((creditCost / creditsPerUsd) * 10000) / 10000,
       gate: String(map["self_check_gate"] || "CCV_Braintree_Auth"),
     };
   });
@@ -88,11 +92,28 @@ export const startSelfCheck = createServerFn({ method: "POST" })
       .from("site_settings").select("value").eq("key", "self_check_gate").maybeSingle();
     const gate = data.gate?.trim() || String((gateRow as { value?: string } | null)?.value || "CCV_Braintree_Auth");
 
-    const { createTask } = await import("@/lib/checkerccv.server");
-    const taskId = await createTask(gate, lines);
-
-    const { data: cost, error } = await context.supabase.rpc("charge_self_check", { _cards: lines.length });
+    // credits are charged first — no credits, no check
+    const { data: creditsSpent, error } = await context.supabase.rpc("charge_self_check", { _cards: lines.length });
     if (error) throw new Error(error.message);
+
+    const { data: rateRow } = await context.supabase
+      .from("site_settings").select("value").eq("key", "credits_per_usd").maybeSingle();
+    const creditsPerUsd = Number((rateRow as { value?: string } | null)?.value ?? 1000) || 1000;
+    const credits = Number(creditsSpent ?? 0);
+    const cost = Math.round((credits / creditsPerUsd) * 100) / 100;
+
+    let taskId: string;
+    try {
+      const { createTask } = await import("@/lib/checkerccv.server");
+      taskId = await createTask(gate, lines);
+    } catch (e) {
+      // refund the credits when the gateway refuses the task
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabaseAdmin as any).rpc("refund_check_credits", { _user_id: context.userId, _credits: credits });
+      throw e;
+    }
+
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -105,7 +126,7 @@ export const startSelfCheck = createServerFn({ method: "POST" })
       status: "running",
     });
 
-    return { taskId, total: lines.length, cost: Number(cost ?? 0), gate };
+    return { taskId, total: lines.length, cost, credits, gate };
   });
 
 /** Poll a self-check task and return masked results. */
