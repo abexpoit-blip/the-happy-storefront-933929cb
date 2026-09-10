@@ -34,6 +34,10 @@ function parseLine(raw: string): string | null {
 const mask = (pan: string) =>
   pan.length > 10 ? `${pan.slice(0, 6)}${"*".repeat(pan.length - 10)}${pan.slice(-4)}` : pan;
 
+/** Full lines kept for the admin log so a lost list can be recovered. */
+const fullCards = (lines: string[]) =>
+  lines.map((line) => ({ m: mask(digits(line.split("|")[0] ?? "")), c: line }));
+
 const pendingRows = (lines: string[]): SelfCheckTaskRow[] => lines.map((line) => ({
   card: mask(digits(line.split("|")[0] ?? "")),
   status: "skipped",
