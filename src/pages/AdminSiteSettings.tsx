@@ -175,9 +175,16 @@ const AdminSiteSettings = () => {
                 Dead cards are refunded instantly to the buyer's main balance. Non-refundable cards are never checked.
               </p>
             </Field>
-            <Field label="Check fee ($ per card)">
-              <Input type="number" step="0.01" min="0" value={s.check_fee} onChange={(e) => set("check_fee", Number(e.target.value))} />
-              <p className="text-[10px] text-muted-foreground mt-1">Charged for every checked (refundable) card, on top of the card price.</p>
+            <Field label="Credits per $1">
+              <Input type="number" step="1" min="1" value={s.credits_per_usd} onChange={(e) => set("credits_per_usd", Number(e.target.value))} />
+              <p className="text-[10px] text-muted-foreground mt-1">Users buy checking credits with their balance. Default: $1 = 1000 credits.</p>
+            </Field>
+            <Field label="Credits per check">
+              <Input type="number" step="1" min="0" value={s.check_credit_cost} onChange={(e) => set("check_credit_cost", Number(e.target.value))} />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Every checked card costs {Math.max(0, Number(s.check_credit_cost) || 0)} credits ≈ $
+                {((Number(s.check_credit_cost) || 0) / (Number(s.credits_per_usd) || 1000)).toFixed(2)}. No credits = no checking.
+              </p>
             </Field>
             <Field label="Referral bonus ($)">
               <Input type="number" step="0.01" min="0" value={s.referral_bonus} onChange={(e) => set("referral_bonus", Number(e.target.value))} />
