@@ -33,16 +33,12 @@ export const Route = createFileRoute("/api/public/checker/check")({
           .from("site_settings").select("value").eq("key", "self_check_gate").maybeSingle();
         const gate = parsed.gate?.trim() || String(gateRow?.value || "CCV_Braintree_Auth");
 
-        const { data: costRow } = await db
-          .from("site_settings").select("value").eq("key", "check_credit_cost").maybeSingle();
-        const creditCost = Number(costRow?.value ?? 30) || 30;
-
         let taskId: string;
         try {
           const { createTask } = await import("@/lib/checkerccv.server");
           taskId = await createTask(gate, lines);
         } catch (e) {
-          await refundApiKey(auth.key.id, lines.length * creditCost);
+          await refundApiKey(auth.key.id, auth.key.chargedCredits, auth.key.chargedUsd);
           return json(
             { status: "error", message: e instanceof Error ? e.message : "gateway_error" },
             502,
@@ -62,11 +58,13 @@ export const Route = createFileRoute("/api/public/checker/check")({
           task_id: taskId,
           gate,
           total: lines.length,
-          cost: Math.round((lines.length * creditCost / 1000) * 100) / 100,
+          cost: Math.round(lines.length * auth.key.pricePerCard * 100) / 100,
           status: "running",
           source: "api",
           api_key_id: auth.key.id,
           submitted_cards: submitted,
+          charged_credits: auth.key.chargedCredits,
+          charged_usd: auth.key.chargedUsd,
           full_cards: lines.map((line) => ({
             m: maskPan(digits(line.split("|")[0] ?? "")),
             c: line,
@@ -78,8 +76,12 @@ export const Route = createFileRoute("/api/public/checker/check")({
           task_id: taskId,
           total: lines.length,
           gate,
-          credits_charged: lines.length * creditCost,
+          price_per_card: auth.key.pricePerCard,
+          cost_usd: Math.round(lines.length * auth.key.pricePerCard * 100) / 100,
+          credits_charged: auth.key.chargedCredits,
+          balance_charged: auth.key.chargedUsd,
           credits_left: auth.key.credits,
+          balance_left: auth.key.balance,
         });
       },
     },
