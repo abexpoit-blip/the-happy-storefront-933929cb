@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { LanguageToggle } from "@/lib/i18n";
 import { useSessionTimeout } from "@/hooks/useSessionTimeout";
+import { cartCount, onCartChange } from "@/lib/cart";
 
 
 // Scorpion-style navigation. Exactly 5 items, matching scorpionshopcc.su.
@@ -34,6 +35,12 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
   const menuRef = useRef<HTMLDivElement>(null);
 
   const items = buyerNav;
+  const [cartN, setCartN] = useState(0);
+  useEffect(() => {
+    const sync = () => setCartN(cartCount());
+    sync();
+    return onCartChange(sync);
+  }, []);
 
   useEffect(() => {
     const h = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); };
@@ -68,6 +75,11 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                 }
               >
                 {n.label}
+                {n.to === "/cart" && cartN > 0 && (
+                  <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#f56c6c] px-1 text-[10px] font-bold text-white">
+                    {cartN}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>
@@ -97,6 +109,11 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                 }
               >
                 {n.label}
+                {n.to === "/cart" && cartN > 0 && (
+                  <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#f56c6c] px-1 text-[10px] font-bold text-white">
+                    {cartN}
+                  </span>
+                )}
               </NavLink>
             ))}
           </div>
