@@ -615,6 +615,42 @@ export type Database = {
         }
         Relationships: []
       }
+      self_checks: {
+        Row: {
+          cost: number
+          created_at: string
+          gate: string
+          id: string
+          results: Json
+          status: string
+          task_id: string
+          total: number
+          user_id: string
+        }
+        Insert: {
+          cost?: number
+          created_at?: string
+          gate: string
+          id?: string
+          results?: Json
+          status?: string
+          task_id: string
+          total?: number
+          user_id: string
+        }
+        Update: {
+          cost?: number
+          created_at?: string
+          gate?: string
+          id?: string
+          results?: Json
+          status?: string
+          task_id?: string
+          total?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       site_settings: {
         Row: {
           key: string
@@ -748,6 +784,7 @@ export type Database = {
         Returns: undefined
       }
       award_referral_bonus: { Args: { _user_id: string }; Returns: boolean }
+      charge_self_check: { Args: { _cards: number }; Returns: number }
       expire_stale_deposits: { Args: never; Returns: number }
       has_role: {
         Args: {
