@@ -203,13 +203,29 @@ const Shop = () => {
           </select>
         </Field>
         <Field label="COUNTRY">
-          <input
+          <select
             value={country}
-            onChange={(e) => setCountry(e.target.value.toUpperCase())}
-            onKeyDown={(e) => e.key === "Enter" && runSearch()}
-            placeholder="Please enter country"
-            className="h-8 w-full min-w-0 lg:w-[150px] rounded-md border border-[#dcdcdc] px-2 text-[13px] outline-none focus:border-[#2196f3] focus:ring-2 focus:ring-[#2196f3]/15 transition"
-          />
+            onChange={(e) => { const v = e.target.value; setCountry(v); setQ((s) => ({ ...s, country: v })); setSearched(true); }}
+            className="h-8 w-full min-w-0 lg:w-[190px] rounded-md border border-[#dcdcdc] px-2 text-[13px] outline-none bg-white focus:border-[#2196f3] focus:ring-2 focus:ring-[#2196f3]/15 transition"
+          >
+            <option value="">All countries</option>
+            {stockCountries.length > 0 && (
+              <optgroup label="In stock">
+                {stockCountries.map((c) => (
+                  <option key={`s-${c.code}`} value={c.code}>
+                    {flagEmoji(c.code)} {c.name} ({c.n})
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            <optgroup label="All countries">
+              {everyCountry.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {flagEmoji(c.code)} {c.name}
+                </option>
+              ))}
+            </optgroup>
+          </select>
         </Field>
         <Field label="ZIP">
           <input
