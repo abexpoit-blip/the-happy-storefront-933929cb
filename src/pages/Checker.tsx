@@ -13,6 +13,7 @@ import {
   type SelfCheckRow, type SelfCheckStatus,
 } from "@/lib/selfcheck.functions";
 import { useAuth } from "@/hooks/useAuth";
+import { buyCheckCredits } from "@/lib/store";
 
 type Tab = SelfCheckStatus;
 
@@ -46,7 +47,11 @@ const Checker = () => {
   const start = useServerFn(startSelfCheck);
   const poll = useServerFn(pollSelfCheck);
 
-  const [price, setPrice] = useState(0.2);
+  const [price, setPrice] = useState(0.03);
+  const [creditCost, setCreditCost] = useState(30);
+  const [creditsPerUsd, setCreditsPerUsd] = useState(1000);
+  const [buyUsd, setBuyUsd] = useState(5);
+  const [buying, setBuying] = useState(false);
   const [gates, setGates] = useState<Gate[]>([]);
   const [gate, setGate] = useState("");
   const [gateOpen, setGateOpen] = useState(false);
@@ -60,7 +65,10 @@ const Checker = () => {
   const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    void getConfig({}).then((c) => { setPrice(c.price); setGate((g) => g || c.gate); }).catch(() => undefined);
+    void getConfig({}).then((c) => {
+      setPrice(c.price); setCreditCost(c.creditCost); setCreditsPerUsd(c.creditsPerUsd);
+      setGate((g) => g || c.gate);
+    }).catch(() => undefined);
     void getGates({}).then((g) => setGates(g as Gate[])).catch(() => undefined);
     void getCredit({})
       .then((c) => setCredit({ credit: c.credit, ok: c.ok, error: "error" in c ? c.error : undefined }))
@@ -76,8 +84,25 @@ const Checker = () => {
   }, []);
 
   const lines = useMemo(() => text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean), [text]);
-  const cost = Math.round(lines.length * price * 100) / 100;
+  const needCredits = lines.length * creditCost;
+  const cost = Math.round((needCredits / creditsPerUsd) * 100) / 100;
   const spendable = Number(profile?.balance ?? 0) + Number(profile?.bonus_balance ?? 0);
+  const myCredits = Number(profile?.check_credits ?? 0);
+
+  const buyCredits = async () => {
+    if (!(buyUsd >= 1)) return toast.error("Minimum $1");
+    if (spendable < buyUsd) return toast.error("Insufficient balance. Please top up.");
+    setBuying(true);
+    try {
+      const got = await buyCheckCredits(buyUsd);
+      toast.success(`+${got} credits added`);
+      await refresh?.();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBuying(false);
+    }
+  };
 
   const counts = useMemo(() => ({
     live: rows.filter((r) => r.status === "live").length,
@@ -96,12 +121,12 @@ const Checker = () => {
   const run = async () => {
     if (!lines.length) return toast.error("Paste at least one card (PAN|MM|YYYY|CVV)");
     if (lines.length > 500) return toast.error("Maximum 500 cards per run");
-    if (spendable < cost) return toast.error("Insufficient balance. Please top up.");
+    if (myCredits < needCredits) return toast.error(`Not enough credits — you need ${needCredits}, you have ${myCredits}. Buy credits first.`);
     setBusy(true); setRows([]); setStartedAt(Date.now());
     try {
       const task = await start({ data: { cards: lines, gate: gate || undefined } });
       setTaskId(task.taskId);
-      toast.success(`Charged $${task.cost.toFixed(2)} — checking ${task.total} card(s)`);
+      toast.success(`Charged ${task.credits} credits ($${task.cost.toFixed(2)}) — checking ${task.total} card(s)`);
       void refresh?.();
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, i === 0 ? 5000 : 6000));
@@ -112,7 +137,8 @@ const Checker = () => {
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
       toast.error(
-        m.includes("insufficient_balance") ? "Insufficient balance."
+        m.includes("insufficient_credits") ? "Not enough check credits. Buy credits first."
+        : m.includes("insufficient_balance") ? "Insufficient balance."
         : m.includes("no_valid_cards") ? "No valid cards. Use PAN|MM|YYYY|CVV per line."
         : m.includes("checker_not_configured") ? "Checker gateway is not configured yet."
         : m,
@@ -150,7 +176,7 @@ const Checker = () => {
         eyebrowIcon={Radar}
         title="Check your cards"
         highlight="live or dead"
-        description={`Paste your cards, pick a gate and pay from your balance — $${price.toFixed(2)} per card. Bonus balance is spent first.`}
+        description={`Paste your cards, pick a gate and pay with credits — ${creditCost} credits ($${price.toFixed(2)}) per card. $1 = ${creditsPerUsd} credits.`}
         right={
           <div className="flex flex-wrap gap-2">
             <div className="rounded-xl border border-white/12 bg-white/[0.06] px-4 py-3 text-right">
@@ -158,6 +184,12 @@ const Checker = () => {
                 <Wallet className="h-3 w-3" /> Your balance
               </div>
               <div className="font-mono text-xl text-white">${spendable.toFixed(2)}</div>
+            </div>
+            <div className="rounded-xl border border-[#f9a825]/35 bg-[#f9a825]/10 px-4 py-3 text-right">
+              <div className="flex items-center justify-end gap-1.5 text-[11px] uppercase tracking-wider text-white/60">
+                <Zap className="h-3 w-3" /> Your credits
+              </div>
+              <div className="font-mono text-xl text-[#f9d27a]">{myCredits}</div>
             </div>
             <div className="rounded-xl border border-white/12 bg-white/[0.06] px-4 py-3 text-right">
               <div className="flex items-center justify-end gap-1.5 text-[11px] uppercase tracking-wider text-white/55">
@@ -176,7 +208,7 @@ const Checker = () => {
         <Panel
           title="List card"
           icon={CreditCard}
-          right={<span className="rounded-md border border-[#c62828]/40 bg-[#c62828]/15 px-2 py-0.5 text-[11px] text-[#ff8a80]">${price.toFixed(2)} per card</span>}
+          right={<span className="rounded-md border border-[#c62828]/40 bg-[#c62828]/15 px-2 py-0.5 text-[11px] text-[#ff8a80]">{creditCost} credits (${price.toFixed(2)}) per card</span>}
         >
           <div className="p-3">
             <textarea
@@ -225,11 +257,13 @@ const Checker = () => {
             <div className="mt-3 grid grid-cols-2 gap-2 text-[12px]">
               <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
                 <div className="text-white/45">Total cost</div>
-                <div className="font-mono text-[15px] text-[#7ee08a]">${cost.toFixed(2)}</div>
+                <div className="font-mono text-[15px] text-[#7ee08a]">{needCredits} cr</div>
+                <div className="font-mono text-[11px] text-white/40">${cost.toFixed(2)}</div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
-                <div className="flex items-center gap-1 text-white/45"><Wallet className="h-3 w-3" /> Balance</div>
-                <div className="font-mono text-[15px] text-white/90">${spendable.toFixed(2)}</div>
+                <div className="flex items-center gap-1 text-white/45"><Wallet className="h-3 w-3" /> Your credits</div>
+                <div className={`font-mono text-[15px] ${myCredits >= needCredits ? "text-white/90" : "text-[#ff8a80]"}`}>{myCredits} cr</div>
+                <div className="font-mono text-[11px] text-white/40">${spendable.toFixed(2)} balance</div>
               </div>
             </div>
 
@@ -241,6 +275,32 @@ const Checker = () => {
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radar className="h-4 w-4" />}
               {busy ? "Checking…" : `Start check${lines.length ? ` (${lines.length})` : ""}`}
             </button>
+
+            {/* buy credits with balance */}
+            <div className="mt-3 rounded-xl border border-[#f9a825]/30 bg-[#f9a825]/[0.07] p-3">
+              <div className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-wider text-[#f9d27a]">
+                <Zap className="h-3.5 w-3.5" /> Buy credits
+              </div>
+              <p className="mt-1 text-[11.5px] text-white/50">
+                $1 = {creditsPerUsd} credits · 1 check = {creditCost} credits (${price.toFixed(2)})
+              </p>
+              <div className="mt-2 flex gap-2">
+                <input
+                  type="number" min={1} step={1} value={buyUsd}
+                  onChange={(e) => setBuyUsd(Number(e.target.value))}
+                  disabled={buying}
+                  className="h-10 w-24 rounded-lg border border-white/12 bg-[#0a1222] px-3 font-mono text-[13px] text-white/90 outline-none focus:border-[#f9a825]/60"
+                />
+                <button
+                  onClick={() => void buyCredits()}
+                  disabled={buying}
+                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#f9a825] to-[#ffca28] text-[13px] font-semibold text-[#231a00] transition hover:brightness-110 disabled:opacity-50"
+                >
+                  {buying ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Buy {Math.max(0, Math.floor(buyUsd * creditsPerUsd))} cr
+                </button>
+              </div>
+            </div>
           </div>
         </Panel>
 
@@ -272,7 +332,7 @@ const Checker = () => {
                 <div className="flex justify-between"><dt className="text-white/45">Progress</dt><dd className="font-mono text-white/80">{rows.length}/{total}</dd></div>
                 <div className="flex justify-between"><dt className="text-white/45">ETA</dt><dd className="font-mono text-white/80">{eta}</dd></div>
                 <div className="flex justify-between"><dt className="text-white/45">Hit rate</dt><dd className="font-mono text-[#7ee08a]">{hitRate}%</dd></div>
-                <div className="flex justify-between"><dt className="text-white/45">Charged</dt><dd className="font-mono text-white/80">${cost.toFixed(2)}</dd></div>
+                <div className="flex justify-between"><dt className="text-white/45">Charged</dt><dd className="font-mono text-white/80">{needCredits} cr (${cost.toFixed(2)})</dd></div>
               </dl>
             </div>
           </div>
@@ -359,7 +419,7 @@ const Checker = () => {
 
       <p className="mt-3 flex items-center gap-2 text-[12px] text-white/45">
         <ShieldCheck className="h-3.5 w-3.5 text-[#7ee08a]" />
-        The fee is charged per submitted card whatever the result. Cards go straight to the gateway — nothing is stored in plain form.
+Credits are charged per submitted card whatever the result — no credits, no checking. Cards go straight to the gateway — nothing is stored in plain form.
       </p>
     </AppShell>
   );
