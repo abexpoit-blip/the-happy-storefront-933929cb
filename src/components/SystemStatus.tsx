@@ -60,7 +60,7 @@ export function SystemStatusBadge({ className = "" }: { className?: string }) {
 export function SystemStatusPanel({ className = "" }: { className?: string }) {
   const { status, loading, refresh } = useSystemStatus();
 
-  const Row = ({ name, s }: { name: string; s?: { state: string; ms: number; note?: string } }) => {
+  const Row = ({ name, s }: { name: string; s?: { state: string } }) => {
     const online = s?.state === "online";
     return (
       <div className="flex items-center justify-between gap-3 px-4 py-2.5 text-[13px]">
@@ -69,11 +69,11 @@ export function SystemStatusPanel({ className = "" }: { className?: string }) {
           {name}
         </span>
         <span
-          className={`rounded-full px-2 py-0.5 font-mono text-[12px] ${
+          className={`rounded-full px-2.5 py-0.5 text-[12px] font-semibold ${
             online ? "bg-[#2fb344]/10 text-[#1e7e34]" : "bg-[#e53935]/10 text-[#c62828]"
           }`}
         >
-          {s ? (online ? `online · ${s.ms}ms` : `offline${s.note ? ` · ${s.note}` : ""}`) : "checking…"}
+          {s ? (online ? "Online" : "Offline") : "Checking…"}
         </span>
       </div>
     );
@@ -92,9 +92,9 @@ export function SystemStatusPanel({ className = "" }: { className?: string }) {
           <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} /> Check now
         </button>
       </div>
-      <Row name="Checker API" s={status?.checker} />
+      <Row name="Checker" s={status?.checker} />
       <div className="h-px bg-[#f0f0f0]" />
-      <Row name="Payment API" s={status?.payments} />
+      <Row name="Payment" s={status?.payments} />
     </div>
   );
 }
