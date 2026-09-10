@@ -304,84 +304,87 @@ const Shop = () => {
                     className="cursor-pointer accent-[#2196f3]"
                   />
                 </td>
-                <td className="p-2 align-middle max-w-[210px]">
+                <td className="p-3 align-middle max-w-[240px]">
                   <span
                     title={publicBase(c.base) || ""}
-                    className="inline-block max-w-full truncate rounded-md border border-[#c8e6c9] bg-[#eaf7ec] px-2 py-1 text-[11px] font-medium text-[#2e7d32]"
+                    className="inline-block max-w-full truncate rounded-lg border border-[#a5d6a7] bg-gradient-to-b from-[#f1fbf2] to-[#dff3e2] px-2.5 py-1.5 text-[13px] font-semibold text-[#1b5e20] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_3px_8px_-6px_rgba(27,94,32,0.8)]"
                   >
                     {publicBase(c.base) || "—"}
                   </span>
                 </td>
-                <td className="p-2 align-middle">
-                  <span className="inline-block rounded-md bg-gradient-to-b from-[#37474f] to-[#1f2d3d] px-2 py-1 font-mono text-[11px] font-semibold text-white shadow-[0_4px_10px_-6px_rgba(31,45,61,0.9)]">
+                <td className="p-3 align-middle">
+                  <span className="inline-block rounded-lg bg-gradient-to-b from-[#455a64] to-[#1f2d3d] px-2.5 py-1.5 font-mono text-[13px] font-bold tracking-wide text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_5px_12px_-7px_rgba(31,45,61,1)]">
                     {c.bin ?? "—"}
                   </span>
                   {c.last_digits ? (
-                    <span className="ml-1 font-mono text-[11px] text-[#90a4ae]">••{c.last_digits}</span>
+                    <span className="ml-1.5 font-mono text-[13px] font-semibold text-[#78909c]">••{c.last_digits}</span>
                   ) : null}
                 </td>
-                <td className="p-2 align-middle">
-                  <BrandLogo brand={c.brand || detectBrandFromBin(c.bin ?? "")} className="h-5 w-8 drop-shadow-sm" />
+                <td className="p-3 align-middle">
+                  <BrandLogo brand={c.brand || detectBrandFromBin(c.bin ?? "")} className="h-7 w-11 drop-shadow-[0_3px_6px_rgba(31,45,61,0.35)]" />
                 </td>
-                <td className="p-2 align-middle font-mono text-[12px] text-[#37474f] whitespace-nowrap">
+                <td className="p-3 align-middle font-mono text-[14px] font-semibold text-[#263238] whitespace-nowrap">
                   {(c.exp_month ?? "--")}/{(c.exp_year ?? "--")}
                 </td>
-                <td className="p-2 align-middle">
-                  <CheckCircle2 className="h-4 w-4 text-[#2e7d32]" />
+                <td className="p-3 align-middle">
+                  <CheckCircle2 className="h-5 w-5 text-[#2e7d32] drop-shadow-[0_2px_4px_rgba(46,125,50,0.45)]" />
                 </td>
-                <td className="p-2 align-middle whitespace-nowrap">
+                <td className="p-3 align-middle whitespace-nowrap">
                   {c.country ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <CountryFlagImg code={c.country} className="h-3.5 w-5 rounded-[2px]" />
-                      <span className="text-[12px] font-semibold text-[#37474f]">{countryCode(c.country)}</span>
+                    <span className="inline-flex items-center gap-2">
+                      <CountryFlagImg code={c.country} className="h-6 w-9" />
+                      <span className="flex flex-col leading-tight">
+                        <span className="text-[13px] font-bold text-[#1f2d3d]">{countryCode(c.country)}</span>
+                        <span className="text-[11px] text-[#78909c] max-w-[120px] truncate">{countryName(c.country)}</span>
+                      </span>
                     </span>
                   ) : <span className="text-[#bbb]">—</span>}
                 </td>
-                <td className="p-2 align-middle max-w-[170px]">
+                <td className="p-3 align-middle max-w-[200px]">
                   {c.city || c.state ? (
                     <span
-                      title={[c.city, c.state].filter(Boolean).join(", ")}
-                      className="inline-block max-w-full truncate rounded-md border border-[#ffe0a3] bg-[#fff6e0] px-2 py-1 text-[11px] font-semibold uppercase text-[#8d6e00]"
+                      title={[c.city, c.state, c.zip].filter(Boolean).join(", ")}
+                      className="inline-block max-w-full truncate rounded-lg border border-[#ffd280] bg-gradient-to-b from-[#fffaf0] to-[#ffeec9] px-2.5 py-1.5 text-[13px] font-semibold uppercase text-[#8d6e00] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
                     >
                       {[c.city, c.state].filter(Boolean).join(", ")}
                     </span>
                   ) : <span className="text-[#bbb]">—</span>}
                 </td>
-                <td className="p-2 align-middle min-w-[150px]">
-                  <span className="flex flex-wrap gap-1">
+                <td className="p-3 align-middle min-w-[160px]">
+                  <span className="flex flex-wrap gap-1.5">
                     {c.zip ? <InfoChip>+zip</InfoChip> : null}
                     {c.city ? <InfoChip>+city</InfoChip> : null}
                     {c.state ? <InfoChip>+state</InfoChip> : null}
                     {c.has_phone ? <InfoChip>+phone</InfoChip> : null}
                     {c.has_email ? <InfoChip>+email</InfoChip> : null}
                     {!c.zip && !c.city && !c.state && !c.has_phone && !c.has_email ? (
-                      <span className="text-[11px] text-[#bbb]">none</span>
+                      <span className="text-[12px] text-[#bbb]">none</span>
                     ) : null}
                   </span>
                 </td>
-                <td className="p-2 align-middle font-mono text-[12px] text-[#c62828]">{c.zip ?? "N/A"}</td>
-                <td className="p-2 align-middle">
-                  <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                <td className="p-3 align-middle font-mono text-[14px] font-semibold text-[#c62828]">{c.zip ?? "N/A"}</td>
+                <td className="p-3 align-middle">
+                  <span className={`inline-block rounded-full px-3 py-1 text-[12px] font-bold uppercase tracking-wide shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] ${
                     c.refundable
-                      ? "bg-[#e8f5e9] text-[#2e7d32] border border-[#c8e6c9]"
-                      : "bg-[#fdecea] text-[#c62828] border border-[#f5c6c2]"
+                      ? "bg-gradient-to-b from-[#eaf7ec] to-[#c8e6c9] text-[#1b5e20] border border-[#a5d6a7]"
+                      : "bg-gradient-to-b from-[#fdecea] to-[#f9d3cf] text-[#b71c1c] border border-[#ef9a9a]"
                   }`}>
                     {c.refundable ? "Yes" : "No"}
                   </span>
                 </td>
-                <td className="p-2 align-middle font-mono text-[13px] font-bold text-[#1f2d3d] whitespace-nowrap">
+                <td className="p-3 align-middle font-mono text-[16px] font-extrabold text-[#1f2d3d] whitespace-nowrap">
                   ${Number(c.price).toFixed(2)}
                 </td>
-                <td className="p-2 align-middle">
+                <td className="p-3 align-middle">
                   {c.delivery_type === "key" && c.stock <= 0 ? (
-                    <span className="text-[#bbb] text-[12px]">sold</span>
+                    <span className="text-[#bbb] text-[13px]">sold</span>
                   ) : (
                     <button
                       onClick={() => buyMany([c.id])}
                       disabled={buying}
-                      className="h-7 px-3 rounded-md bg-gradient-to-b from-[#66bb6a] to-[#2e7d32] text-white text-[12px] font-semibold inline-flex items-center gap-1.5 shadow-[0_6px_14px_-7px_rgba(46,125,50,0.9)] active:translate-y-px transition disabled:opacity-50"
+                      className="h-9 px-4 rounded-lg bg-gradient-to-b from-[#7bd17f] to-[#2e7d32] text-white text-[13px] font-bold inline-flex items-center gap-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_8px_16px_-9px_rgba(46,125,50,1)] hover:from-[#66bb6a] hover:to-[#256a29] active:translate-y-px transition disabled:opacity-50"
                     >
-                      <ShoppingCart className="h-3.5 w-3.5" /> Buy
+                      <ShoppingCart className="h-4 w-4" /> Buy
                     </button>
                   )}
                 </td>
