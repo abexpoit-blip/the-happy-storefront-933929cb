@@ -424,9 +424,13 @@ const OrderDetail = ({
             <button onClick={() => void onRefresh().then(loadChecks)} className="h-8 px-3 rounded-md bg-[#409eff] text-white text-[12.5px] hover:brightness-110 inline-flex items-center gap-1.5">
               <RefreshCw className="h-3.5 w-3.5" /> Refresh data
             </button>
-            <button onClick={() => onExport(true)} className="h-8 px-3 rounded-md border border-[#43a047]/60 text-[#7ee08a] text-[12.5px] hover:bg-[#43a047]/15 inline-flex items-center gap-1.5">
+            <button onClick={() => onExport(false)} className="h-8 px-3 rounded-md border border-[#43a047]/60 text-[#7ee08a] text-[12.5px] hover:bg-[#43a047]/15 inline-flex items-center gap-1.5">
+              <Download className="h-3.5 w-3.5" /> Download TXT
+            </button>
+            <button onClick={() => onExport(true)} className="h-8 px-3 rounded-md border border-white/15 text-white/80 text-[12.5px] hover:bg-white/10 inline-flex items-center gap-1.5">
               <Download className="h-3.5 w-3.5" /> Export CSV
             </button>
+
             <button
               onClick={() => void copy(cards.map((c) => c.raw).join("\n"))}
               className="h-8 px-3 rounded-md bg-gradient-to-r from-[#7b5cff] to-[#a06bff] text-white text-[12.5px] hover:brightness-110 inline-flex items-center gap-1.5"
