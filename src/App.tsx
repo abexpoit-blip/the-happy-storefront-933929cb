@@ -33,6 +33,7 @@ const AdminPayments = lazy(() => import("./pages/AdminPayments"));
 const AdminCategories = lazy(() => import("./pages/AdminCategories"));
 const AdminShop = lazy(() => import("./pages/AdminShop"));
 const Support = lazy(() => import("./pages/Support"));
+const Checker = lazy(() => import("./pages/Checker"));
 const AdminSupport = lazy(() => import("./pages/AdminSupport"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -92,6 +93,7 @@ const App = () => (
             <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
             <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
             <Route path="/recharge" element={<ProtectedRoute><Recharge /></ProtectedRoute>} />
+            <Route path="/checker" element={<ProtectedRoute><Checker /></ProtectedRoute>} />
             <Route path="/referrals" element={<ProtectedRoute><Referrals /></ProtectedRoute>} />
             <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
             <Route path="/tickets" element={<ProtectedRoute><Support /></ProtectedRoute>} />
