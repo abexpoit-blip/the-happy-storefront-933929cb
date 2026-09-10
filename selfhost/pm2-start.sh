@@ -22,6 +22,10 @@ done
 set +a
 export PORT
 
+for v in PLISIO_API_KEY CHECKERCCV_API_KEY CHECKERCCV_TOKEN; do
+  [ -n "${!v:-}" ] || echo "WARN: $v missing — bash selfhost/set-secrets.sh <service> $v=VALUE" >&2
+done
+
 for v in SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY; do
   if [ -z "${!v:-}" ]; then
     echo "MISSING $v in $APP_DIR/.env — run: bash selfhost/fix-env.sh" >&2
