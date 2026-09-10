@@ -350,7 +350,7 @@ const EN_EXTRA: Record<string, string> = {
 };
 
 const ATTRS = ["placeholder", "title", "aria-label", "alt"];
-let lastLang: Lang = "ru";
+let lastLang: Lang = "en";
 
 const invert = (m: Record<string, string>) => {
   const out: Record<string, string> = {};
@@ -395,7 +395,7 @@ function translateNode(root: Node) {
 }
 
 interface LangCtx { lang: Lang; setLang: (l: Lang) => void; toggle: () => void }
-const Ctx = createContext<LangCtx>({ lang: "ru", setLang: () => {}, toggle: () => {} });
+const Ctx = createContext<LangCtx>({ lang: "en", setLang: () => {}, toggle: () => {} });
 
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   // English is the default language; Russian is opt-in via the toggle.
