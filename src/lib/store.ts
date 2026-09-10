@@ -157,7 +157,8 @@ export const purchaseAndDeliver = async (
 
 /** Buy checking credits with the account balance ($1 = 1000 credits). */
 export const buyCheckCredits = async (usd: number): Promise<number> => {
-  const { data, error } = await supabase.rpc("buy_check_credits", { _usd: usd });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc("buy_check_credits", { _usd: usd });
   if (error) throw new Error(translatePurchaseError(error.message));
   return Number(data ?? 0);
 };
