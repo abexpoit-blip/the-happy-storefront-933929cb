@@ -9,7 +9,7 @@ import { addToCart, cartCount, onCartChange } from "@/lib/cart";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { publicBase } from "@/lib/baseLabel";
-import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode } from "@/lib/brands";
+import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode, countryName } from "@/lib/brands";
 
 const PAGE_SIZES = [10, 20, 50, 100];
 
@@ -502,7 +502,7 @@ function pageNumbers(page: number, total: number): (number | "…")[] {
 
 function InfoChip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="rounded border border-[#cfe6ff] bg-[#eaf4ff] px-1.5 py-[1px] text-[10px] font-medium text-[#1565c0]">
+    <span className="rounded-md border border-[#bbdefb] bg-gradient-to-b from-[#f3f9ff] to-[#dceeff] px-2 py-[3px] text-[12px] font-semibold text-[#0d47a1] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
       {children}
     </span>
   );
