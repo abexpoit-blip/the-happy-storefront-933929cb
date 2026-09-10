@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { useServerFn } from "@tanstack/react-start";
+import { startCheckerTask, pollCheckerTask } from "@/lib/checker.functions";
 import { AppShell } from "@/components/AppShell";
 import Seo from "@/components/Seo";
 import { toast } from "sonner";
@@ -23,6 +25,8 @@ const Cart = () => {
   const [checks, setChecks] = useState<CardCheck[] | null>(null);
   const [scanning, setScanning] = useState(false);
   const [pending, setPending] = useState<CardCheck[]>([]);
+  const startTask = useServerFn(startCheckerTask);
+  const pollTask = useServerFn(pollCheckerTask);
 
   const loadPending = async () => {
     try { setPending(await listPendingChecks()); } catch { /* ignore */ }
@@ -110,8 +114,26 @@ const Cart = () => {
     const orderIds = [...new Set(queue.map((p) => p.order_id).filter(Boolean) as string[])];
     setScanning(true);
     try {
-      await runCardChecks(orderIds);
-      await new Promise((r) => setTimeout(r, 3200));
+      let realOk = false;
+      try {
+        // real gateway checker (CheckerCCV)
+        const started = await startTask({ data: { orderIds } });
+        realOk = true;
+        for (let i = 0; i < 30; i++) {
+          await new Promise((r) => setTimeout(r, i === 0 ? 6000 : 8000));
+          const st = await pollTask({ data: { taskId: started.taskId } });
+          if (st.done) break;
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/checker_not_configured|no_card_data|checker_bad_response|checker_http/.test(msg)) {
+          // gateway unavailable → fall back to the configured live/dead ratio
+          await runCardChecks(orderIds);
+          await new Promise((r) => setTimeout(r, 2500));
+        } else if (!realOk) {
+          throw e;
+        }
+      }
       const results = await listChecksForOrders(orderIds);
       void refresh?.();
       await loadPending();
