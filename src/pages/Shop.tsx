@@ -10,6 +10,8 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { publicBase } from "@/lib/baseLabel";
 import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode, countryName } from "@/lib/brands";
+import { sortBasesLatestFirst } from "@/lib/baseLabel";
+import { allCountries, flagEmoji, resolveCountryCode, resolveCountryName } from "@/lib/countries";
 
 const PAGE_SIZES = [10, 20, 50, 100];
 
@@ -65,17 +67,31 @@ const Shop = () => {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
+  // Newest base first — buyers want the latest upload date on top.
   const bases = useMemo(
-    () => [...new Set(all.map((p) => p.base).filter(Boolean) as string[])].sort(),
+    () => sortBasesLatestFirst([...new Set(all.map((p) => p.base).filter(Boolean) as string[])]),
     [all],
   );
+
+  // Countries actually in stock (with counts), plus the full ISO list below it.
+  const stockCountries = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of all) {
+      const cc = resolveCountryCode(p.country);
+      if (cc) counts.set(cc, (counts.get(cc) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([code, n]) => ({ code, n, name: resolveCountryName(code) }))
+      .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
+  }, [all]);
+  const everyCountry = useMemo(() => allCountries(), []);
 
   const cards = useMemo(() => {
     if (!searched) return [];
     return all.filter((p) => {
       if (q.bin && !(p.bin ?? "").startsWith(q.bin)) return false;
       if (q.base !== "all" && (p.base ?? "") !== q.base) return false;
-      if (q.country && !(p.country ?? "").toUpperCase().includes(q.country.toUpperCase())) return false;
+      if (q.country && resolveCountryCode(p.country) !== q.country) return false;
       if (q.zip && !(p.zip ?? "").startsWith(q.zip)) return false;
       if (q.refund === "yes" && !p.refundable) return false;
       if (q.refund === "no" && p.refundable) return false;
