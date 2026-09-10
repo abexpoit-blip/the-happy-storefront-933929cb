@@ -27,11 +27,14 @@ const Cart = () => {
   const [checks, setChecks] = useState<CardCheck[] | null>(null);
   const [scanning, setScanning] = useState(false);
   const [pending, setPending] = useState<CardCheck[]>([]);
+  const [history, setHistory] = useState<CardCheck[]>([]);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
   const startTask = useServerFn(startCheckerTask);
   const pollTask = useServerFn(pollCheckerTask);
 
   const loadPending = async () => {
     try { setPending(await listPendingChecks()); } catch { /* ignore */ }
+    try { setHistory(await listMyChecks(50)); } catch { /* ignore */ }
   };
   useEffect(() => { void loadPending(); }, []);
 
