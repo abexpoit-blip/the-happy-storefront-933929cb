@@ -4,11 +4,12 @@ import Seo from "@/components/Seo";
 import { toast } from "sonner";
 import {
   Loader2, Radar, CreditCard, ChevronDown, ListChecks, History, Copy, Download,
-  CheckCircle2, XCircle, AlertTriangle, SkipForward, Wallet, Gauge,
+  CheckCircle2, XCircle, AlertTriangle, SkipForward, Wallet, Gauge, ShieldCheck, Zap,
 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
+import { PageHero } from "@/components/PageHero";
 import {
-  selfCheckConfig, startSelfCheck, pollSelfCheck, checkerGates,
+  selfCheckConfig, startSelfCheck, pollSelfCheck, checkerGates, checkerCredit,
   type SelfCheckRow, type SelfCheckStatus,
 } from "@/lib/selfcheck.functions";
 import { useAuth } from "@/hooks/useAuth";
