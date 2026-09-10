@@ -136,8 +136,17 @@ const ApiAccess = () => {
         <div className="flex items-center gap-2 font-semibold"><Terminal className="h-4 w-4" /> API documentation</div>
         <div className="text-[13px] text-[#555]">
           Base URL <code className="font-mono">{BASE}</code>. Send your key in the <code>x-api-key</code> header on every
-          request. Credits are charged per card; cards the gateway never answers are refunded automatically.
+          request. Every card costs <b>${price.toFixed(2)}</b>: the credits on your key are used first, and anything
+          left over is taken from your account balance. Cards the gateway never answers are refunded automatically.
         </div>
+
+        <div className="rounded-xl border border-[#ffe0b2] bg-[#fff8e8] p-4 text-[12.5px] text-[#6b5417] leading-relaxed">
+          <b>Keep your checker topped up.</b> Requests fail with <code>insufficient_balance</code> the moment your key
+          credits and your account balance both run out, so keep credits on the key and money in your balance at all
+          times. Check <code>/api/public/checker/balance</code> before every batch (it returns
+          {" "}<code>cards_affordable</code>) and deposit early — a bot that runs dry stops mid-run.
+        </div>
+
 
         <Snippet
           title="1. Start a check — POST /api/public/checker/check"
