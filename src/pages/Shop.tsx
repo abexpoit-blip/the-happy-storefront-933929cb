@@ -136,12 +136,12 @@ const Shop = () => {
   );
 
   const buyMany = (ids: string[]) => {
-    if (!ids.length) return toast.error("Выберите карты");
+    if (!ids.length) return toast.error("Select cards first");
     const items = all.filter((p) => ids.includes(p.id));
     const added = addToCart(items);
     setSelected(new Set());
-    if (added === 0) toast.info("Уже в корзине");
-    else toast.success(`Добавлено в корзину: ${added}`);
+    if (added === 0) toast.info("Already in cart");
+    else toast.success(`Added to cart: ${added}`);
   };
 
   const noResults = !loading && searched && cards.length === 0;
