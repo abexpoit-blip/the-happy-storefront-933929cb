@@ -66,6 +66,17 @@ export async function checkCredit(): Promise<number> {
   return Number(p?.data?.credit ?? 0);
 }
 
+/** Gates selected for this shop (CheckerCCV dashboard list). */
+export const GATE_CATALOG: CheckerGate[] = [
+  { id: "CCV_Amazon_Auth", description: "CCV Amazon US Auth", creditGate: 15, isEnabled: true },
+  { id: "CCN_Amazon_Auth", description: "CCN Amazon Prime US Auth", creditGate: 15, isEnabled: true },
+  { id: "CCN_Amazon_Auth_Logo", description: "CCN Amazon Auth Logo Bank - 3 Minutes", creditGate: 15, isEnabled: true },
+  { id: "CCV_Academy_Auth", description: "CCV Academy Auth - Walmart.Com", creditGate: 12, isEnabled: true },
+  { id: "CCV_Doordash_Auth", description: "CCV DoorDash Auth - Stripe", creditGate: 8, isEnabled: true },
+  { id: "CCN_Doordash_Auth", description: "CCN DoorDash Auth - Stripe", creditGate: 8, isEnabled: true },
+  { id: "CCV_Braintree_Auth", description: "CCV Braintree Auth - Do not check same BIN", creditGate: 5, isEnabled: true },
+];
+
 export async function listGates(enabledOnly = true): Promise<CheckerGate[]> {
   const { key } = creds();
   let p = (await call(GATES_URL, { key })) as unknown;
@@ -73,7 +84,16 @@ export async function listGates(enabledOnly = true): Promise<CheckerGate[]> {
     p = (p as { data: unknown[] }).data;
   }
   const gates = (Array.isArray(p) ? p : []) as CheckerGate[];
-  return enabledOnly ? gates.filter((g) => g.isEnabled === true) : gates;
+  const live = enabledOnly ? gates.filter((g) => g.isEnabled === true) : gates;
+  // API থেকে description/credit না এলে আমাদের catalog থেকে পূরণ করি
+  return live.map((g) => {
+    const known = GATE_CATALOG.find((c) => c.id === g.id);
+    return {
+      ...g,
+      description: g.description || known?.description || String(g.id),
+      creditGate: Number(g.creditGate ?? known?.creditGate ?? 0),
+    };
+  });
 }
 
 export async function createTask(gatecode: string, listcc: string[]) {
