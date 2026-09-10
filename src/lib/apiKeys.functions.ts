@@ -5,6 +5,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 export interface ApiKeyListRow {
   id: string;
   label: string;
+  userId: string | null;
+  owner: string | null;
   ownerNote: string | null;
   prefix: string;
   credits: number;
