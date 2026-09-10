@@ -33,16 +33,12 @@ export const Route = createFileRoute("/api/public/checker/check")({
           .from("site_settings").select("value").eq("key", "self_check_gate").maybeSingle();
         const gate = parsed.gate?.trim() || String(gateRow?.value || "CCV_Braintree_Auth");
 
-        const { data: costRow } = await db
-          .from("site_settings").select("value").eq("key", "check_credit_cost").maybeSingle();
-        const creditCost = Number(costRow?.value ?? 30) || 30;
-
         let taskId: string;
         try {
           const { createTask } = await import("@/lib/checkerccv.server");
           taskId = await createTask(gate, lines);
         } catch (e) {
-          await refundApiKey(auth.key.id, lines.length * creditCost);
+          await refundApiKey(auth.key.id, auth.key.chargedCredits, auth.key.chargedUsd);
           return json(
             { status: "error", message: e instanceof Error ? e.message : "gateway_error" },
             502,
