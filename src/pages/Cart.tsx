@@ -122,16 +122,22 @@ const Cart = () => {
     }
     const orderIds = [...new Set(queue.map((p) => p.order_id).filter(Boolean) as string[])];
     setScanning(true);
+    setProgress({ done: 0, total: queue.length });
     try {
       let realOk = false;
       try {
         // real gateway checker (CheckerCCV)
         const started = await startTask({ data: { orderIds } });
         realOk = true;
-        for (let i = 0; i < 30; i++) {
-          await new Promise((r) => setTimeout(r, i === 0 ? 6000 : 8000));
-          const st = await pollTask({ data: { taskId: started.taskId } });
-          if (st.done) break;
+        setProgress({ done: 0, total: started.total });
+        // the gateway needs >= 10s between result polls for the same task
+        for (let i = 0; i < 60; i++) {
+          await new Promise((r) => setTimeout(r, i === 0 ? 6000 : 12000));
+          try {
+            const st = await pollTask({ data: { taskId: started.taskId } });
+            setProgress({ done: st.processed, total: st.total || started.total });
+            if (st.done) break;
+          } catch { /* transient gateway error — keep polling */ }
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
