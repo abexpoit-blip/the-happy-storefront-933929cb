@@ -49,13 +49,19 @@ export const selfCheckConfig = createServerFn({ method: "POST" })
 export const checkerGates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
-    const { listGates } = await import("@/lib/checkerccv.server");
-    const gates = await listGates(true);
-    return gates.map((g) => ({
+    const { listGates, GATE_CATALOG } = await import("@/lib/checkerccv.server");
+    const shape = (g: { id?: string; description?: string; creditGate?: number }) => ({
       id: String(g.id),
       description: String(g.description ?? g.id),
       credit: Number(g.creditGate ?? 0),
-    }));
+    });
+    try {
+      const gates = await listGates(true);
+      if (gates.length > 0) return gates.map(shape);
+    } catch {
+      // gateway unreachable / key missing — নিচের catalog দেখাই
+    }
+    return GATE_CATALOG.map(shape);
   });
 
 /** Remaining credit on the checking gateway account. */
