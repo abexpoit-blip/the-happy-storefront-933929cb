@@ -69,16 +69,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         username?: string; email?: string; avatar_url?: string | null;
         balance?: number; bonus_balance?: number; check_credits?: number; blocked?: boolean;
       };
-      const [profileRes, { data: roles }] = await Promise.all([
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase as any).from("profiles")
-          .select("id, username, email, avatar_url, balance, bonus_balance, check_credits, blocked")
-          .eq("id", uid).maybeSingle(),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const db = supabase as any;
+      const readProfile = (cols: string) =>
+        db.from("profiles").select(cols).eq("id", uid).maybeSingle() as Promise<{
+          data: ProfileRow | null;
+          error: { message?: string } | null;
+        }>;
+
+      const [firstRes, { data: roles }] = await Promise.all([
+        readProfile("id, username, email, avatar_url, balance, bonus_balance, check_credits, blocked"),
         supabase.from("user_roles").select("role").eq("user_id", uid),
       ]);
-      const p = (profileRes as { data: ProfileRow | null }).data;
-      const pErr = (profileRes as { error: unknown }).error;
-      if (pErr) throw pErr;
+      let profileRes = firstRes;
+      // Older databases may not have the newer columns yet — retry with the base set
+      // instead of leaving the whole app stuck on "loading".
+      if (profileRes.error) {
+        profileRes = await readProfile("id, username, email, avatar_url, balance, blocked");
+      }
+      const p = profileRes.data;
+      if (profileRes.error) throw profileRes.error;
 
       const roleList = (roles ?? []).map((r) => r.role as string);
       const role = roleList.includes("admin") ? "admin" : roleList.includes("seller") ? "seller" : "buyer";
