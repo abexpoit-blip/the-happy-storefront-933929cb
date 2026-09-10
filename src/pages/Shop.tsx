@@ -32,18 +32,30 @@ const Shop = () => {
   const [q, setQ] = useState({ bin: "", base: "all", country: "", zip: "", refund: "all" as "all" | "yes" | "no" });
 
   const lastLoad = useRef(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const load = async (force = false) => {
     if (!force && Date.now() - lastLoad.current < 60_000) return;
     lastLoad.current = Date.now();
     setLoading(true);
-    try {
-      setAll(await listProducts());
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Ошибка загрузки");
-      setAll([]);
-    } finally {
-      setLoading(false);
+    // Two silent retries — flaky first requests were showing "try again" to users.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const rows = await listProducts();
+        setAll(rows);
+        setLoadError(null);
+        setLoading(false);
+        return;
+      } catch (e) {
+        if (attempt === 2) {
+          const msg = e instanceof Error ? e.message : "Loading error";
+          setLoadError(msg);
+          toast.error(msg);
+        } else {
+          await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+        }
+      }
     }
+    setLoading(false);
   };
 
   useEffect(() => {
