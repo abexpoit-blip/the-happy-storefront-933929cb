@@ -60,6 +60,11 @@ async function call<T>(path: string, params: Record<string, string>): Promise<T>
 /** Percentage fee paid by the client on top of the credited amount. */
 export const CLIENT_FEE_PERCENT = 2;
 
+/** Lightweight health probe — throws when the payment gateway is unusable. */
+export async function gatewayPing(): Promise<void> {
+  await call<unknown>("/balances/LTC", {});
+}
+
 export async function createLtcInvoice(input: {
   usdAmount: number;
   orderNumber: string;

@@ -14,6 +14,7 @@ import {
 } from "@/lib/selfcheck.functions";
 import { useAuth } from "@/hooks/useAuth";
 import { buyCheckCredits } from "@/lib/store";
+import { SystemStatusPanel } from "@/components/SystemStatus";
 
 type Tab = SelfCheckStatus;
 
@@ -202,6 +203,8 @@ const Checker = () => {
           </div>
         }
       />
+
+      <SystemStatusPanel className="mb-4" />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)]">
         {/* LIST CARD */}
