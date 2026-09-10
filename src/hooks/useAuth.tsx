@@ -66,7 +66,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       const [{ data: p, error: pErr }, { data: roles }] = await Promise.all([
-        supabase.from("profiles").select("id, username, email, avatar_url, balance, bonus_balance, check_credits, blocked").eq("id", uid).maybeSingle(),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any).from("profiles").select("id, username, email, avatar_url, balance, bonus_balance, check_credits, blocked").eq("id", uid).maybeSingle() as Promise<{ data: Record<string, unknown> | null; error: unknown }>,
         supabase.from("user_roles").select("role").eq("user_id", uid),
       ]);
       if (pErr) throw pErr;
