@@ -164,18 +164,15 @@ const Checker = () => {
     if (!lines.length) return toast.error("Paste at least one card (PAN|MM|YYYY|CVV)");
     if (lines.length > 500) return toast.error("Maximum 500 cards per run");
     if (myCredits < needCredits) return toast.error(`Not enough credits — you need ${needCredits}, you have ${myCredits}. Buy credits first.`);
-    setBusy(true); setRows([]); setStartedAt(Date.now());
+    setBusy(true); setRows([]); setStartedAt(Date.now()); setExpected(lines.length);
     try {
       const task = await start({ data: { cards: lines, gate: gate || undefined } });
       setTaskId(task.taskId);
+      setExpected(task.total);
       toast.success(`Charged ${task.credits} credits ($${task.cost.toFixed(2)}) — checking ${task.total} card(s)`);
       void refresh?.();
-      for (let i = 0; i < 60; i++) {
-        await new Promise((r) => setTimeout(r, i === 0 ? 5000 : 6000));
-        const st = await poll({ data: { taskId: task.taskId } });
-        if (st.rows.length) setRows(st.rows);
-        if (st.done) break;
-      }
+      await watch(task.taskId);
+      void getHistory({}).then(setHistory).catch(() => undefined);
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
       toast.error(
