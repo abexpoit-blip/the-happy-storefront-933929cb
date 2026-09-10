@@ -167,6 +167,42 @@ export type Database = {
         }
         Relationships: []
       }
+      checker_tasks: {
+        Row: {
+          created_at: string
+          gate: string
+          id: string
+          mapping: Json
+          settled: number
+          status: string
+          task_id: string
+          total: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          gate: string
+          id?: string
+          mapping?: Json
+          settled?: number
+          status?: string
+          task_id: string
+          total?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          gate?: string
+          id?: string
+          mapping?: Json
+          settled?: number
+          status?: string
+          task_id?: string
+          total?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       deposits: {
         Row: {
           admin_note: string | null
@@ -725,6 +761,10 @@ export type Database = {
         Returns: string
       }
       run_card_checks: { Args: { _order_ids: string[] }; Returns: number }
+      settle_card_check: {
+        Args: { _check_id: string; _status: string }
+        Returns: string
+      }
       settle_crypto_deposit: {
         Args: {
           _confirmations?: number
