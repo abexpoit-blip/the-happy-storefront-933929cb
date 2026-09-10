@@ -47,6 +47,8 @@ const Checker = () => {
   const getCredit = useServerFn(checkerCredit);
   const start = useServerFn(startSelfCheck);
   const poll = useServerFn(pollSelfCheck);
+  const getHistory = useServerFn(listSelfChecks);
+
 
   const [price, setPrice] = useState(0.03);
   const [creditCost, setCreditCost] = useState(30);
