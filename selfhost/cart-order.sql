@@ -24,10 +24,17 @@ DECLARE
   _content text;
   _key RECORD;
   _left integer;
+  _requested integer;
+  _available integer;
 BEGIN
   IF _uid IS NULL THEN RAISE EXCEPTION 'not_authenticated'; END IF;
   IF _product_ids IS NULL OR array_length(_product_ids, 1) IS NULL THEN RAISE EXCEPTION 'empty_cart'; END IF;
   IF array_length(_product_ids, 1) > 200 THEN RAISE EXCEPTION 'too_many_items'; END IF;
+
+  _requested := array_length(_product_ids, 1);
+  SELECT count(DISTINCT id) INTO _available
+    FROM products WHERE id = ANY(_product_ids) AND active = true;
+  IF _available <> _requested THEN RAISE EXCEPTION 'product_unavailable'; END IF;
 
   SELECT COALESCE(sum(price), 0) INTO _total
     FROM products WHERE id = ANY(_product_ids) AND active = true;
@@ -78,6 +85,10 @@ BEGIN
   END LOOP;
 
   UPDATE orders SET total = _total WHERE id = _order_id;
+
+  IF (SELECT count(*) FROM order_items WHERE order_id = _order_id) <> _requested THEN
+    RAISE EXCEPTION 'incomplete_cart_order';
+  END IF;
 
   _from_bonus := LEAST(COALESCE(_bonus_bal, 0), _total);
   UPDATE profiles
