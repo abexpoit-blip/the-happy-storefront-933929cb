@@ -9,7 +9,7 @@ import {
 import { useServerFn } from "@tanstack/react-start";
 import { PageHero } from "@/components/PageHero";
 import {
-  selfCheckConfig, startSelfCheck, pollSelfCheck, checkerGates, checkerCredit,
+  selfCheckConfig, startSelfCheck, pollSelfCheck, checkerGates, checkerCredit, listSelfChecks,
   type SelfCheckRow, type SelfCheckStatus,
 } from "@/lib/selfcheck.functions";
 import { useAuth } from "@/hooks/useAuth";
