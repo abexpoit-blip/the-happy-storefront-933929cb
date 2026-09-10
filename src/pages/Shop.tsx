@@ -492,6 +492,14 @@ function pageNumbers(page: number, total: number): (number | "…")[] {
   return out;
 }
 
+function InfoChip({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded border border-[#cfe6ff] bg-[#eaf4ff] px-1.5 py-[1px] text-[10px] font-medium text-[#1565c0]">
+      {children}
+    </span>
+  );
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2 min-w-0">
