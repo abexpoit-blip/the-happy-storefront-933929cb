@@ -213,3 +213,20 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.purchase_product(uuid, integer) FROM anon, public;
 GRANT EXECUTE ON FUNCTION public.purchase_product(uuid, integer) TO authenticated;
+
+-- ---------- refund credits when the gateway refuses a task (service role only) ----------
+CREATE OR REPLACE FUNCTION public.refund_check_credits(_user_id uuid, _credits integer)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF COALESCE(_credits,0) <= 0 THEN RETURN; END IF;
+  UPDATE profiles SET check_credits = check_credits + _credits WHERE id = _user_id;
+  INSERT INTO balance_transactions (user_id, amount, kind, description)
+  VALUES (_user_id, 0, 'check_credits', 'Refunded ' || _credits || ' credits (gateway error)');
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.refund_check_credits(uuid, integer) FROM PUBLIC, anon, authenticated;
