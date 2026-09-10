@@ -790,6 +790,7 @@ export interface AdminCardRow {
   exp_month?: string;
   exp_year?: string;
   category_id: string | null;
+  base?: string | null;
 }
 
 const cardStatus = (p: {
@@ -813,7 +814,7 @@ export const adminListCards = async (opts: {
 } = {}): Promise<AdminCardRow[]> => {
   let q = supabase
     .from("products")
-    .select("id, bin, brand, country, price, active, stock, sold_count, exp_month, exp_year, created_at, category_id")
+    .select("id, bin, brand, country, price, active, stock, sold_count, exp_month, exp_year, created_at, category_id, base")
     .order("created_at", { ascending: false })
     .limit(1000);
   const s = opts.search?.trim();
@@ -831,6 +832,7 @@ export const adminListCards = async (opts: {
     exp_month: p.exp_month ?? undefined,
     exp_year: p.exp_year ?? undefined,
     category_id: p.category_id ?? null,
+    base: (p as { base?: string | null }).base ?? null,
   }));
   const f = opts.status ?? "all";
   return f === "all" ? rows : rows.filter((r) => r.status === f);
@@ -838,7 +840,7 @@ export const adminListCards = async (opts: {
 
 export const adminUpdateCards = async (
   ids: string[],
-  patch: { price?: number; active?: boolean; category_id?: string | null },
+  patch: { price?: number; active?: boolean; category_id?: string | null; base?: string },
 ) => {
   if (ids.length === 0) return;
   // Chunked: a single .in() with thousands of ids overflows the request URL.

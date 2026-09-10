@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { flagEmoji, resolveCountryCode, resolveCountryName } from "@/lib/countries";
 
 export const BRANDS = ["VISA", "MASTERCARD", "AMEX", "DISCOVER", "JCB", "DINERS"] as const;
@@ -223,10 +223,17 @@ export const CatalogBrandIcon = ({ brand }: { brand: string }): ReactNode => {
 /** Glossy 3D-style flag chip. Works for every ISO country code. */
 export const CountryFlagImg = ({ code, className = "h-5 w-7" }: { code?: string | null; className?: string }) => {
   const cc = resolveCountryCode(code);
-  if (!cc || !/^[A-Z]{2}$/.test(cc)) {
+  const [broken, setBroken] = useState(false);
+  useEffect(() => { setBroken(false); }, [cc]);
+
+  if (!cc || !/^[A-Z]{2}$/.test(cc) || broken) {
+    // Emoji fallback keeps every country visible even when the CDN image fails.
     return (
-      <span className={`${className} inline-flex items-center justify-center rounded-[4px] bg-gradient-to-b from-[#eceff1] to-[#cfd8dc] text-[10px]`}>
-        🌐
+      <span
+        title={cc ? resolveCountryName(cc) : "Unknown"}
+        className={`${className} inline-flex items-center justify-center rounded-[4px] ring-1 ring-black/10 bg-gradient-to-b from-[#f7f9fb] to-[#dfe6ec] text-[13px] leading-none align-middle`}
+      >
+        {cc ? flagEmoji(cc) : "🌐"}
       </span>
     );
   }
@@ -240,6 +247,7 @@ export const CountryFlagImg = ({ code, className = "h-5 w-7" }: { code?: string 
         srcSet={`https://flagcdn.com/w160/${cc.toLowerCase()}.png 2x`}
         alt={resolveCountryName(cc)}
         loading="lazy"
+        onError={() => setBroken(true)}
         className="h-full w-full object-cover"
       />
       <span className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/45 via-white/5 to-black/25" />

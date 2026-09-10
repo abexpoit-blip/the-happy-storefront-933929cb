@@ -361,12 +361,48 @@ const invert = (m: Record<string, string>) => {
 let table: Record<string, string> = {};
 const tableFor = (l: Lang) => (l === "en" ? DICT : { ...invert(DICT), ...EN_EXTRA });
 
+/**
+ * Word-level fallback for database-driven text (shop categories, base names…).
+ * Those strings are typed by admins, so they never match a full-phrase key.
+ */
+const WORDS: Record<string, string> = {
+  "карты": "cards", "карта": "card", "карт": "cards",
+  "кредитные": "credit", "кредитная": "credit", "дебетовые": "debit", "дебетовая": "debit",
+  "виза": "visa", "мастеркард": "mastercard",
+  "бизнес": "business", "классик": "classic", "золотая": "gold", "платина": "platinum",
+  "премиум": "premium", "новые": "new", "новая": "new", "свежие": "fresh",
+  "база": "base", "базы": "bases", "сток": "stock",
+  "возврат": "refund", "без": "no", "с": "with", "и": "and", "для": "for",
+  "страна": "country", "страны": "countries", "прочее": "other", "другое": "other",
+  "все": "all", "популярные": "popular", "скидка": "discount", "распродажа": "sale",
+  "сша": "USA", "европа": "Europe", "азия": "Asia", "россия": "Russia",
+  "великобритания": "UK", "канада": "Canada", "германия": "Germany",
+  "полный": "full", "инфо": "info", "проверенные": "checked", "живые": "live",
+};
+
+const CYR = /[А-Яа-яЁё]/;
+
+function wordFallback(text: string): string | null {
+  if (!CYR.test(text)) return null;
+  let changed = false;
+  const out = text.replace(/[А-Яа-яЁё]+/g, (w) => {
+    const hit = WORDS[w.toLowerCase()];
+    if (!hit) return w;
+    changed = true;
+    return w === w.toUpperCase() ? hit.toUpperCase() : hit.charAt(0).toUpperCase() + hit.slice(1);
+  });
+  return changed ? out : null;
+}
+
 function tr(text: string): string | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
   const hit = table[trimmed];
-  if (!hit) return null;
-  return text.replace(trimmed, hit);
+  if (hit) return text.replace(trimmed, hit);
+  // Only English mode needs the fallback: Russian mode keeps the original text.
+  if (lastLang !== "en") return null;
+  const soft = wordFallback(trimmed);
+  return soft ? text.replace(trimmed, soft) : null;
 }
 
 function translateNode(root: Node) {

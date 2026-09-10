@@ -50,6 +50,10 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
 
   const balance = Number(profile?.balance ?? 0).toFixed(2);
   const uname = profile?.username ?? "пользователь";
+  // Cartoon avatar generated from the username — premium look without stored uploads.
+  const avatarUrl =
+    profile?.avatar_url ||
+    `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(uname)}&backgroundType=gradientLinear&radius=50`;
 
   return (
     <div
@@ -139,18 +143,53 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setMenuOpen((v) => !v)}
-              className="flex items-center gap-1.5 pl-1 pr-2 py-1 hover:bg-[#f7f7f7] transition"
+              className="group flex items-center gap-2 rounded-full border border-[#e6e6e6] bg-gradient-to-b from-white to-[#f4f6f8] pl-1 pr-2 py-1 hover:border-[#2196f3]/60 hover:shadow-[0_6px_16px_-10px_rgba(33,150,243,0.9)] transition"
             >
-              <span className="h-8 w-8 rounded-full bg-[#304156] text-white text-xs uppercase font-medium flex items-center justify-center">
-                {uname.slice(0, 2)}
+              <span className="relative h-9 w-9 rounded-full p-[2px] bg-[conic-gradient(from_180deg,#42a5f5,#7e57c2,#f9a825,#42a5f5)] shadow-[0_6px_14px_-8px_rgba(31,45,61,0.9)]">
+                <img
+                  src={avatarUrl}
+                  alt={uname}
+                  className="h-full w-full rounded-full bg-white object-cover"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                />
+                <span className="absolute -bottom-0 -right-0 h-2.5 w-2.5 rounded-full bg-[#2fb344] ring-2 ring-white" />
               </span>
-              <ChevronDown className="h-3.5 w-3.5 text-[#666]" />
+              <span className="hidden sm:flex flex-col items-start leading-tight">
+                <span className="text-[12px] font-semibold text-[#1f2d3d] max-w-[110px] truncate">{uname}</span>
+                <span className="text-[10px] text-[#8a97a5]">
+                  {profile?.role === "admin" ? "ADMIN" : "PREMIUM"}
+                </span>
+              </span>
+              <ChevronDown className="h-3.5 w-3.5 text-[#666] group-hover:text-[#2196f3]" />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-[#e6e6e6] shadow-md z-10 text-sm">
+              <div className="absolute right-0 top-full mt-2 w-60 rounded-xl bg-white border border-[#e6e6e6] shadow-[0_20px_50px_-24px_rgba(31,45,61,0.85)] z-20 text-sm overflow-hidden">
+                <div className="flex items-center gap-3 px-3 py-3 bg-gradient-to-r from-[#304156] to-[#3d5570] text-white">
+                  <span className="h-11 w-11 rounded-full p-[2px] bg-[conic-gradient(from_180deg,#42a5f5,#7e57c2,#f9a825,#42a5f5)]">
+                    <img src={avatarUrl} alt={uname} className="h-full w-full rounded-full bg-white object-cover" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-semibold truncate">{uname}</div>
+                    <div className="text-[11px] text-white/70">$ {balance}</div>
+                  </div>
+                </div>
+                <Link
+                  to="/orders"
+                  onClick={() => setMenuOpen(false)}
+                  className="block px-3 py-2 hover:bg-[#f7f7f7] text-[#333]"
+                >
+                  Заказы
+                </Link>
+                <Link
+                  to="/recharge"
+                  onClick={() => setMenuOpen(false)}
+                  className="block px-3 py-2 hover:bg-[#f7f7f7] text-[#333]"
+                >
+                  Пополнение
+                </Link>
                 <button
                   onClick={async () => { setMenuOpen(false); await signOut(); nav("/auth"); }}
-                  className="w-full text-left px-3 py-2 hover:bg-[#f7f7f7] flex items-center gap-2 text-[#333]"
+                  className="w-full text-left px-3 py-2 hover:bg-[#fff5f5] flex items-center gap-2 text-[#d32f2f] border-t border-[#eee]"
                 >
                   <LogOut className="h-3.5 w-3.5" /> Выйти
                 </button>

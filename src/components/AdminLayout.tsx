@@ -82,14 +82,19 @@ export const AdminLayout = ({ children, title }: { children: ReactNode; title: s
 
         {/* Desktop sidebar */}
         <aside className="hidden lg:block lg:w-[280px] xl:w-[300px] lg:shrink-0">
-          <div className="glass-neon rounded-2xl p-6 lg:sticky lg:top-[calc(var(--nav-h)+1.5rem)]">
+          <div className="glass-neon rounded-2xl p-6 lg:sticky lg:top-[calc(var(--nav-h)+1.5rem)] border border-primary/25 bg-gradient-to-b from-primary/10 via-transparent to-primary/5 shadow-[0_30px_70px_-45px_rgba(0,0,0,0.95)]">
             <SidebarContent pathname={pathname} />
           </div>
         </aside>
 
         {/* Main content */}
         <div className="flex-1 min-w-0 space-y-6">
-          <h1 className="hidden lg:block font-display text-3xl font-black neon-text tracking-tight">{title}</h1>
+          <div className="hidden lg:flex items-center gap-3 rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent px-5 py-4">
+            <span className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary/40 to-primary/10 border border-primary/40 flex items-center justify-center">
+              <Shield className="h-4.5 w-4.5 text-primary-glow" />
+            </span>
+            <h1 className="font-display text-3xl font-black neon-text tracking-tight">{title}</h1>
+          </div>
           {children}
         </div>
       </div>
