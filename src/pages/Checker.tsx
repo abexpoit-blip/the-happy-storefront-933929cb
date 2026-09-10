@@ -83,7 +83,13 @@ const Checker = () => {
           const st = await poll({ data: { taskId: id } });
           if (st.rows.length) setRows(st.rows);
           if (st.total) setExpected(st.total);
-          if (st.done) break;
+          if (st.done) {
+            if (st.refundedCredits > 0) {
+              toast.success(`${st.refundedCredits} credits refunded for cards the checker could not process`);
+            }
+            break;
+          }
+
         } catch {
           // transient gateway/rate-limit error — keep polling
         }
