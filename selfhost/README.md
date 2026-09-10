@@ -52,7 +52,7 @@ node create-users.mjs
 
 ## ধাপ ৪ — অ্যাপ রিবিল্ড (নতুন DB-তে পয়েন্ট করার জন্য)
 ```bash
-cd /var/www/zoru-cc && bun install && bun run build && pm2 restart zoru-cc --update-env
+cd /var/www/zoru-cc && bun install && bun run build && bash selfhost/pm2-start.sh
 pm2 logs zoru-cc --lines 30 --nostream
 ```
 

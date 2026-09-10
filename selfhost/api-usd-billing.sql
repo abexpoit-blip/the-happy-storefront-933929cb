@@ -145,3 +145,67 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.api_key_refund_mixed(uuid, integer, numeric) FROM PUBLIC, anon, authenticated;
+
+-- ---------- atomically settle unanswered-card refunds ----------
+-- Concurrent result polls cannot refund the same task twice.
+CREATE OR REPLACE FUNCTION public.settle_api_check_refund(
+  _check_id uuid,
+  _key_id uuid,
+  _answered integer
+)
+RETURNS TABLE (refunded_credits integer, refunded_usd numeric)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _task RECORD;
+  _uid uuid;
+  _unanswered integer;
+  _target_credits integer;
+  _target_usd numeric;
+  _add_credits integer;
+  _add_usd numeric;
+BEGIN
+  SELECT * INTO _task
+    FROM self_checks
+   WHERE id = _check_id AND api_key_id = _key_id
+   FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'task_not_found'; END IF;
+
+  _unanswered := GREATEST(COALESCE(_task.total, 0) - GREATEST(COALESCE(_answered, 0), 0), 0);
+  IF COALESCE(_task.total, 0) > 0 THEN
+    _target_credits := FLOOR(COALESCE(_task.charged_credits, 0)::numeric * _unanswered / _task.total)::integer;
+    _target_usd := ROUND(COALESCE(_task.charged_usd, 0)::numeric * _unanswered / _task.total, 4);
+  ELSE
+    _target_credits := 0;
+    _target_usd := 0;
+  END IF;
+
+  _add_credits := GREATEST(_target_credits - COALESCE(_task.refunded_credits, 0), 0);
+  _add_usd := GREATEST(_target_usd - COALESCE(_task.refunded_usd, 0), 0);
+
+  IF _add_credits > 0 THEN
+    UPDATE api_keys SET credits = credits + _add_credits WHERE id = _key_id;
+  END IF;
+  IF _add_usd > 0 THEN
+    SELECT user_id INTO _uid FROM api_keys WHERE id = _key_id;
+    IF _uid IS NOT NULL THEN
+      UPDATE profiles SET balance = balance + _add_usd WHERE id = _uid;
+      INSERT INTO balance_transactions (user_id, amount, kind, description)
+      VALUES (_uid, _add_usd, 'api_check_refund', 'API checker refund — unanswered card(s)');
+    END IF;
+  END IF;
+
+  UPDATE self_checks AS sc
+     SET refunded_credits = COALESCE(sc.refunded_credits, 0) + _add_credits,
+         refunded_usd = COALESCE(sc.refunded_usd, 0) + _add_usd
+   WHERE sc.id = _check_id;
+
+  RETURN QUERY
+    SELECT COALESCE(_task.refunded_credits, 0) + _add_credits,
+           COALESCE(_task.refunded_usd, 0) + _add_usd;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.settle_api_check_refund(uuid, uuid, integer) FROM PUBLIC, anon, authenticated;
