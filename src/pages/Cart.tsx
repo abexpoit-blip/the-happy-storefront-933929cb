@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { useServerFn } from "@tanstack/react-start";
-import { startCheckerTask, pollCheckerTask, activeCheckerTask } from "@/lib/checker.functions";
 import { AppShell } from "@/components/AppShell";
 import Seo from "@/components/Seo";
 import { toast } from "sonner";
-import { Trash2, Loader2, ShieldCheck, ShieldOff, Radar, Sparkles, ShoppingCart, Wallet, CreditCard, Copy } from "lucide-react";
+import { Trash2, Loader2, ShieldCheck, ShieldOff, ShoppingCart, Wallet, CreditCard } from "lucide-react";
 import { PageHero, StatCard } from "@/components/PageHero";
 import { getCart, removeFromCart, clearCart, onCartChange, type CartLine } from "@/lib/cart";
-import { purchaseProduct, listChecksForOrders, listPendingChecks, listMyChecks, runCardChecks, type CardCheck } from "@/lib/store";
+import { purchaseProduct } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { publicBase } from "@/lib/baseLabel";
@@ -17,34 +15,11 @@ import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode } from "@/li
 const Cart = () => {
   const { profile, refresh } = useAuth();
   const settings = useSiteSettings();
-  const creditCost = Number(settings.check_credit_cost ?? 30);
-  const creditsPerUsd = Number(settings.credits_per_usd ?? 1000) || 1000;
-  const checkFee = Math.round((creditCost / creditsPerUsd) * 10000) / 10000;
+  const checkFee = Number(settings.check_fee ?? 0.03) || 0.03;
   const nav = useNavigate();
   const [items, setItems] = useState<CartLine[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [checks, setChecks] = useState<CardCheck[] | null>(null);
-  const [scanning, setScanning] = useState(false);
-  const [pending, setPending] = useState<CardCheck[]>([]);
-  const [history, setHistory] = useState<CardCheck[]>([]);
-  const [progress, setProgress] = useState({ done: 0, total: 0 });
-  const startTask = useServerFn(startCheckerTask);
-  const pollTask = useServerFn(pollCheckerTask);
-  const getActiveTask = useServerFn(activeCheckerTask);
-
-  const loadPending = async () => {
-    try { setPending(await listPendingChecks()); } catch { /* ignore */ }
-    try { setHistory(await listMyChecks(50)); } catch { /* ignore */ }
-  };
-  useEffect(() => {
-    void loadPending();
-    void getActiveTask({}).then((task) => {
-      if (!task) return;
-      setProgress({ done: task.settled, total: task.total });
-      void watchCartTask(task.taskId, task.total);
-    }).catch(() => undefined);
-  }, []);
 
   useEffect(() => {
     const sync = () => {
@@ -53,7 +28,6 @@ const Cart = () => {
       setSelected((prev) => {
         const ids = new Set(next.map((n) => n.id));
         const kept = prev.filter((id) => ids.has(id));
-        // default: everything selected
         return prev.length === 0 ? next.map((n) => n.id) : kept;
       });
     };
@@ -61,15 +35,9 @@ const Cart = () => {
     return onCartChange(sync);
   }, []);
 
-  const chosen = useMemo(
-    () => items.filter((i) => selected.includes(i.id)),
-    [items, selected],
-  );
+  const chosen = useMemo(() => items.filter((i) => selected.includes(i.id)), [items, selected]);
   const total = chosen.reduce((s, i) => s + Number(i.price), 0);
   const refundables = useMemo(() => chosen.filter((i) => i.refundable), [chosen]);
-  const needCredits = refundables.length * creditCost;
-  const myCredits = Number(profile?.check_credits ?? 0);
-  const fees = Math.round(refundables.length * checkFee * 100) / 100;
   const allSelected = items.length > 0 && chosen.length === items.length;
 
   const toggle = (id: string) =>
@@ -77,46 +45,18 @@ const Cart = () => {
 
   const toggleAll = () => setSelected(allSelected ? [] : items.map((i) => i.id));
 
-  const watchCartTask = async (taskId: string, totalCards: number) => {
-    setScanning(true);
-    try {
-      for (let i = 0; i < 120; i++) {
-        await new Promise((r) => setTimeout(r, i === 0 ? 6000 : 12000));
-        try {
-          const st = await pollTask({ data: { taskId } });
-          setProgress({ done: st.settled, total: st.total || totalCards });
-          await loadPending();
-          if (st.done) {
-            if (st.refundedCredits > 0) toast.success(`${st.refundedCredits} credits refunded for cards the checker could not process`);
-            const latest = await listMyChecks(50);
-            setHistory(latest);
-            setChecks(latest.filter((row) => row.status !== "pending").slice(0, totalCards));
-            void refresh?.();
-            break;
-          }
-        } catch { /* transient gateway error — keep polling */ }
-      }
-    } finally {
-      setScanning(false);
-    }
-  };
-
   const buyNow = async () => {
     if (!chosen.length) return toast.error("Select at least one card");
     const spendable = Number(profile?.balance ?? 0) + Number(profile?.bonus_balance ?? 0);
     if (spendable < total) return toast.error("Insufficient funds. Please top up your balance.");
-    if (myCredits < needCredits)
-      return toast.error(`Refund cards need ${needCredits} check credits — you have ${myCredits}. Buy credits on the Checker page.`);
     setBusy(true);
     let ok = 0;
     const failed: string[] = [];
     let lastError = "";
-    let hadRefundable = false;
     try {
       for (const it of chosen) {
         try {
           await purchaseProduct(it.id, 1);
-          if (it.refundable) hadRefundable = true;
           removeFromCart(it.id);
           ok++;
         } catch (e) {
@@ -125,68 +65,17 @@ const Cart = () => {
         }
       }
       void refresh?.();
-      await loadPending();
-      if (ok > 0) {
-        toast.success(
-          hadRefundable
-            ? `Purchased: ${ok}. Refund cards are ready — press "Check cards" to run the checker.`
-            : `Purchased: ${ok}`,
-        );
-        if (!hadRefundable) nav("/orders");
-      }
       if (failed.length) {
         toast.error(`Failed: ${failed.join(", ")}${lastError ? ` — ${lastError}` : ""}`, { duration: 8000 });
+      }
+      if (ok > 0) {
+        toast.success(`Purchased: ${ok}. Opening your order…`);
+        nav("/orders");
       }
     } finally {
       setBusy(false);
     }
   };
-
-  /** Manual checker — only refund cards, started by the buyer. */
-  const runChecker = async () => {
-    let queue = pending;
-    if (!queue.length) {
-      // pending list may be stale (just purchased in another tab / slow refresh)
-      try { queue = await listPendingChecks(); setPending(queue); } catch { /* ignore */ }
-    }
-    if (!queue.length) {
-      return toast.error("No refund cards waiting for a check. Buy a refund card first.");
-    }
-    const orderIds = [...new Set(queue.map((p) => p.order_id).filter(Boolean) as string[])];
-    setScanning(true);
-    setProgress({ done: 0, total: queue.length });
-    try {
-      let realOk = false;
-      try {
-        // real gateway checker (CheckerCCV)
-        const started = await startTask({ data: { orderIds } });
-        realOk = true;
-        setProgress({ done: 0, total: started.total });
-        await watchCartTask(started.taskId, started.total);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (/checker_not_configured|no_card_data|checker_bad_response|checker_http/.test(msg)) {
-          // gateway unavailable → fall back to the configured live/dead ratio
-          await runCardChecks(orderIds);
-          await new Promise((r) => setTimeout(r, 2500));
-        } else if (!realOk) {
-          throw e;
-        }
-      }
-      const results = await listChecksForOrders(orderIds);
-      void refresh?.();
-      await loadPending();
-      const settledRows = results.filter((r) => r.status !== "pending");
-      if (settledRows.length) setChecks(settledRows);
-      else toast.info("The checker is still working on these cards. Your cards stay in the queue — press Check again in a minute.", { duration: 8000 });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Check failed", { duration: 8000 });
-    } finally {
-      setScanning(false);
-    }
-  };
-
-
 
   return (
     <AppShell>
@@ -197,55 +86,22 @@ const Cart = () => {
         eyebrowIcon={ShoppingCart}
         title="Your"
         highlight="cart"
-        description={`Only refund cards can be checked — the $${checkFee.toFixed(2)} per-card fee is charged at purchase and you start the checker yourself with the "Check cards" button. DEAD cards are refunded to your main balance instantly.`}
+        description={`Select the cards you want and buy them. After the purchase you are taken to the order page, where refund cards can be checked for $${checkFee.toFixed(2)} per card.`}
       />
 
       <div className="grid gap-3 sm:grid-cols-3 mb-4">
         <StatCard label="Selected cards" icon={CreditCard} tone="blue" value={chosen.length} hint={`${items.length} in cart`} />
-        <StatCard label="Order total" icon={ShoppingCart} tone="green" value={`$${total.toFixed(2)}`} hint={`+ ${needCredits} check credits (${refundables.length} refund card${refundables.length === 1 ? "" : "s"})`} />
-        <StatCard label="Balance / credits" icon={Wallet} tone="amber" value={`$${(Number(profile?.balance ?? 0) + Number(profile?.bonus_balance ?? 0)).toFixed(2)}`} hint={`${myCredits} check credits · bonus spent first`} />
+        <StatCard label="Order total" icon={ShoppingCart} tone="green" value={`$${total.toFixed(2)}`} hint={`${refundables.length} refund card${refundables.length === 1 ? "" : "s"}`} />
+        <StatCard label="Balance" icon={Wallet} tone="amber" value={`$${(Number(profile?.balance ?? 0) + Number(profile?.bonus_balance ?? 0)).toFixed(2)}`} hint="bonus balance is spent first" />
       </div>
-
-      {pending.length > 0 && (
-        <div className="mb-4 rounded-xl border border-[#2196f3]/30 bg-gradient-to-r from-[#0f1a33] via-[#132244] to-[#0f1a33] px-4 py-3.5 flex flex-wrap items-center gap-3 shadow-[0_10px_30px_rgba(15,26,51,0.35)]">
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#2196f3]/15 border border-[#2196f3]/30">
-            <Radar className="h-4.5 w-4.5 text-[#5ac8fa]" />
-          </span>
-          <div className="min-w-[200px]">
-            <div className="text-[13.5px] font-semibold text-white">
-              {pending.length} refund card{pending.length === 1 ? "" : "s"} waiting for a check
-            </div>
-            <div className="text-[12px] text-white/60">
-              Checking is manual — press the button to open the checker. DEAD cards are refunded instantly.
-            </div>
-          </div>
-          <button
-            onClick={() => void runChecker()}
-            disabled={scanning}
-            className="ml-auto h-9 px-5 rounded-md bg-gradient-to-r from-[#2196f3] to-[#5ac8fa] text-white text-[13px] font-semibold shadow-[0_6px_18px_rgba(33,150,243,0.4)] hover:brightness-110 transition disabled:opacity-60 inline-flex items-center gap-2"
-          >
-            {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
-            Check cards
-          </button>
-        </div>
-      )}
-
 
       <div className="rounded-xl border border-[#e6e6e6] bg-gradient-to-r from-white via-[#fbfcff] to-[#f4f7ff] px-4 py-3 flex flex-wrap items-center gap-3 text-[13px] shadow-[0_2px_10px_rgba(20,30,60,0.06)]">
         <span className="font-semibold text-[#1f2d3d]">Cart</span>
         <span className="text-[#888]">Items: {items.length}</span>
         <span className="text-[#888]">Selected: {chosen.length}</span>
-        <span className="text-[#888]">
-          Cards: <span className="font-mono text-[#2e7d32]">${total.toFixed(2)}</span>
-        </span>
-        <span className="text-[#888]">
-          Checking: <span className="font-mono text-[#f56c6c]">{needCredits} cr</span>{" "}
-          ({refundables.length} × {creditCost} cr ≈ ${fees.toFixed(2)}, refund cards only)
-        </span>
         <span className="text-[#1f2d3d] font-medium">
-          Total: <span className="font-mono">${total.toFixed(2)}</span> + {needCredits} cr
+          Total: <span className="font-mono text-[#2e7d32]">${total.toFixed(2)}</span>
         </span>
-        <Link to="/checker" className="text-[#2196f3] hover:underline">Buy credits</Link>
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={toggleAll}
@@ -266,7 +122,7 @@ const Cart = () => {
             disabled={!chosen.length || busy}
             className="h-8 px-5 rounded-md bg-gradient-to-r from-[#2e7d32] to-[#43a047] text-white text-[13px] shadow-[0_4px_14px_rgba(46,125,50,0.35)] hover:brightness-110 transition disabled:opacity-60 inline-flex items-center gap-2"
           >
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShoppingCart className="h-3.5 w-3.5" />}
             Buy {chosen.length || ""} now
           </button>
         </div>
@@ -295,76 +151,64 @@ const Cart = () => {
             {items.map((c) => {
               const isOn = selected.includes(c.id);
               return (
-              <tr
-                key={c.id}
-                className={`border-b border-[#f0f0f0] transition ${isOn ? "bg-[#f4fbf5]" : "hover:bg-[#fafcff]"}`}
-              >
-                <td className="p-2 text-center">
-                  <input
-                    type="checkbox"
-                    checked={isOn}
-                    onChange={() => toggle(c.id)}
-                    disabled={busy}
-                    className="h-3.5 w-3.5 accent-[#2e7d32] cursor-pointer"
-                    aria-label={`Select card ${c.bin ?? c.title}`}
-                  />
-                </td>
-                <td className="p-2 text-center font-mono text-[#333]">
-                  <span className="inline-flex items-center gap-2">
-                    <BrandLogo brand={c.brand || detectBrandFromBin(c.bin ?? "")} className="h-5 w-8 shrink-0" />
-                    <span>{c.bin ?? "—"}<span className="text-[#bbb]">••••</span>{c.last_digits ?? "••"}</span>
-                  </span>
-                </td>
-                <td className="p-2 text-center font-mono">{c.exp_month ?? "—"}</td>
-                <td className="p-2 text-center font-mono">{c.exp_year ?? "—"}</td>
-                <td className="p-2 text-center max-w-[140px] truncate" title={c.city ?? ""}>{c.city ?? "—"}</td>
-                <td className="p-2 text-center">{c.state ?? "—"}</td>
-                <td className="p-2 text-center font-mono">{c.zip ?? "—"}</td>
-                <td className="p-2 text-center">
-                  {c.country ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <CountryFlagImg code={c.country} className="h-3.5 w-5" />
-                      <span>{countryCode(c.country)}</span>
+                <tr
+                  key={c.id}
+                  className={`border-b border-[#f0f0f0] transition ${isOn ? "bg-[#f4fbf5]" : "hover:bg-[#fafcff]"}`}
+                >
+                  <td className="p-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isOn}
+                      onChange={() => toggle(c.id)}
+                      disabled={busy}
+                      className="h-3.5 w-3.5 accent-[#2e7d32] cursor-pointer"
+                      aria-label={`Select card ${c.bin ?? c.title}`}
+                    />
+                  </td>
+                  <td className="p-2 text-center font-mono text-[#333]">
+                    <span className="inline-flex items-center gap-2">
+                      <BrandLogo brand={c.brand || detectBrandFromBin(c.bin ?? "")} className="h-5 w-8 shrink-0" />
+                      <span>{c.bin ?? "—"}<span className="text-[#bbb]">••••</span>{c.last_digits ?? "••"}</span>
                     </span>
-                  ) : "—"}
-                </td>
-                <td className="p-2 text-center">
-                  {c.refundable ? (
-                    <div className="inline-flex flex-col items-center gap-1">
+                  </td>
+                  <td className="p-2 text-center font-mono">{c.exp_month ?? "—"}</td>
+                  <td className="p-2 text-center font-mono">{c.exp_year ?? "—"}</td>
+                  <td className="p-2 text-center max-w-[140px] truncate" title={c.city ?? ""}>{c.city ?? "—"}</td>
+                  <td className="p-2 text-center">{c.state ?? "—"}</td>
+                  <td className="p-2 text-center font-mono">{c.zip ?? "—"}</td>
+                  <td className="p-2 text-center">
+                    {c.country ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <CountryFlagImg code={c.country} className="h-3.5 w-5" />
+                        <span>{countryCode(c.country)}</span>
+                      </span>
+                    ) : "—"}
+                  </td>
+                  <td className="p-2 text-center">
+                    {c.refundable ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-[#e8f5e9] text-[#2e7d32] border border-[#c8e6c9] px-2 py-0.5 text-[11px]">
                         <ShieldCheck className="h-3 w-3" /> refund
                       </span>
-                      <button
-                        onClick={() => void runChecker()}
-                        disabled={scanning}
-                        title={pending.length ? "Run live/dead check" : "Buy this card first — then the checker runs"}
-                        className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white bg-gradient-to-r from-[#2196f3] to-[#5ac8fa] shadow-[0_4px_12px_rgba(33,150,243,0.35)] hover:brightness-110 transition disabled:opacity-45 disabled:shadow-none"
-                      >
-                        {scanning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Radar className="h-3 w-3" />} Check
-                      </button>
-
-                    </div>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[#f6f6f6] text-[#999] border border-[#e6e6e6] px-2 py-0.5 text-[11px]">
-                      <ShieldOff className="h-3 w-3" /> no
-                    </span>
-                  )}
-                </td>
-
-                <td className="p-2 text-center font-mono">{Number(c.price).toFixed(2)}</td>
-                <td className="p-2 text-center text-[11px] text-[#666] max-w-[180px]">
-                  <span className="whitespace-pre-line break-words">{publicBase(c.base) || "—"}</span>
-                </td>
-                <td className="p-2 text-center">
-                  <button
-                    onClick={() => removeFromCart(c.id)}
-                    disabled={busy}
-                    className="text-[#f56c6c] hover:underline text-[12px] inline-flex items-center gap-1 disabled:opacity-50"
-                  >
-                    <Trash2 className="h-3 w-3" /> Delete
-                  </button>
-                </td>
-              </tr>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#f6f6f6] text-[#999] border border-[#e6e6e6] px-2 py-0.5 text-[11px]">
+                        <ShieldOff className="h-3 w-3" /> no
+                      </span>
+                    )}
+                  </td>
+                  <td className="p-2 text-center font-mono">{Number(c.price).toFixed(2)}</td>
+                  <td className="p-2 text-center text-[11px] text-[#666] max-w-[180px]">
+                    <span className="whitespace-pre-line break-words">{publicBase(c.base) || "—"}</span>
+                  </td>
+                  <td className="p-2 text-center">
+                    <button
+                      onClick={() => removeFromCart(c.id)}
+                      disabled={busy}
+                      className="text-[#f56c6c] hover:underline text-[12px] inline-flex items-center gap-1 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3 w-3" /> Delete
+                    </button>
+                  </td>
+                </tr>
               );
             })}
             {items.length === 0 && (
@@ -379,236 +223,10 @@ const Cart = () => {
       </div>
 
       <p className="mt-3 text-[12px] text-[#777]">
-        Checking is <b>manual and only for refund cards</b> — the ${checkFee.toFixed(2)} per-card fee is taken at purchase, then you
-        start the checker from the "Check cards" panel above. DEAD cards are instantly refunded to your main balance.
-        Non-refund cards are never checked and never refunded.
+        Checking is done on the <Link to="/orders" className="text-[#2196f3] hover:underline">order page</Link> after the purchase —
+        only refund cards get a CHECK button, the fee is ${checkFee.toFixed(2)} per card and DEAD cards are refunded to your balance instantly.
       </p>
-
-      <CheckHistory rows={history} onOpen={(rows) => setChecks(rows)} />
-
-       {scanning && <ScanOverlay count={progress.total || pending.length} done={progress.done} cards={pending} />}
-      {checks && <CheckResultDialog checks={checks} onClose={() => { setChecks(null); void loadPending(); }} />}
     </AppShell>
-  );
-};
-
-
-const SCAN_STEPS = [
-  "Opening secure checker session…",
-  "Connecting to gateway node…",
-  "Authorizing refund cards…",
-  "Reading live / dead response…",
-  "Finalizing results…",
-];
-
-const ScanOverlay = ({ count, done = 0, cards }: { count: number; done?: number; cards: CardCheck[] }) => {
-  const [step, setStep] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setStep((s) => Math.min(s + 1, SCAN_STEPS.length - 1)), 700);
-    return () => clearInterval(t);
-  }, []);
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#060b18]/80 backdrop-blur-xl p-4">
-      <div className="relative w-full max-w-md rounded-3xl border border-white/15 bg-white/[0.06] p-8 text-center shadow-[0_30px_80px_rgba(0,0,0,0.65)] overflow-hidden backdrop-blur-2xl">
-        <div className="pointer-events-none absolute -top-24 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-[#2196f3]/30 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 right-0 h-48 w-48 rounded-full bg-[#43a047]/25 blur-3xl" />
-
-        <div className="relative mx-auto h-24 w-24">
-          <span className="absolute inset-0 rounded-full border border-white/20 animate-ping" />
-          <span className="absolute inset-2 rounded-full border border-[#5ac8fa]/40 animate-ping [animation-delay:400ms]" />
-          <span className="absolute inset-4 rounded-full bg-white/10 backdrop-blur-md" />
-          <span className="absolute inset-0 grid place-items-center">
-            <Radar className="h-9 w-9 text-[#5ac8fa] animate-spin [animation-duration:2.4s]" />
-          </span>
-        </div>
-
-        <div className="relative mt-6 text-white text-[15.5px] font-semibold tracking-wide">Checking cards…</div>
-        <div className="relative mt-1 text-[12.5px] text-white/65">
-          Live check running on {count} refund card{count === 1 ? "" : "s"}. Please don't close this window.
-        </div>
-        <div className="relative mt-2 font-mono text-[13px] text-[#5ac8fa]">{done} / {count} checked</div>
-        <div className="relative mt-3 max-h-28 space-y-1 overflow-y-auto rounded-lg border border-white/10 bg-black/15 p-2 text-left font-mono text-[11px] text-white/60">
-          {cards.map((card) => <div key={card.id}>{card.bin || "—"}••••{card.last_digits || "••"} · {card.status.toUpperCase()}</div>)}
-        </div>
-
-        <div className="relative mt-5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-          {done > 0 && count > 0 ? (
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-[#2196f3] via-[#5ac8fa] to-[#43a047] transition-all duration-500"
-              style={{ width: `${Math.min(100, Math.round((done / count) * 100))}%` }}
-            />
-          ) : (
-            <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#2196f3] via-[#5ac8fa] to-[#43a047]" style={{ animation: "cartScan 1.4s ease-in-out infinite" }} />
-          )}
-        </div>
-
-        <ul className="relative mt-5 space-y-1.5 text-left">
-          {SCAN_STEPS.map((s, i) => (
-            <li
-              key={s}
-              className={`flex items-center gap-2 text-[12px] transition ${i <= step ? "text-white/85" : "text-white/30"}`}
-            >
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${i < step ? "bg-[#7ee08a]" : i === step ? "bg-[#5ac8fa] animate-pulse" : "bg-white/25"}`}
-              />
-              {s}
-            </li>
-          ))}
-        </ul>
-        <style>{`@keyframes cartScan{0%{transform:translateX(-100%)}100%{transform:translateX(320%)}}`}</style>
-      </div>
-    </div>
-  );
-};
-
-
-/** Persistent check history — survives reloads because it is read from the database. */
-const CheckHistory = ({ rows, onOpen }: { rows: CardCheck[]; onOpen: (rows: CardCheck[]) => void }) => {
-  if (!rows.length) return null;
-  const settled = rows.filter((r) => r.status !== "pending");
-  const live = settled.filter((r) => r.status === "live").length;
-  const dead = settled.filter((r) => r.status === "dead").length;
-  const refunded = settled.reduce((s, r) => s + Number(r.refunded ?? 0), 0);
-
-  return (
-    <div className="mt-6 rounded-2xl border border-white/10 bg-[#0d1526] p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-[13px] font-semibold text-white">Check history</div>
-          <div className="text-[12px] text-white/50">
-            {live} live · {dead} dead · ${refunded.toFixed(2)} refunded
-          </div>
-        </div>
-        {settled.length > 0 && (
-          <button
-            onClick={() => onOpen(settled.slice(0, 100))}
-            className="rounded-lg border border-[#2196f3]/40 bg-[#2196f3]/10 px-3 py-1.5 text-[12px] font-semibold text-[#8fd0ff] hover:bg-[#2196f3]/20"
-          >
-            Open full result
-          </button>
-        )}
-      </div>
-
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[520px] text-[12.5px]">
-          <thead>
-            <tr className="text-left text-[11px] uppercase tracking-wider text-white/40">
-              <th className="py-1.5">Date</th><th>BIN</th><th>Last</th><th>Price</th><th>Status</th><th>Refunded</th><th>Copy</th>
-            </tr>
-          </thead>
-          <tbody className="text-white/75">
-            {rows.slice(0, 20).map((r) => (
-              <tr key={r.id} className="border-t border-white/5">
-                <td className="py-1.5 whitespace-nowrap">{new Date(r.created_at).toLocaleString()}</td>
-                <td className="font-mono">{r.bin || "—"}</td>
-                <td className="font-mono">{r.last_digits || "—"}</td>
-                <td className="font-mono">${Number(r.price).toFixed(2)}</td>
-                <td>
-                  <span className={
-                    r.status === "live" ? "text-[#7ee08a] font-semibold"
-                    : r.status === "dead" ? "text-[#f56c6c] font-semibold"
-                    : "text-[#f9d27a]"
-                  }>{r.status.toUpperCase()}</span>
-                </td>
-                <td className="font-mono">${Number(r.refunded ?? 0).toFixed(2)}</td>
-                <td><button onClick={() => void navigator.clipboard.writeText(`${r.bin || ""}••••${r.last_digits || ""} | ${r.status.toUpperCase()}`)} className="rounded p-1 text-white/45 hover:bg-white/10 hover:text-white" title="Copy card result" aria-label="Copy card result"><Copy className="h-3.5 w-3.5" /></button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-};
-
-const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: () => void }) => {
-  const live = checks.filter((c) => c.status === "live");
-  const dead = checks.filter((c) => c.status === "dead");
-  const refunded = dead.reduce((s, c) => s + Number(c.refunded), 0);
-  const rate = checks.length ? Math.round((live.length / checks.length) * 100) : 0;
-  const fee = checks.reduce((s, c) => s + Number(c.fee ?? 0), 0);
-  const copyAll = async () => {
-    const output = checks.map((c) => `${c.bin || ""}••••${c.last_digits || ""} | ${c.status.toUpperCase()}${c.status === "dead" ? ` | REFUND $${Number(c.refunded).toFixed(2)}` : ""}`).join("\n");
-    await navigator.clipboard.writeText(output);
-    toast.success("Results copied");
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#060b18]/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#101a33] to-[#0a1122] shadow-[0_20px_60px_rgba(0,0,0,0.6)]">
-        <div className="px-5 py-3.5 border-b border-white/10 flex items-center justify-between">
-          <span className="text-[14px] font-semibold text-white inline-flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-[#f9a825]" /> Check result (refund cards)
-          </span>
-          <div className="flex items-center gap-2">
-            <button onClick={() => void copyAll()} className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1 text-[11.5px] text-white/65 hover:bg-white/10" title="Copy all results"><Copy className="h-3.5 w-3.5" /> Copy all</button>
-            <span className="rounded-full bg-[#2e7d32]/20 text-[#7ee08a] border border-[#2e7d32]/40 px-2.5 py-0.5 text-[11.5px] font-mono">LIVE {rate}%</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 text-center text-[13px] border-b border-white/10">
-          <div className="p-3.5 border-r border-white/5">
-            <div className="text-[11px] text-white/50">Checked</div>
-            <div className="font-mono text-white text-lg">{checks.length}</div>
-          </div>
-          <div className="p-3.5 border-r border-white/5">
-            <div className="text-[11px] text-white/50">Live / Dead</div>
-            <div className="font-mono text-lg">
-              <span className="text-[#7ee08a]">{live.length}</span>
-              <span className="text-white/30"> / </span>
-              <span className="text-[#ff8a80]">{dead.length}</span>
-            </div>
-          </div>
-          <div className="p-3.5">
-            <div className="text-[11px] text-white/50">Refunded</div>
-            <div className="font-mono text-[#7ee08a] text-lg">${refunded.toFixed(2)}</div>
-          </div>
-        </div>
-
-        <div className="max-h-[280px] overflow-y-auto">
-          <table className="w-full text-[12px]">
-            <tbody>
-              {checks.map((c) => (
-                <tr key={c.id} className="border-b border-white/5">
-                  <td className="p-2.5 font-mono text-white/85">
-                    {c.bin ?? "—"}<span className="text-white/30">••••</span>{c.last_digits ?? ""}
-                  </td>
-                  <td className="p-2.5 text-center font-mono text-white/60">${Number(c.price).toFixed(2)}</td>
-                  <td className="p-2.5 text-center">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold border ${
-                        c.status === "live"
-                          ? "bg-[#2e7d32]/20 text-[#7ee08a] border-[#2e7d32]/40"
-                          : "bg-[#c62828]/20 text-[#ff8a80] border-[#c62828]/40"
-                      }`}
-                    >
-                      {c.status === "live" ? "LIVE" : "DEAD"}
-                    </span>
-                  </td>
-                  <td className="p-2.5 text-right font-mono text-[#7ee08a]">
-                    {c.status === "dead" ? `+$${Number(c.refunded).toFixed(2)}` : "—"}
-                  </td>
-                  <td className="p-2.5 text-right"><button onClick={() => void navigator.clipboard.writeText(`${c.bin || ""}••••${c.last_digits || ""} | ${c.status.toUpperCase()}`)} className="rounded p-1.5 text-white/45 hover:bg-white/10 hover:text-white" title="Copy card result" aria-label="Copy card result"><Copy className="h-3.5 w-3.5" /></button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="px-5 py-3.5 border-t border-white/10 flex items-center justify-between gap-3">
-          <span className="text-[11px] text-white/50">
-            DEAD cards were refunded to your main balance. Checking fee: ${fee.toFixed(2)}
-          </span>
-          <button
-            onClick={onClose}
-            className="h-8 px-5 rounded-md bg-gradient-to-r from-[#2e7d32] to-[#43a047] text-white text-[13px] shadow-[0_4px_14px_rgba(46,125,50,0.35)] hover:brightness-110"
-          >
-            OK
-          </button>
-        </div>
-      </div>
-    </div>
   );
 };
 
