@@ -17,6 +17,8 @@ export interface SiteSettings {
   min_deposit: number;
   refund_live_rate: number;
   check_fee: number;
+  credits_per_usd: number;
+  check_credit_cost: number;
   referral_bonus: number;
 }
 
@@ -42,6 +44,8 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   min_deposit: 5,
   refund_live_rate: 60,
   check_fee: 0.03,
+  credits_per_usd: 1000,
+  check_credit_cost: 30,
   referral_bonus: 5,
 };
 
