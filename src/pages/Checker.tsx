@@ -375,6 +375,25 @@ const Checker = () => {
                 <div className="flex justify-between"><dt className="text-white/45">Charged</dt><dd className="font-mono text-white/80">{needCredits} cr (${cost.toFixed(2)})</dd></div>
               </dl>
             </div>
+
+            {history.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Previous runs</div>
+                {history.slice(0, 6).map((h) => (
+                  <button
+                    key={h.taskId}
+                    onClick={() => { setRows(h.rows); setTaskId(h.taskId); setExpected(h.total); }}
+                    className={`flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left text-[11.5px] transition ${
+                      taskId === h.taskId ? "border-[#2196f3]/50 bg-[#2196f3]/10 text-white/90" : "border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    <span className="font-mono">{h.taskId.slice(-8)}</span>
+                    <span className="font-mono">{h.rows.length}/{h.total}</span>
+                    <span className={h.status === "completed" ? "text-[#7ee08a]" : "text-[#f9d27a]"}>{h.status}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </Panel>
       </div>
