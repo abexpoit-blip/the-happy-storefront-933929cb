@@ -28,20 +28,47 @@ async function assertAdmin(context: any) {
   if (!isAdmin) throw new Error("forbidden");
 }
 
+/** Users an admin can bind a key to. */
+export const listKeyOwners = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ id: string; name: string }[]> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabaseAdmin as any)
+      .from("profiles")
+      .select("id, username, email")
+      .order("username", { ascending: true })
+      .limit(2000);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return ((data ?? []) as any[]).map((p) => ({
+      id: String(p.id),
+      name: String(p.username || p.email || p.id),
+    }));
+  });
+
 export const listApiKeys = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<ApiKeyListRow[]> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabaseAdmin as any)
-      .from("api_keys")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const db = supabaseAdmin as any;
+    const { data } = await db.from("api_keys").select("*").order("created_at", { ascending: false });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return ((data ?? []) as any[]).map((k) => ({
+    const rows = (data ?? []) as any[];
+    const ids = [...new Set(rows.map((k) => k.user_id).filter(Boolean))];
+    const names = new Map<string, string>();
+    if (ids.length) {
+      const { data: profiles } = await db.from("profiles").select("id, username, email").in("id", ids);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const p of (profiles ?? []) as any[]) names.set(p.id, p.username || p.email || p.id);
+    }
+    return rows.map((k) => ({
       id: String(k.id),
       label: String(k.label),
+      userId: k.user_id ?? null,
+      owner: k.user_id ? names.get(k.user_id) ?? null : null,
       ownerNote: k.owner_note ?? null,
       prefix: String(k.prefix ?? ""),
       credits: Number(k.credits ?? 0),
