@@ -27,7 +27,7 @@ const TABS: { key: Tab; label: string; icon: typeof CheckCircle2; on: string }[]
 const Panel = ({ title, icon: Icon, right, children, className = "" }: {
   title: string; icon: typeof Radar; right?: React.ReactNode; children: React.ReactNode; className?: string;
 }) => (
-  <section className={`rounded-2xl border border-white/10 bg-gradient-to-b from-[#111c33] to-[#0b1striped224] bg-[#0d1628] shadow-[0_18px_50px_rgba(4,10,24,0.55)] overflow-hidden ${className}`}>
+  <section className={`rounded-2xl border border-white/10 bg-gradient-to-b from-[#111c33] to-[#0b1224] shadow-[0_18px_50px_rgba(4,10,24,0.55)] overflow-hidden ${className}`}>
     <header className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
       <Icon className="h-4 w-4 text-[#5ac8fa]" />
       <h2 className="text-[12.5px] font-semibold uppercase tracking-[0.14em] text-white/85">{title}</h2>
