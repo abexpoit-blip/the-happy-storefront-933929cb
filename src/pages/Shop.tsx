@@ -238,13 +238,6 @@ const Shop = () => {
           >
             Select all results ({cards.length})
           </button>
-          <button
-            onClick={() => buyMany(cards.map((c) => c.id))}
-            disabled={cards.length === 0 || buying}
-            className="h-8 px-3 rounded-md bg-gradient-to-b from-[#455a64] to-[#1f2d3d] text-white text-[12px] shadow-[0_6px_14px_-7px_rgba(31,45,61,0.9)] active:translate-y-px transition disabled:opacity-50"
-          >
-            Buy all · {resultsTotal.toFixed(2)}$
-          </button>
           {selected.size > 0 && (
             <span className="text-[12px] font-semibold text-[#2e7d32] bg-[#e8f5e9] border border-[#c8e6c9] rounded-md px-2.5 h-8 inline-flex items-center">
               Selected total: {selectedTotal.toFixed(2)}$
@@ -290,8 +283,8 @@ const Shop = () => {
                   className="cursor-pointer accent-[#2196f3]"
                 />
               </th>
-              {["DB","BIN","BRAND","EXPIRY","CVV","COUNTRY","REGION","INFO","ZIP","REFUND","PRICE","ACTIONS"].map((h) => (
-                <th key={h} className="p-2 text-left font-semibold uppercase tracking-wide border-b border-[#e0e0e0] whitespace-nowrap">{h}</th>
+              {["BASE","BIN","BRAND","EXPIRY","CVV","COUNTRY","REGION","INFO","ZIP","REFUND","PRICE","ACTIONS"].map((h) => (
+                <th key={h} className="p-3 text-left font-bold uppercase tracking-wide border-b border-[#e0e0e0] whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
