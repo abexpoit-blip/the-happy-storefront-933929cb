@@ -340,7 +340,15 @@ const Checker = () => {
         </Panel>
       </div>
 
-      <p className="mt-3 text-[12px] text-[#777]">
+      {credit && !credit.ok ? (
+        <p className="mt-3 flex items-center gap-2 rounded-xl border border-[#c62828]/35 bg-[#c62828]/10 px-3.5 py-2.5 text-[12.5px] text-[#ff8a80]">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          The checking gateway is unreachable right now — checks will fail until it is back.
+        </p>
+      ) : null}
+
+      <p className="mt-3 flex items-center gap-2 text-[12px] text-white/45">
+        <ShieldCheck className="h-3.5 w-3.5 text-[#7ee08a]" />
         The fee is charged per submitted card whatever the result. Cards go straight to the gateway — nothing is stored in plain form.
       </p>
     </AppShell>
