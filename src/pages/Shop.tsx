@@ -272,6 +272,18 @@ const Shop = () => {
         </div>
       </div>
 
+      {loadError && !loading && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#ffcdd2] bg-gradient-to-b from-[#fff5f5] to-[#ffe6e4] px-4 py-3 text-[13px] text-[#b71c1c]">
+          <span>Could not load the stock: {loadError}</span>
+          <button
+            onClick={() => void load(true)}
+            className="h-8 px-3 rounded-md bg-gradient-to-b from-[#ef5350] to-[#c62828] text-white text-[12px] font-semibold"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
       {/* TABLE */}
       <div className="mt-3 rounded-xl border border-[#e6e6e6] bg-white overflow-x-auto shadow-[0_14px_40px_-26px_rgba(31,45,61,0.6)] -mx-3 sm:mx-0">
         <table className="w-full min-w-[1220px] text-[15px] border-collapse">

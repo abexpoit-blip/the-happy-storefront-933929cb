@@ -398,7 +398,8 @@ interface LangCtx { lang: Lang; setLang: (l: Lang) => void; toggle: () => void }
 const Ctx = createContext<LangCtx>({ lang: "ru", setLang: () => {}, toggle: () => {} });
 
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
-  const [lang, setLangState] = useState<Lang>("ru");
+  // English is the default language; Russian is opt-in via the toggle.
+  const [lang, setLangState] = useState<Lang>("en");
 
   useEffect(() => {
     const saved = (typeof localStorage !== "undefined" ? localStorage.getItem(LS_KEY) : null) as Lang | null;
