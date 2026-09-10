@@ -158,7 +158,7 @@ const Checker = () => {
     dead: finishedRows.filter((r) => r.status === "dead").length,
     error: finishedRows.filter((r) => r.status === "error").length,
     skipped: finishedRows.filter((r) => r.status === "skipped").length,
-  }), [rows]);
+  }), [finishedRows]);
 
   const total = Math.max(expected, rows.length, busy ? lines.length : 0) || lines.length;
   const progress = total ? Math.round((finishedRows.length / total) * 100) : 0;
@@ -218,8 +218,8 @@ const Checker = () => {
     URL.revokeObjectURL(url);
   };
 
-  const eta = !busy ? "Done" : startedAt && rows.length
-    ? `${Math.max(1, Math.round(((Date.now() - startedAt) / 1000 / rows.length) * (total - rows.length)))}s`
+  const eta = !busy ? "Done" : startedAt && finishedRows.length
+    ? `${Math.max(1, Math.round(((Date.now() - startedAt) / 1000 / finishedRows.length) * (total - finishedRows.length)))}s`
     : "…";
 
   return (
@@ -388,7 +388,7 @@ const Checker = () => {
                  <div className="flex justify-between"><dt className="text-white/45">Progress</dt><dd className="font-mono text-white/80">{finishedRows.length}/{total}</dd></div>
                 <div className="flex justify-between"><dt className="text-white/45">ETA</dt><dd className="font-mono text-white/80">{eta}</dd></div>
                 <div className="flex justify-between"><dt className="text-white/45">Hit rate</dt><dd className="font-mono text-[#7ee08a]">{hitRate}%</dd></div>
-                <div className="flex justify-between"><dt className="text-white/45">Charged</dt><dd className="font-mono text-white/80">{needCredits} cr (${cost.toFixed(2)})</dd></div>
+                <div className="flex justify-between"><dt className="text-white/45">Reserved</dt><dd className="font-mono text-white/80">{expected * creditCost} cr</dd></div>
               </dl>
             </div>
 
@@ -495,7 +495,7 @@ const Checker = () => {
 
       <p className="mt-3 flex items-center gap-2 text-[12px] text-white/45">
         <ShieldCheck className="h-3.5 w-3.5 text-[#7ee08a]" />
-Credits are charged per submitted card whatever the result — no credits, no checking. Cards go straight to the gateway — nothing is stored in plain form.
+        Credits are reserved first. Only LIVE or DEAD gateway answers stay charged; failed, skipped, or unanswered checks are refunded. Card history remains for 24 hours and only masked card numbers are stored.
       </p>
     </AppShell>
   );
