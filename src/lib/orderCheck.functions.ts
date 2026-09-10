@@ -67,9 +67,10 @@ export const startOrderCardCheck = createServerFn({ method: "POST" })
     if (!parsed) throw new Error("no_card_data");
 
     // pay the fee (bonus balance first) — throws insufficient_balance
-    const { error: chargeError } = await context.supabase.rpc("charge_order_check", {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: chargeError } = await (context.supabase as any).rpc("charge_order_check", {
       _check_id: data.checkId,
-    } as never);
+    });
     if (chargeError) throw new Error(chargeError.message);
 
     const { data: gateRow } = await db
