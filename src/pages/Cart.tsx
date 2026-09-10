@@ -50,32 +50,20 @@ const Cart = () => {
     const spendable = Number(profile?.balance ?? 0) + Number(profile?.bonus_balance ?? 0);
     if (spendable < total) return toast.error("Insufficient funds. Please top up your balance.");
     setBusy(true);
-    let ok = 0;
-    const failed: string[] = [];
-    let lastError = "";
     try {
-      for (const it of chosen) {
-        try {
-          await purchaseProduct(it.id, 1);
-          removeFromCart(it.id);
-          ok++;
-        } catch (e) {
-          lastError = e instanceof Error ? e.message : String(e);
-          failed.push(it.bin ?? it.title);
-        }
-      }
+      await purchaseCart(chosen.map((i) => i.id));
+      chosen.forEach((i) => removeFromCart(i.id));
       void refresh?.();
-      if (failed.length) {
-        toast.error(`Failed: ${failed.join(", ")}${lastError ? ` — ${lastError}` : ""}`, { duration: 8000 });
-      }
-      if (ok > 0) {
-        toast.success(`Purchased: ${ok}. Opening your order…`);
-        nav("/orders");
-      }
+      toast.success(`Purchased ${chosen.length} card${chosen.length === 1 ? "" : "s"}. Opening your order…`);
+      nav("/orders");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(msg, { duration: 8000 });
     } finally {
       setBusy(false);
     }
   };
+
 
   return (
     <AppShell>
