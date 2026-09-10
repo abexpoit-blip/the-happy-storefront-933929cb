@@ -9,9 +9,16 @@ PORT="${PORT:-3002}"
 
 cd "$APP_DIR"
 
+SECRET_DIR="${SECRET_DIR:-/etc/zoru}"
+
 set -a
 # shellcheck disable=SC1091
 . ./.env
+# প্রতিটি সার্ভিসের key আলাদা ফাইল থেকে লোড হয় (plisio / checkerccv / smtp / telegram)
+for f in "$SECRET_DIR"/*.env; do
+  # shellcheck disable=SC1090
+  [ -e "$f" ] && . "$f"
+done
 set +a
 export PORT
 
