@@ -22,7 +22,11 @@ function apiKey(): string {
   return k;
 }
 
-async function call<T>(path: string, params: Record<string, string>): Promise<T> {
+async function call<T>(
+  path: string,
+  params: Record<string, string>,
+  options: { quiet?: boolean } = {},
+): Promise<T> {
   const url = new URL(`${API}${path}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   url.searchParams.set("api_key", apiKey());
@@ -33,7 +37,7 @@ async function call<T>(path: string, params: Record<string, string>): Promise<T>
     redirect: "manual",
   });
   if (res.status >= 300 && res.status < 400) {
-    console.error("plisio unexpected redirect", res.status);
+    if (!options.quiet) console.error("plisio unexpected redirect", res.status);
     throw new Error(`payment_gateway_error: Unexpected redirect (HTTP ${res.status})`);
   }
   const raw = await res.text();
@@ -41,7 +45,7 @@ async function call<T>(path: string, params: Record<string, string>): Promise<T>
   try {
     json = JSON.parse(raw) as typeof json;
   } catch {
-    console.error("plisio non-json response", res.status, raw.slice(0, 300));
+    if (!options.quiet) console.error("plisio non-json response", res.status, raw.slice(0, 300));
     throw new Error(`payment_gateway_error: HTTP ${res.status}`);
   }
   if (!res.ok || json.status !== "success" || !json.data) {
@@ -51,7 +55,7 @@ async function call<T>(path: string, params: Record<string, string>): Promise<T>
         ? (json.data as { message?: string }).message
         : undefined) ??
       raw.slice(0, 200);
-    console.error("plisio error", res.status, detail);
+    if (!options.quiet) console.error("plisio error", res.status, detail);
     throw new Error(`payment_gateway_error: ${detail}`);
   }
   return json.data as T;
@@ -62,7 +66,7 @@ export const CLIENT_FEE_PERCENT = 2;
 
 /** Lightweight health probe — throws when the payment gateway is unusable. */
 export async function gatewayPing(): Promise<void> {
-  await call<unknown>("/balances/LTC", {});
+  await call<unknown>("/balances/LTC", {}, { quiet: true });
 }
 
 export async function createLtcInvoice(input: {
