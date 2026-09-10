@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import Seo from "@/components/Seo";
 import { toast } from "sonner";
@@ -9,7 +9,7 @@ import {
 import { useServerFn } from "@tanstack/react-start";
 import { PageHero } from "@/components/PageHero";
 import {
-  selfCheckConfig, startSelfCheck, pollSelfCheck, checkerGates, checkerCredit,
+  selfCheckConfig, startSelfCheck, pollSelfCheck, checkerGates, checkerCredit, listSelfChecks,
   type SelfCheckRow, type SelfCheckStatus,
 } from "@/lib/selfcheck.functions";
 import { useAuth } from "@/hooks/useAuth";
@@ -47,6 +47,8 @@ const Checker = () => {
   const getCredit = useServerFn(checkerCredit);
   const start = useServerFn(startSelfCheck);
   const poll = useServerFn(pollSelfCheck);
+  const getHistory = useServerFn(listSelfChecks);
+
 
   const [price, setPrice] = useState(0.03);
   const [creditCost, setCreditCost] = useState(30);
@@ -63,7 +65,35 @@ const Checker = () => {
   const [taskId, setTaskId] = useState<string | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [credit, setCredit] = useState<{ credit: number; ok: boolean; error?: string } | null>(null);
+  const [history, setHistory] = useState<{ taskId: string; total: number; status: string; rows: SelfCheckRow[]; createdAt: string }[]>([]);
+  const [expected, setExpected] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
+  const watching = useRef<string | null>(null);
+
+  /** Poll a task until the gateway says it is finished. Gateway needs >=10s between polls. */
+  const watch = useCallback(async (id: string) => {
+    if (watching.current === id) return;
+    watching.current = id;
+    setBusy(true);
+    setTaskId(id);
+    try {
+      for (let i = 0; i < 120; i++) {
+        await new Promise((r) => setTimeout(r, i === 0 ? 6000 : 12000));
+        try {
+          const st = await poll({ data: { taskId: id } });
+          if (st.rows.length) setRows(st.rows);
+          if (st.total) setExpected(st.total);
+          if (st.done) break;
+        } catch {
+          // transient gateway/rate-limit error — keep polling
+        }
+      }
+    } finally {
+      watching.current = null;
+      setBusy(false);
+      void refresh?.();
+    }
+  }, [poll, refresh]);
 
   useEffect(() => {
     void getConfig({}).then((c) => {
@@ -74,7 +104,18 @@ const Checker = () => {
     void getCredit({})
       .then((c) => setCredit({ credit: c.credit, ok: c.ok, error: "error" in c ? c.error : undefined }))
       .catch((e) => setCredit({ credit: 0, ok: false, error: e instanceof Error ? e.message : "unreachable" }));
-  }, [getConfig, getGates, getCredit]);
+    // restore the last run after a reload and resume an unfinished one
+    void getHistory({}).then((h) => {
+      setHistory(h);
+      const last = h[0];
+      if (!last) return;
+      setTaskId(last.taskId);
+      setExpected(last.total);
+      if (last.rows.length) setRows(last.rows);
+      if (last.status !== "completed") void watch(last.taskId);
+    }).catch(() => undefined);
+  }, [getConfig, getGates, getCredit, getHistory, watch]);
+
 
   useEffect(() => {
     const close = (e: MouseEvent) => {
@@ -112,7 +153,7 @@ const Checker = () => {
     skipped: rows.filter((r) => r.status === "skipped").length,
   }), [rows]);
 
-  const total = busy || rows.length ? Math.max(lines.length, rows.length) : lines.length;
+  const total = Math.max(expected, rows.length, busy ? lines.length : 0) || lines.length;
   const progress = total ? Math.round((rows.length / total) * 100) : 0;
   const hitRate = rows.length ? Math.round((counts.live / rows.length) * 100) : 0;
   const visible = rows.filter((r) => r.status === tab);
@@ -123,18 +164,15 @@ const Checker = () => {
     if (!lines.length) return toast.error("Paste at least one card (PAN|MM|YYYY|CVV)");
     if (lines.length > 500) return toast.error("Maximum 500 cards per run");
     if (myCredits < needCredits) return toast.error(`Not enough credits — you need ${needCredits}, you have ${myCredits}. Buy credits first.`);
-    setBusy(true); setRows([]); setStartedAt(Date.now());
+    setBusy(true); setRows([]); setStartedAt(Date.now()); setExpected(lines.length);
     try {
       const task = await start({ data: { cards: lines, gate: gate || undefined } });
       setTaskId(task.taskId);
+      setExpected(task.total);
       toast.success(`Charged ${task.credits} credits ($${task.cost.toFixed(2)}) — checking ${task.total} card(s)`);
       void refresh?.();
-      for (let i = 0; i < 60; i++) {
-        await new Promise((r) => setTimeout(r, i === 0 ? 5000 : 6000));
-        const st = await poll({ data: { taskId: task.taskId } });
-        if (st.rows.length) setRows(st.rows);
-        if (st.done) break;
-      }
+      await watch(task.taskId);
+      void getHistory({}).then(setHistory).catch(() => undefined);
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
       toast.error(
@@ -337,6 +375,25 @@ const Checker = () => {
                 <div className="flex justify-between"><dt className="text-white/45">Charged</dt><dd className="font-mono text-white/80">{needCredits} cr (${cost.toFixed(2)})</dd></div>
               </dl>
             </div>
+
+            {history.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Previous runs</div>
+                {history.slice(0, 6).map((h) => (
+                  <button
+                    key={h.taskId}
+                    onClick={() => { setRows(h.rows); setTaskId(h.taskId); setExpected(h.total); }}
+                    className={`flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left text-[11.5px] transition ${
+                      taskId === h.taskId ? "border-[#2196f3]/50 bg-[#2196f3]/10 text-white/90" : "border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    <span className="font-mono">{h.taskId.slice(-8)}</span>
+                    <span className="font-mono">{h.rows.length}/{h.total}</span>
+                    <span className={h.status === "completed" ? "text-[#7ee08a]" : "text-[#f9d27a]"}>{h.status}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </Panel>
       </div>

@@ -106,11 +106,21 @@ export async function createTask(gatecode: string, listcc: string[]) {
 }
 
 export async function getResults(taskId: string, cursor = 0, limit = 500) {
-  const p = (await call(`${API_BASE}/tasks/result.php`, {
-    task_id: taskId,
-    cursor,
-    limit,
-  })) as {
+  // The gateway rate-limits result polling (min ~10s per task) — retry on 429.
+  let raw: unknown;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      raw = await call(`${API_BASE}/tasks/result.php`, { task_id: taskId, cursor, limit });
+      break;
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      if (attempt >= 2 || !(m.includes("429") || m.toLowerCase().includes("rate") || m.toLowerCase().includes("too many"))) {
+        throw e;
+      }
+      await new Promise((r) => setTimeout(r, 11000));
+    }
+  }
+  const p = raw as {
     status?: string;
     total?: number;
     total_results?: number;
