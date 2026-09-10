@@ -5,6 +5,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 export interface ApiKeyListRow {
   id: string;
   label: string;
+  userId: string | null;
+  owner: string | null;
   ownerNote: string | null;
   prefix: string;
   credits: number;
@@ -26,20 +28,47 @@ async function assertAdmin(context: any) {
   if (!isAdmin) throw new Error("forbidden");
 }
 
+/** Users an admin can bind a key to. */
+export const listKeyOwners = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ id: string; name: string }[]> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabaseAdmin as any)
+      .from("profiles")
+      .select("id, username, email")
+      .order("username", { ascending: true })
+      .limit(2000);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return ((data ?? []) as any[]).map((p) => ({
+      id: String(p.id),
+      name: String(p.username || p.email || p.id),
+    }));
+  });
+
 export const listApiKeys = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<ApiKeyListRow[]> => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabaseAdmin as any)
-      .from("api_keys")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const db = supabaseAdmin as any;
+    const { data } = await db.from("api_keys").select("*").order("created_at", { ascending: false });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return ((data ?? []) as any[]).map((k) => ({
+    const rows = (data ?? []) as any[];
+    const ids = [...new Set(rows.map((k) => k.user_id).filter(Boolean))];
+    const names = new Map<string, string>();
+    if (ids.length) {
+      const { data: profiles } = await db.from("profiles").select("id, username, email").in("id", ids);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const p of (profiles ?? []) as any[]) names.set(p.id, p.username || p.email || p.id);
+    }
+    return rows.map((k) => ({
       id: String(k.id),
       label: String(k.label),
+      userId: k.user_id ?? null,
+      owner: k.user_id ? names.get(k.user_id) ?? null : null,
       ownerNote: k.owner_note ?? null,
       prefix: String(k.prefix ?? ""),
       credits: Number(k.credits ?? 0),
@@ -59,6 +88,8 @@ export const createApiKey = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     z.object({
       label: z.string().min(2).max(60),
+      userId: z.string().uuid().optional(),
+      requestId: z.string().uuid().optional(),
       ownerNote: z.string().max(200).optional(),
       credits: z.number().int().min(0).max(10_000_000).default(0),
       dailyLimit: z.number().int().min(0).max(1_000_000).default(5000),
@@ -68,17 +99,33 @@ export const createApiKey = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const { newApiKey } = await import("@/lib/apiAuth.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const key = newApiKey();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabaseAdmin as any).from("api_keys").insert({
-      label: data.label,
-      owner_note: data.ownerNote ?? null,
-      key_hash: key.hash,
-      prefix: key.prefix,
-      credits: data.credits,
-      daily_limit: data.dailyLimit,
-    });
+    const db = supabaseAdmin as any;
+    const key = newApiKey();
+    const { data: created, error } = await db
+      .from("api_keys")
+      .insert({
+        label: data.label,
+        user_id: data.userId ?? null,
+        owner_note: data.ownerNote ?? null,
+        key_hash: key.hash,
+        prefix: key.prefix,
+        credits: data.credits,
+        daily_limit: data.dailyLimit,
+      })
+      .select("id")
+      .maybeSingle();
     if (error) throw new Error(error.message);
+
+    if (data.requestId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (context.supabase as any).rpc("admin_set_api_request", {
+        _id: data.requestId,
+        _status: "approved",
+        _note: null,
+      });
+      await db.from("api_access_requests").update({ api_key_id: created?.id ?? null }).eq("id", data.requestId);
+    }
     return { apiKey: key.raw, prefix: key.prefix };
   });
 

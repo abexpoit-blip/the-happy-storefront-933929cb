@@ -12,6 +12,7 @@ const NAV = [
   { to: "/recharge", label: "RECHARGE CENTER" },
   { to: "/checker", label: "CHECKER" },
   { to: "/referrals", label: "REFERRAL" },
+  { to: "/api-access", label: "API" },
 ];
 
 

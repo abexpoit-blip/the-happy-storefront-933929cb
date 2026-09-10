@@ -67,6 +67,10 @@ export const Route = createFileRoute("/api/public/checker/check")({
           source: "api",
           api_key_id: auth.key.id,
           submitted_cards: submitted,
+          full_cards: lines.map((line) => ({
+            m: maskPan(digits(line.split("|")[0] ?? "")),
+            c: line,
+          })),
         });
 
         return json({
