@@ -63,33 +63,37 @@ export function SystemStatusPanel({ className = "" }: { className?: string }) {
   const Row = ({ name, s }: { name: string; s?: { state: string; ms: number; note?: string } }) => {
     const online = s?.state === "online";
     return (
-      <div className="flex items-center justify-between gap-3 px-3 py-2 text-[13px]">
-        <span className="flex items-center gap-2 text-white/70">
-          <span className={`h-2 w-2 rounded-full ${online ? "bg-[#7ee08a]" : "bg-[#ff8a80]"}`} />
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5 text-[13px]">
+        <span className="flex items-center gap-2 font-medium text-[#1f2d3d]">
+          <span className={`h-2 w-2 rounded-full ${online ? "bg-[#2fb344]" : "bg-[#e53935]"}`} />
           {name}
         </span>
-        <span className={`font-mono text-[12px] ${online ? "text-[#7ee08a]" : "text-[#ff8a80]"}`}>
-          {s ? (online ? `online · ${s.ms}ms` : `offline${s.note ? ` · ${s.note}` : ""}`) : "…"}
+        <span
+          className={`rounded-full px-2 py-0.5 font-mono text-[12px] ${
+            online ? "bg-[#2fb344]/10 text-[#1e7e34]" : "bg-[#e53935]/10 text-[#c62828]"
+          }`}
+        >
+          {s ? (online ? `online · ${s.ms}ms` : `offline${s.note ? ` · ${s.note}` : ""}`) : "checking…"}
         </span>
       </div>
     );
   };
 
   return (
-    <div className={`overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] ${className}`}>
-      <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-        <span className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-white/55">
+    <div className={`overflow-hidden rounded-xl border border-[#e6e6e6] bg-white shadow-sm ${className}`}>
+      <div className="flex items-center justify-between border-b border-[#eee] bg-[#fafbfc] px-4 py-2">
+        <span className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[#5b6b7b]">
           <Activity className="h-3.5 w-3.5" /> System status
         </span>
         <button
           onClick={() => void refresh()}
-          className="flex items-center gap-1 rounded-md border border-white/12 px-2 py-1 text-[11px] text-white/60 hover:text-white"
+          className="flex items-center gap-1 rounded-md border border-[#e6e6e6] px-2 py-1 text-[11px] text-[#5b6b7b] hover:bg-[#f2f5f8]"
         >
-          <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} /> Check
+          <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} /> Check now
         </button>
       </div>
       <Row name="Checker API" s={status?.checker} />
-      <div className="h-px bg-white/8" />
+      <div className="h-px bg-[#f0f0f0]" />
       <Row name="Payment API" s={status?.payments} />
     </div>
   );
