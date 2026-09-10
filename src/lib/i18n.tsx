@@ -273,19 +273,104 @@ const DICT: Record<string, string> = {
   "Проверьте": "Check",
 };
 
+
+/** English → Russian for screens that are authored in English (cart, orders, checker). */
+const EN_EXTRA: Record<string, string> = {
+  "Cart": "Корзина",
+  "Your": "Ваша",
+  "cart": "корзина",
+  "Checkout": "Оформление",
+  "Items:": "Позиций:",
+  "Selected:": "Выбрано:",
+  "Select all": "Выбрать всё",
+  "Deselect all": "Снять выделение",
+  "Clear": "Очистить",
+  "Delete": "Удалить",
+  "Cart cleared": "Корзина очищена",
+  "Selected cards": "Выбранные карты",
+  "Order total": "Сумма заказа",
+  "Balance": "Баланс",
+  "Total": "Всего",
+  "Total:": "Итого:",
+  "Go to shop": "Перейти в магазин",
+  "Select at least one card": "Выберите хотя бы одну карту",
+  "Insufficient funds. Please top up your balance.": "Недостаточно средств. Пополните баланс.",
+  "My orders": "Мои заказы",
+  "Purchase": "История",
+  "history": "покупок",
+  "Order number": "Номер заказа",
+  "Enter order number": "Введите номер заказа",
+  "Search": "Поиск",
+  "Reset": "Сброс",
+  "All days": "Все дни",
+  "Download TXT": "Скачать TXT",
+  "Export CSV": "Экспорт CSV",
+  "Downloaded": "Скачано",
+  "Nothing to download": "Нет данных для скачивания",
+  "No orders": "Нет заказов",
+  "Open": "Открыть",
+  "Cards": "Карты",
+  "Cards bought": "Куплено карт",
+  "Total orders": "Всего заказов",
+  "Spent": "Потрачено",
+  "Payment time": "Время оплаты",
+  "Operation": "Операция",
+  "Order detail": "Детали заказа",
+  "Back to list": "Назад к списку",
+  "Refresh data": "Обновить данные",
+  "Copy card info": "Копировать карты",
+  "Copy": "Копировать",
+  "Copied": "Скопировано",
+  "Copy failed — copy manually": "Не удалось скопировать — скопируйте вручную",
+  "Card count": "Количество карт",
+  "Refunded cards": "Возвращённые карты",
+  "Avg card price": "Средняя цена карты",
+  "Total amount": "Сумма заказа",
+  "Refund amount": "Сумма возврата",
+  "All checkable cards": "Карты для проверки",
+  "CHECK ALL": "ПРОВЕРИТЬ ВСЁ",
+  "CHECK": "ПРОВЕРИТЬ",
+  "Card Info": "Данные карты",
+  "Raw Card Data": "Исходная строка",
+  "BIN Info": "Информация BIN",
+  "Region": "Регион",
+  "Unit Price": "Цена",
+  "Detection": "Проверка",
+  "Refund": "Возврат",
+  "Action": "Действие",
+  "not refundable": "без возврата",
+  "No card data in this order": "В этом заказе нет данных карт",
+  "Dead cards cannot be copied": "Мёртвые карты нельзя копировать",
+  "Dead cards are refunded automatically": "Мёртвые карты возвращаются автоматически",
+  "Not enough balance for the check fee": "Недостаточно средств для оплаты проверки",
+  "This card was already checked": "Эта карта уже проверена",
+  "LIVE — card is valid": "LIVE — карта валидна",
+  "Still checking — press CHECK again in a minute": "Проверка продолжается — нажмите ПРОВЕРИТЬ через минуту",
+  "/ page": "/ стр.",
+};
+
 const ATTRS = ["placeholder", "title", "aria-label", "alt"];
 let lastLang: Lang = "ru";
+
+const invert = (m: Record<string, string>) => {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(m)) if (!(v in out)) out[v] = k;
+  return out;
+};
+/** Active lookup table: RU→EN in English mode, EN→RU in Russian mode. */
+let table: Record<string, string> = {};
+const tableFor = (l: Lang) => (l === "en" ? DICT : { ...invert(DICT), ...EN_EXTRA });
 
 function tr(text: string): string | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
-  const hit = DICT[trimmed];
+  const hit = table[trimmed];
   if (!hit) return null;
   return text.replace(trimmed, hit);
 }
 
 function translateNode(root: Node) {
-  if (lastLang !== "en") return;
+  if (!Object.keys(table).length) return;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const nodes: Text[] = [];
   let n = walker.nextNode();
@@ -324,7 +409,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
     lastLang = lang;
     if (typeof document === "undefined") return;
     document.documentElement.lang = lang;
-    if (lang === "ru") return;
+    table = tableFor(lang);
     translateNode(document.body);
     const obs = new MutationObserver((records) => {
       for (const r of records) {
