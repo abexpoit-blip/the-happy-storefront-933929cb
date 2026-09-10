@@ -403,9 +403,17 @@ const ScanOverlay = ({ count, done = 0 }: { count: number; done?: number }) => {
         <div className="relative mt-1 text-[12.5px] text-white/65">
           Live check running on {count} refund card{count === 1 ? "" : "s"}. Please don't close this window.
         </div>
+        <div className="relative mt-2 font-mono text-[13px] text-[#5ac8fa]">{done} / {count} checked</div>
 
         <div className="relative mt-5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-          <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#2196f3] via-[#5ac8fa] to-[#43a047]" style={{ animation: "cartScan 1.4s ease-in-out infinite" }} />
+          {done > 0 && count > 0 ? (
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-[#2196f3] via-[#5ac8fa] to-[#43a047] transition-all duration-500"
+              style={{ width: `${Math.min(100, Math.round((done / count) * 100))}%` }}
+            />
+          ) : (
+            <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#2196f3] via-[#5ac8fa] to-[#43a047]" style={{ animation: "cartScan 1.4s ease-in-out infinite" }} />
+          )}
         </div>
 
         <ul className="relative mt-5 space-y-1.5 text-left">
