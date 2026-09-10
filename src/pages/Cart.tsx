@@ -377,7 +377,7 @@ const SCAN_STEPS = [
   "Finalizing results…",
 ];
 
-const ScanOverlay = ({ count }: { count: number }) => {
+const ScanOverlay = ({ count, done = 0 }: { count: number; done?: number }) => {
   const [step, setStep] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setStep((s) => Math.min(s + 1, SCAN_STEPS.length - 1)), 700);
