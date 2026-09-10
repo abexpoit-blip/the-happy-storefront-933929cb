@@ -65,7 +65,35 @@ const Checker = () => {
   const [taskId, setTaskId] = useState<string | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [credit, setCredit] = useState<{ credit: number; ok: boolean; error?: string } | null>(null);
+  const [history, setHistory] = useState<{ taskId: string; total: number; status: string; rows: SelfCheckRow[]; createdAt: string }[]>([]);
+  const [expected, setExpected] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
+  const watching = useRef<string | null>(null);
+
+  /** Poll a task until the gateway says it is finished. Gateway needs >=10s between polls. */
+  const watch = useCallback(async (id: string) => {
+    if (watching.current === id) return;
+    watching.current = id;
+    setBusy(true);
+    setTaskId(id);
+    try {
+      for (let i = 0; i < 120; i++) {
+        await new Promise((r) => setTimeout(r, i === 0 ? 6000 : 12000));
+        try {
+          const st = await poll({ data: { taskId: id } });
+          if (st.rows.length) setRows(st.rows);
+          if (st.total) setExpected(st.total);
+          if (st.done) break;
+        } catch {
+          // transient gateway/rate-limit error — keep polling
+        }
+      }
+    } finally {
+      watching.current = null;
+      setBusy(false);
+      void refresh?.();
+    }
+  }, [poll, refresh]);
 
   useEffect(() => {
     void getConfig({}).then((c) => {
@@ -76,7 +104,18 @@ const Checker = () => {
     void getCredit({})
       .then((c) => setCredit({ credit: c.credit, ok: c.ok, error: "error" in c ? c.error : undefined }))
       .catch((e) => setCredit({ credit: 0, ok: false, error: e instanceof Error ? e.message : "unreachable" }));
-  }, [getConfig, getGates, getCredit]);
+    // restore the last run after a reload and resume an unfinished one
+    void getHistory({}).then((h) => {
+      setHistory(h);
+      const last = h[0];
+      if (!last) return;
+      setTaskId(last.taskId);
+      setExpected(last.total);
+      if (last.rows.length) setRows(last.rows);
+      if (last.status !== "completed") void watch(last.taskId);
+    }).catch(() => undefined);
+  }, [getConfig, getGates, getCredit, getHistory, watch]);
+
 
   useEffect(() => {
     const close = (e: MouseEvent) => {
