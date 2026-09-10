@@ -4,28 +4,27 @@ import { ChevronDown, LogOut, Menu, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
-import { LanguageToggle } from "@/lib/i18n";
+import { LanguageToggle, useLanguage } from "@/lib/i18n";
 import { useSessionTimeout } from "@/hooks/useSessionTimeout";
 import { cartCount, onCartChange } from "@/lib/cart";
 
 
-// Scorpion-style navigation. Exactly 5 items, matching scorpionshopcc.su.
 const buyerNav = [
-  { to: "/", label: "ГЛАВНАЯ", end: true },
-  { to: "/shop", label: "МАГАЗИН" },
-  { to: "/cart", label: "КОРЗИНА" },
-  { to: "/orders", label: "ЗАКАЗЫ" },
-  { to: "/recharge", label: "ПОПОЛНЕНИЕ" },
-  { to: "/checker", label: "ЧЕКЕР" },
-  { to: "/referrals", label: "РЕФЕРАЛЫ" },
-  { to: "/api-access", label: "API" },
-  { to: "/support", label: "ПОДДЕРЖКА" },
-
+  { to: "/", en: "HOME", ru: "ГЛАВНАЯ", end: true },
+  { to: "/shop", en: "SHOP", ru: "МАГАЗИН" },
+  { to: "/cart", en: "CART", ru: "КОРЗИНА" },
+  { to: "/orders", en: "ORDERS", ru: "ЗАКАЗЫ" },
+  { to: "/recharge", en: "RECHARGE", ru: "ПОПОЛНЕНИЕ" },
+  { to: "/checker", en: "CHECKER", ru: "ЧЕКЕР" },
+  { to: "/referrals", en: "REFERRALS", ru: "РЕФЕРАЛЫ" },
+  { to: "/api-access", en: "API", ru: "API" },
+  { to: "/support", en: "SUPPORT", ru: "ПОДДЕРЖКА" },
 ];
 
 
 export const AppShell = ({ children }: { children: ReactNode }) => {
   const { profile, signOut, user } = useAuth();
+  const { lang } = useLanguage();
   const settings = useSiteSettings();
   const nav = useNavigate();
   useLocation();
@@ -78,7 +77,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                   }`
                 }
               >
-                {n.label}
+                {n[lang]}
                 {n.to === "/cart" && cartN > 0 && (
                   <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#f56c6c] px-1 text-[10px] font-bold text-white">
                     {cartN}
@@ -90,7 +89,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
           <button
             onClick={() => setDrawerOpen((v) => !v)}
             className="lg:hidden p-2 -ml-2 text-white"
-            aria-label="Меню"
+            aria-label={lang === "en" ? "Menu" : "Меню"}
           >
             {drawerOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -112,7 +111,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                   }`
                 }
               >
-                {n.label}
+                {n[lang]}
                 {n.to === "/cart" && cartN > 0 && (
                   <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#f56c6c] px-1 text-[10px] font-bold text-white">
                     {cartN}
@@ -178,20 +177,20 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                   onClick={() => setMenuOpen(false)}
                   className="block px-3 py-2 hover:bg-[#f7f7f7] text-[#333]"
                 >
-                  Заказы
+                  {lang === "en" ? "Orders" : "Заказы"}
                 </Link>
                 <Link
                   to="/recharge"
                   onClick={() => setMenuOpen(false)}
                   className="block px-3 py-2 hover:bg-[#f7f7f7] text-[#333]"
                 >
-                  Пополнение
+                  {lang === "en" ? "Recharge" : "Пополнение"}
                 </Link>
                 <button
                   onClick={async () => { setMenuOpen(false); await signOut(); nav("/auth"); }}
                   className="w-full text-left px-3 py-2 hover:bg-[#fff5f5] flex items-center gap-2 text-[#d32f2f] border-t border-[#eee]"
                 >
-                  <LogOut className="h-3.5 w-3.5" /> Выйти
+                  <LogOut className="h-3.5 w-3.5" /> {lang === "en" ? "Log out" : "Выйти"}
                 </button>
               </div>
             )}
@@ -204,13 +203,13 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
       {/* ПОДВАЛ */}
       <footer className="bg-[#304156] text-white/70 mt-6">
         <div className="mx-auto max-w-[1400px] px-4 sm:px-6 py-6 flex flex-col md:flex-row items-center justify-between gap-3 text-[12px]">
-          <div>© {new Date().getFullYear()} {settings.shop_name}. Все права защищены.</div>
+          <div>© {new Date().getFullYear()} {settings.shop_name}. {lang === "en" ? "All rights reserved." : "Все права защищены."}</div>
           <div className="flex items-center gap-4">
-            <span>Поддержка 24/7</span>
+            <span>{lang === "en" ? "24/7 support" : "Поддержка 24/7"}</span>
             <span className="hidden md:inline text-white/30">·</span>
-            <span>Мгновенная доставка</span>
+            <span>{lang === "en" ? "Instant delivery" : "Мгновенная доставка"}</span>
             <span className="hidden md:inline text-white/30">·</span>
-            <span>Безопасные расчёты</span>
+            <span>{lang === "en" ? "Secure payments" : "Безопасные расчёты"}</span>
           </div>
         </div>
       </footer>

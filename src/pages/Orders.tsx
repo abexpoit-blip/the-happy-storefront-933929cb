@@ -113,6 +113,7 @@ const Orders = () => {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
 
   const [q, setQ] = useState("");
@@ -123,6 +124,7 @@ const Orders = () => {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const data = await listMyOrders();
       setOrders(
@@ -140,7 +142,10 @@ const Orders = () => {
           })),
         })),
       );
-    } catch { setOrders([]); } finally { setLoading(false); }
+    } catch (error) {
+      setOrders([]);
+      setLoadError(error instanceof Error ? error.message : "Orders could not be loaded");
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { if (user) void load(); }, [user, load]);
@@ -286,7 +291,9 @@ const Orders = () => {
                 </tr>
               ))}
               {!loading && rows.length === 0 && (
-                <tr><td colSpan={5} className="p-12 text-center text-[#909399]">No orders</td></tr>
+                <tr><td colSpan={5} className="p-12 text-center text-[#909399]">
+                  {loadError ? `Could not load orders: ${loadError}` : "No orders"}
+                </td></tr>
               )}
             </tbody>
           </table>
