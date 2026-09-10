@@ -59,35 +59,12 @@ export const COUNTRIES: { code: string; name: string; flag: string }[] = [
   { code: "HU", name: "Hungary", flag: "🇭🇺" },
 ];
 
-export const countryFlag = (code?: string | null) => {
-  if (!code) return "🌐";
-  const upper = code.toUpperCase().trim();
-  const byCode = COUNTRIES.find((c) => c.code === upper);
-  if (byCode) return byCode.flag;
-  const byName = COUNTRIES.find((c) => c.name.toUpperCase() === upper);
-  if (byName) return byName.flag;
-  return "🌐";
-};
+export const countryFlag = (code?: string | null) => flagEmoji(code);
 
-export const countryCode = (input?: string | null): string => {
-  if (!input) return "";
-  const upper = input.toUpperCase().trim();
-  const byCode = COUNTRIES.find((c) => c.code === upper);
-  if (byCode) return byCode.code;
-  const byName = COUNTRIES.find((c) => c.name.toUpperCase() === upper);
-  if (byName) return byName.code;
-  return input.toUpperCase().slice(0, 2);
-};
+/** Works for every ISO country, plus common aliases (USA, UK, Holland…). */
+export const countryCode = (input?: string | null): string => resolveCountryCode(input);
 
-export const countryName = (input?: string | null): string => {
-  if (!input) return "";
-  const upper = input.toUpperCase().trim();
-  const byCode = COUNTRIES.find((c) => c.code === upper);
-  if (byCode) return byCode.name;
-  const byName = COUNTRIES.find((c) => c.name.toUpperCase() === upper);
-  if (byName) return byName.name;
-  return input;
-};
+export const countryName = (input?: string | null): string => resolveCountryName(input);
 
 export function detectBrandFromBin(bin: string): string {
   const n = (bin ?? "").replace(/\D/g, "");
