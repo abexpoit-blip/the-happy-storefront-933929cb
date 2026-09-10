@@ -152,7 +152,9 @@ const Cart = () => {
       const results = await listChecksForOrders(orderIds);
       void refresh?.();
       await loadPending();
-      setChecks(results.filter((r) => r.status !== "pending"));
+      const settledRows = results.filter((r) => r.status !== "pending");
+      if (settledRows.length) setChecks(settledRows);
+      else toast.info("The checker is still working on these cards. Your cards stay in the queue — press Check again in a minute.", { duration: 8000 });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Check failed", { duration: 8000 });
     } finally {
