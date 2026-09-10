@@ -126,7 +126,7 @@ export const startSelfCheck = createServerFn({ method: "POST" })
       status: "running",
     });
 
-    return { taskId, total: lines.length, cost: Number(cost ?? 0), gate };
+    return { taskId, total: lines.length, cost, credits, gate };
   });
 
 /** Poll a self-check task and return masked results. */
