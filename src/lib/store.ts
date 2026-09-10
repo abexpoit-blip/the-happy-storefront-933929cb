@@ -137,6 +137,23 @@ export const purchaseProduct = async (productId: string, quantity: number) => {
   return data as string;
 };
 
+/**
+ * Buy several cards in ONE order, so the order page shows every card together.
+ * Falls back to one-order-per-card on servers where the migration is not applied yet.
+ */
+export const purchaseCart = async (productIds: string[]): Promise<string | null> => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc("purchase_cart", { _product_ids: productIds });
+  if (!error) return data as string;
+  const msg = String(error.message ?? "");
+  const missing = msg.includes("purchase_cart") || msg.includes("function") || msg.includes("404");
+  if (!missing) throw new Error(translatePurchaseError(msg));
+  let last: string | null = null;
+  for (const id of productIds) last = await purchaseProduct(id, 1);
+  return last;
+};
+
+
 /** Purchase then return the actually delivered content (keys / link / text). */
 export const purchaseAndDeliver = async (
   productId: string,
