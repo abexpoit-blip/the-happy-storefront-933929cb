@@ -58,6 +58,18 @@ export const checkerGates = createServerFn({ method: "POST" })
     }));
   });
 
+/** Remaining credit on the checking gateway account. */
+export const checkerCredit = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    try {
+      const { checkCredit } = await import("@/lib/checkerccv.server");
+      return { credit: await checkCredit(), ok: true as const };
+    } catch (e) {
+      return { credit: 0, ok: false as const, error: e instanceof Error ? e.message : "checker_error" };
+    }
+  });
+
 /** Charge the user and start a gateway task for their own cards. */
 export const startSelfCheck = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

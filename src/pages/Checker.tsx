@@ -4,11 +4,12 @@ import Seo from "@/components/Seo";
 import { toast } from "sonner";
 import {
   Loader2, Radar, CreditCard, ChevronDown, ListChecks, History, Copy, Download,
-  CheckCircle2, XCircle, AlertTriangle, SkipForward, Wallet, Gauge,
+  CheckCircle2, XCircle, AlertTriangle, SkipForward, Wallet, Gauge, ShieldCheck, Zap,
 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
+import { PageHero } from "@/components/PageHero";
 import {
-  selfCheckConfig, startSelfCheck, pollSelfCheck, checkerGates,
+  selfCheckConfig, startSelfCheck, pollSelfCheck, checkerGates, checkerCredit,
   type SelfCheckRow, type SelfCheckStatus,
 } from "@/lib/selfcheck.functions";
 import { useAuth } from "@/hooks/useAuth";
@@ -41,6 +42,7 @@ const Checker = () => {
   const { profile, refresh } = useAuth();
   const getConfig = useServerFn(selfCheckConfig);
   const getGates = useServerFn(checkerGates);
+  const getCredit = useServerFn(checkerCredit);
   const start = useServerFn(startSelfCheck);
   const poll = useServerFn(pollSelfCheck);
 
@@ -54,12 +56,14 @@ const Checker = () => {
   const [tab, setTab] = useState<Tab>("live");
   const [taskId, setTaskId] = useState<string | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [credit, setCredit] = useState<{ credit: number; ok: boolean } | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     void getConfig({}).then((c) => { setPrice(c.price); setGate((g) => g || c.gate); }).catch(() => undefined);
     void getGates({}).then((g) => setGates(g as Gate[])).catch(() => undefined);
-  }, [getConfig, getGates]);
+    void getCredit({}).then((c) => setCredit({ credit: c.credit, ok: c.ok })).catch(() => setCredit({ credit: 0, ok: false }));
+  }, [getConfig, getGates, getCredit]);
 
   useEffect(() => {
     const close = (e: MouseEvent) => {
@@ -138,6 +142,32 @@ const Checker = () => {
   return (
     <AppShell>
       <Seo title="Card Checker | Zoru Shop" description="Check your own cards live/dead with your balance." path="/checker" />
+
+      <PageHero
+        eyebrow="Card checker"
+        eyebrowIcon={Radar}
+        title="Check your cards"
+        highlight="live or dead"
+        description={`Paste your cards, pick a gate and pay from your balance — $${price.toFixed(2)} per card. Bonus balance is spent first.`}
+        right={
+          <div className="flex flex-wrap gap-2">
+            <div className="rounded-xl border border-white/12 bg-white/[0.06] px-4 py-3 text-right">
+              <div className="flex items-center justify-end gap-1.5 text-[11px] uppercase tracking-wider text-white/55">
+                <Wallet className="h-3 w-3" /> Your balance
+              </div>
+              <div className="font-mono text-xl text-white">${spendable.toFixed(2)}</div>
+            </div>
+            <div className="rounded-xl border border-white/12 bg-white/[0.06] px-4 py-3 text-right">
+              <div className="flex items-center justify-end gap-1.5 text-[11px] uppercase tracking-wider text-white/55">
+                <Zap className="h-3 w-3" /> Gateway credit
+              </div>
+              <div className={`font-mono text-xl ${credit?.ok ? "text-[#7ee08a]" : "text-[#ff8a80]"}`}>
+                {credit ? (credit.ok ? credit.credit.toFixed(2) : "offline") : "…"}
+              </div>
+            </div>
+          </div>
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)]">
         {/* LIST CARD */}
@@ -310,7 +340,15 @@ const Checker = () => {
         </Panel>
       </div>
 
-      <p className="mt-3 text-[12px] text-[#777]">
+      {credit && !credit.ok ? (
+        <p className="mt-3 flex items-center gap-2 rounded-xl border border-[#c62828]/35 bg-[#c62828]/10 px-3.5 py-2.5 text-[12.5px] text-[#ff8a80]">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          The checking gateway is unreachable right now — checks will fail until it is back.
+        </p>
+      ) : null}
+
+      <p className="mt-3 flex items-center gap-2 text-[12px] text-white/45">
+        <ShieldCheck className="h-3.5 w-3.5 text-[#7ee08a]" />
         The fee is charged per submitted card whatever the result. Cards go straight to the gateway — nothing is stored in plain form.
       </p>
     </AppShell>
