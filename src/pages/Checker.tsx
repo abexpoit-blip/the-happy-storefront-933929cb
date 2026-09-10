@@ -56,13 +56,15 @@ const Checker = () => {
   const [tab, setTab] = useState<Tab>("live");
   const [taskId, setTaskId] = useState<string | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [credit, setCredit] = useState<{ credit: number; ok: boolean } | null>(null);
+  const [credit, setCredit] = useState<{ credit: number; ok: boolean; error?: string } | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     void getConfig({}).then((c) => { setPrice(c.price); setGate((g) => g || c.gate); }).catch(() => undefined);
     void getGates({}).then((g) => setGates(g as Gate[])).catch(() => undefined);
-    void getCredit({}).then((c) => setCredit({ credit: c.credit, ok: c.ok })).catch(() => setCredit({ credit: 0, ok: false }));
+    void getCredit({})
+      .then((c) => setCredit({ credit: c.credit, ok: c.ok, error: "error" in c ? c.error : undefined }))
+      .catch((e) => setCredit({ credit: 0, ok: false, error: e instanceof Error ? e.message : "unreachable" }));
   }, [getConfig, getGates, getCredit]);
 
   useEffect(() => {
@@ -343,7 +345,15 @@ const Checker = () => {
       {credit && !credit.ok ? (
         <p className="mt-3 flex items-center gap-2 rounded-xl border border-[#c62828]/35 bg-[#c62828]/10 px-3.5 py-2.5 text-[12.5px] text-[#ff8a80]">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          The checking gateway is unreachable right now — checks will fail until it is back.
+          <span>
+            The checking gateway is unreachable right now — checks will fail until it is back.
+            {credit.error ? <span className="ml-1 font-mono text-white/55">({credit.error})</span> : null}
+            {credit.error?.includes("not_configured")
+              ? " The gateway key is missing on the server."
+              : credit.error?.toLowerCase().includes("ip")
+                ? " The server IP is not whitelisted on the gateway."
+                : ""}
+          </span>
         </p>
       ) : null}
 
