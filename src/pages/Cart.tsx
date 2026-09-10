@@ -360,7 +360,9 @@ const Cart = () => {
         Non-refund cards are never checked and never refunded.
       </p>
 
-      {scanning && <ScanOverlay count={pending.length} />}
+      <CheckHistory rows={history} onOpen={(rows) => setChecks(rows)} />
+
+      {scanning && <ScanOverlay count={progress.total || pending.length} done={progress.done} />}
       {checks && <CheckResultDialog checks={checks} onClose={() => { setChecks(null); void loadPending(); }} />}
     </AppShell>
   );
