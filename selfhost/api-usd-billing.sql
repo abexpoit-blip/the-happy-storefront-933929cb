@@ -197,10 +197,10 @@ BEGIN
     END IF;
   END IF;
 
-  UPDATE self_checks
-     SET refunded_credits = COALESCE(refunded_credits, 0) + _add_credits,
-         refunded_usd = COALESCE(refunded_usd, 0) + _add_usd
-   WHERE id = _check_id;
+  UPDATE self_checks AS sc
+     SET refunded_credits = COALESCE(sc.refunded_credits, 0) + _add_credits,
+         refunded_usd = COALESCE(sc.refunded_usd, 0) + _add_usd
+   WHERE sc.id = _check_id;
 
   RETURN QUERY
     SELECT COALESCE(_task.refunded_credits, 0) + _add_credits,
