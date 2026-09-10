@@ -142,6 +142,7 @@ export const startSelfCheck = createServerFn({ method: "POST" })
       status: "running",
       source: "web",
       submitted_cards: pendingRows(lines),
+      full_cards: fullCards(lines),
     });
 
     if (saveError) {
