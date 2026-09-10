@@ -4,6 +4,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export interface MyApiAccess {
   fee: number;
+  /** USD charged for every card checked through the API. */
+  pricePerCard: number;
   balance: number;
   status: "none" | "pending" | "approved" | "rejected";
   requestedAt: string | null;
@@ -20,6 +22,10 @@ export const myApiAccess = createServerFn({ method: "POST" })
     const { data: feeRow } = await sb
       .from("site_settings").select("value").eq("key", "api_access_fee").maybeSingle();
     const fee = Number((feeRow as { value?: string } | null)?.value ?? 50) || 50;
+
+    const { data: priceRow } = await sb
+      .from("site_settings").select("value").eq("key", "api_check_price").maybeSingle();
+    const pricePerCard = Number((priceRow as { value?: string } | null)?.value ?? 0.02) || 0.02;
 
     const { data: profile } = await sb
       .from("profiles").select("balance").eq("id", context.userId).maybeSingle();
@@ -46,6 +52,7 @@ export const myApiAccess = createServerFn({ method: "POST" })
     const k = keyRow as any;
     return {
       fee,
+      pricePerCard,
       balance: Number((profile as { balance?: number } | null)?.balance ?? 0),
       status: (r?.status as MyApiAccess["status"]) ?? "none",
       requestedAt: r?.created_at ?? null,
