@@ -17,6 +17,7 @@ const AdminPaymentGateway = () => {
   const [plisioKey, setPlisioKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [keyExists, setKeyExists] = useState(false);
+  const [keyValid, setKeyValid] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingKey, setSavingKey] = useState(false);
@@ -39,6 +40,7 @@ const AdminPaymentGateway = () => {
     try {
       const res = await plisioKeyStatus();
       setKeyExists(res.configured);
+      setKeyValid(res.valid);
     } catch { /* ignore */ }
   };
 
@@ -90,7 +92,8 @@ const AdminPaymentGateway = () => {
             <AlertTriangle className="h-4 w-4 text-primary-glow shrink-0 mt-0.5" />
             <p className="text-xs text-muted-foreground">
               Your Plisio secret key is stored securely on the server. It is never sent to the browser.
-              {keyExists && <span className="text-success ml-1 font-semibold">✓ Key is configured</span>}
+              {keyExists && keyValid && <span className="text-success ml-1 font-semibold">✓ Key is valid and online</span>}
+              {keyExists && !keyValid && <span className="text-destructive ml-1 font-semibold">✕ Key is configured but invalid</span>}
               {!keyExists && <span className="text-warning ml-1 font-semibold">⚠ No key configured — deposits won't work</span>}
             </p>
           </div>

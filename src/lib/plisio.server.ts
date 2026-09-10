@@ -17,7 +17,7 @@ export interface NewInvoice {
 }
 
 function apiKey(): string {
-  const k = process.env.PLISIO_API_KEY;
+  const k = process.env.PLISIO_API_KEY?.trim();
   if (!k) throw new Error("payment_gateway_not_configured");
   return k;
 }

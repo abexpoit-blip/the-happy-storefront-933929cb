@@ -146,7 +146,17 @@ export const checkDepositStatus = createServerFn({ method: "POST" })
     };
   });
 
-/** Reports whether the Plisio API key is configured on the server (never returns the key). */
-export const plisioKeyStatus = createServerFn({ method: "GET" }).handler(async () => ({
-  configured: Boolean(process.env.PLISIO_API_KEY),
-}));
+/** Validates the server-side Plisio key without ever returning it. */
+export const plisioKeyStatus = createServerFn({ method: "GET" }).handler(async () => {
+  if (!process.env.PLISIO_API_KEY?.trim()) {
+    return { configured: false, valid: false };
+  }
+
+  try {
+    const { gatewayPing } = await import("@/lib/plisio.server");
+    await gatewayPing();
+    return { configured: true, valid: true };
+  } catch {
+    return { configured: true, valid: false };
+  }
+});
