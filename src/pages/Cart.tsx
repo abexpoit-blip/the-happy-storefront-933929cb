@@ -528,6 +528,11 @@ const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: 
   const refunded = dead.reduce((s, c) => s + Number(c.refunded), 0);
   const rate = checks.length ? Math.round((live.length / checks.length) * 100) : 0;
   const fee = checks.reduce((s, c) => s + Number(c.fee ?? 0), 0);
+  const copyAll = async () => {
+    const output = checks.map((c) => `${c.bin || ""}••••${c.last_digits || ""} | ${c.status.toUpperCase()}${c.status === "dead" ? ` | REFUND $${Number(c.refunded).toFixed(2)}` : ""}`).join("\n");
+    await navigator.clipboard.writeText(output);
+    toast.success("Results copied");
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#060b18]/80 backdrop-blur-sm p-4">
@@ -536,9 +541,10 @@ const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: 
           <span className="text-[14px] font-semibold text-white inline-flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-[#f9a825]" /> Check result (refund cards)
           </span>
-          <span className="rounded-full bg-[#2e7d32]/20 text-[#7ee08a] border border-[#2e7d32]/40 px-2.5 py-0.5 text-[11.5px] font-mono">
-            LIVE {rate}%
-          </span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => void copyAll()} className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1 text-[11.5px] text-white/65 hover:bg-white/10" title="Copy all results"><Copy className="h-3.5 w-3.5" /> Copy all</button>
+            <span className="rounded-full bg-[#2e7d32]/20 text-[#7ee08a] border border-[#2e7d32]/40 px-2.5 py-0.5 text-[11.5px] font-mono">LIVE {rate}%</span>
+          </div>
         </div>
 
         <div className="grid grid-cols-3 text-center text-[13px] border-b border-white/10">
