@@ -121,7 +121,8 @@ export const listProducts = async (
     .select("*")
     .order("created_at", { ascending: false })
     .limit(limit);
-  if (!opts.includeInactive) q = q.eq("active", true);
+  // A sold-out card must never stay on the shelf, even if `active` was not flipped.
+  if (!opts.includeInactive) q = q.eq("active", true).or("delivery_type.neq.key,stock.gt.0");
   if (opts.categoryId) q = q.eq("category_id", opts.categoryId);
   if (opts.search?.trim()) q = q.ilike("title", `%${opts.search.trim()}%`);
   const { data, error } = await q;
