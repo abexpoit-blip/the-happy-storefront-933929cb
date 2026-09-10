@@ -15,14 +15,16 @@ export interface MyApiAccess {
 export const myApiAccess = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<MyApiAccess> => {
-    const { data: feeRow } = await context.supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = context.supabase as any;
+    const { data: feeRow } = await sb
       .from("site_settings").select("value").eq("key", "api_access_fee").maybeSingle();
     const fee = Number((feeRow as { value?: string } | null)?.value ?? 50) || 50;
 
-    const { data: profile } = await context.supabase
+    const { data: profile } = await sb
       .from("profiles").select("balance").eq("id", context.userId).maybeSingle();
 
-    const { data: reqRow } = await context.supabase
+    const { data: reqRow } = await sb
       .from("api_access_requests")
       .select("status, created_at, admin_note")
       .eq("user_id", context.userId)
@@ -30,7 +32,7 @@ export const myApiAccess = createServerFn({ method: "POST" })
       .limit(1)
       .maybeSingle();
 
-    const { data: keyRow } = await context.supabase
+    const { data: keyRow } = await sb
       .from("api_keys")
       .select("label, prefix, credits, active, locked_ip")
       .eq("user_id", context.userId)
@@ -65,7 +67,8 @@ export const requestApiAccess = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({ purpose: z.string().max(300).optional() }).parse(input ?? {}))
   .handler(async ({ data, context }) => {
-    const { data: id, error } = await context.supabase.rpc("request_api_access", {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: id, error } = await (context.supabase as any).rpc("request_api_access", {
       _purpose: data.purpose ?? null,
     });
     if (error) {
