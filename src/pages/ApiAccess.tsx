@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { ScorpionShell } from "@/components/ScorpionShell";
+import { AppShell } from "@/components/AppShell";
+import { Seo } from "@/components/Seo";
 import { PageHero, StatCard } from "@/components/PageHero";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,23 +65,27 @@ const ApiAccess = () => {
   const enough = balance >= fee;
 
   return (
-    <ScorpionShell>
+    <AppShell>
+      <Seo title="Checker API | Zoru Shop" description="Use the Zoru card checker from your own bot or site." path="/api-access" />
       <PageHero
-        title="Checker API"
-        subtitle="Run card checks from your own bot, site or script — straight from our server."
+        eyebrow="Developer access"
+        eyebrowIcon={Terminal}
+        title="Checker"
+        highlight="API"
+        description="Run card checks from your own bot, site or script — straight from our server."
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Access fee" value={`$${fee.toFixed(2)}`} icon={<KeyRound className="h-5 w-5" />} />
-        <StatCard label="Your balance" value={`$${balance.toFixed(2)}`} icon={<Wallet className="h-5 w-5" />} />
+      <div className="grid gap-4 sm:grid-cols-3 mb-5">
+        <StatCard label="Access fee" value={`$${fee.toFixed(2)}`} icon={KeyRound} />
+        <StatCard label="Your balance" value={`$${balance.toFixed(2)}`} icon={Wallet} tone="green" />
         <StatCard
           label="Status"
           value={info?.key ? (info.key.active ? "Active" : "Disabled") : (info?.status ?? "none")}
-          icon={<ShieldCheck className="h-5 w-5" />}
+          icon={ShieldCheck} tone="amber"
         />
       </div>
 
-      <div className="rounded-2xl border border-[#e6e6e6] bg-white p-5 space-y-4">
+      <div className="rounded-2xl border border-[#e6e6e6] bg-white p-5 space-y-4 mt-5">
         {info?.key ? (
           <>
             <div className="font-semibold">Your API key</div>
@@ -127,7 +132,7 @@ const ApiAccess = () => {
         )}
       </div>
 
-      <div className="rounded-2xl border border-[#e6e6e6] bg-white p-5 space-y-4">
+      <div className="rounded-2xl border border-[#e6e6e6] bg-white p-5 space-y-4 mt-5">
         <div className="flex items-center gap-2 font-semibold"><Terminal className="h-4 w-4" /> API documentation</div>
         <div className="text-[13px] text-[#555]">
           Base URL <code className="font-mono">{BASE}</code>. Send your key in the <code>x-api-key</code> header on every
@@ -175,7 +180,7 @@ const ApiAccess = () => {
           <br />Card format: <code>PAN|MM|YYYY|CVV</code>, max 500 cards per request. Poll results every 10–15 seconds.
         </div>
       </div>
-    </ScorpionShell>
+    </AppShell>
   );
 };
 
