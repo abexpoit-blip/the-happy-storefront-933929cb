@@ -142,24 +142,63 @@ export const pollSelfCheck = createServerFn({ method: "POST" })
     if (!task) throw new Error("task_not_found");
 
     const { getResults, verdict } = await import("@/lib/checkerccv.server");
-    const page = await getResults(data.taskId, 0, 500);
 
-    const rows: SelfCheckRow[] = page.results.map((r) => {
-      const pan = digits(String(r.card ?? "").split("|")[0] ?? "");
-      const v = verdict(r.category);
-      const cat = String(r.category ?? "").toLowerCase();
-      return {
-        card: mask(pan),
-        status: v ?? (cat.includes("skip") ? "skipped" : "error"),
-        category: String(r.category ?? ""),
-        msg: String(r.result?.msg ?? ""),
-      };
-    });
+    // Results are cursor-paginated and arrive gradually — keep what we already stored.
+    const stored: SelfCheckRow[] = Array.isArray(task.results) ? (task.results as SelfCheckRow[]) : [];
+    const rows: SelfCheckRow[] = [...stored];
+    let cursor = rows.length;
+    let status = String(task.status ?? "running");
 
-    const done = page.status === "completed" || page.status === "cancelled";
+    for (let page = 0; page < 4; page++) {
+      const res = await getResults(data.taskId, cursor, 500);
+      status = res.status;
+      const mapped: SelfCheckRow[] = res.results.map((r) => {
+        const pan = digits(String(r.card ?? "").split("|")[0] ?? "");
+        const v = verdict(r.category);
+        const cat = String(r.category ?? "").toLowerCase();
+        return {
+          card: mask(pan),
+          status: v ?? (cat.includes("skip") ? "skipped" : "error"),
+          category: String(r.category ?? ""),
+          msg: String(r.result?.msg ?? ""),
+        };
+      });
+      rows.push(...mapped);
+      const next = res.nextCursor > cursor ? res.nextCursor : cursor + mapped.length;
+      if (mapped.length === 0 || next <= cursor) break;
+      cursor = next;
+    }
+
+    const done = status === "completed" || status === "cancelled";
     await db.from("self_checks")
       .update({ results: rows, status: done ? "completed" : "running" })
       .eq("id", task.id);
 
-    return { done, status: page.status, total: Number(task.total ?? 0), rows };
+    return { done, status, total: Number(task.total ?? 0), rows };
+  });
+
+/** Recent self-check tasks for the signed-in user (survives page reloads). */
+export const listSelfChecks = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabaseAdmin as any)
+      .from("self_checks")
+      .select("task_id, gate, total, cost, status, results, created_at")
+      .eq("user_id", context.userId)
+      .order("created_at", { ascending: false })
+      .limit(10);
+    return ((data ?? []) as {
+      task_id: string; gate: string; total: number; cost: number;
+      status: string; results: SelfCheckRow[] | null; created_at: string;
+    }[]).map((t) => ({
+      taskId: t.task_id,
+      gate: t.gate,
+      total: Number(t.total ?? 0),
+      cost: Number(t.cost ?? 0),
+      status: t.status,
+      rows: Array.isArray(t.results) ? t.results : [],
+      createdAt: t.created_at,
+    }));
   });
