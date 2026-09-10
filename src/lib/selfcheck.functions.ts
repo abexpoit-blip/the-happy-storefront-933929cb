@@ -136,6 +136,7 @@ export const startSelfCheck = createServerFn({ method: "POST" })
       total: lines.length,
       cost: Number(cost ?? 0),
       status: "running",
+      source: "web",
       submitted_cards: pendingRows(lines),
     });
 
