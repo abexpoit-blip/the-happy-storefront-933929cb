@@ -3,18 +3,27 @@ import { AdminLayout } from "@/components/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useServerFn } from "@tanstack/react-start";
-import { adminCheckerLogs, adminDeleteCheckerLogs, type AdminCheckRun } from "@/lib/adminChecker.functions";
+import {
+  adminCheckerLogs,
+  adminCheckerExport,
+  adminDeleteCheckerLogs,
+  adminPurgeCheckerLogs,
+  type AdminCheckRun,
+} from "@/lib/adminChecker.functions";
 import { toast } from "sonner";
-import { Activity, Download, Trash2, RefreshCw, ChevronDown, ChevronRight, Search } from "lucide-react";
+import { Activity, Download, Trash2, RefreshCw, ChevronDown, ChevronRight, Search, Copy } from "lucide-react";
 
 const today = () => new Date().toISOString().slice(0, 10);
+const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
 
 const statusColor = (s: string) =>
   s === "live" ? "text-emerald-600" : s === "dead" ? "text-rose-600" : "text-amber-600";
 
 const AdminCheckerLogs = () => {
   const load = useServerFn(adminCheckerLogs);
+  const exportFile = useServerFn(adminCheckerExport);
   const removeLogs = useServerFn(adminDeleteCheckerLogs);
+  const purge = useServerFn(adminPurgeCheckerLogs);
 
   const [day, setDay] = useState(today());
   const [search, setSearch] = useState("");
@@ -44,23 +53,25 @@ const AdminCheckerLogs = () => {
     return { runs: runs.length, cards, live, dead };
   }, [runs]);
 
-  const exportDay = () => {
-    const lines = [
-      "time|user|source|gate|card|status|category|message",
-      ...runs.flatMap((r) =>
-        r.rows.map((c) =>
-          [new Date(r.createdAt).toISOString(), r.who, r.source, r.gate, c.card, c.status, c.category, c.msg]
-            .map((v) => String(v ?? "").replace(/\|/g, "/"))
-            .join("|"),
-        ),
-      ),
-    ];
-    const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+  const save = (name: string, text: string) => {
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `checker-${day}.txt`;
+    a.download = name;
     a.click();
     URL.revokeObjectURL(a.href);
+  };
+
+  const download = async (opts: { liveOnly: boolean; format: "txt" | "csv"; from: string; to?: string }) => {
+    try {
+      const res = await exportFile({
+        data: { from: opts.from, to: opts.to, liveOnly: opts.liveOnly, format: opts.format, search },
+      });
+      if (!res.rows) { toast.error("Nothing to export for this selection"); return; }
+      const scope = opts.to && opts.to !== opts.from ? `${opts.from}_${opts.to}` : opts.from;
+      save(`checker-${opts.liveOnly ? "live-" : ""}${scope}.${opts.format}`, res.content);
+      toast.success(`${res.rows} card(s) exported`);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Export failed"); }
   };
 
   const deleteRun = async (taskId: string) => {
@@ -80,6 +91,20 @@ const AdminCheckerLogs = () => {
       refresh();
     } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
   };
+
+  const purgeOld = async () => {
+    if (!confirm("Delete every checker log older than 30 days?")) return;
+    try {
+      const res = await purge({ data: { days: 30 } });
+      toast.success(`${res.deleted} old run(s) removed`);
+      refresh();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
+  };
+
+  const copy = (v: string) => { navigator.clipboard.writeText(v); toast.success("Copied"); };
+
+  const copyRun = (r: AdminCheckRun) =>
+    copy(r.rows.map((c) => `${c.full ?? c.card} | ${c.status.toUpperCase()} | ${c.msg}`).join("\n"));
 
   const toggle = (id: string) =>
     setOpen((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -112,12 +137,32 @@ const AdminCheckerLogs = () => {
           />
         </div>
         <Button variant="outline" onClick={refresh}><RefreshCw className="h-4 w-4 mr-2" />Refresh</Button>
-        <Button variant="outline" onClick={exportDay} disabled={!runs.length}>
-          <Download className="h-4 w-4 mr-2" />Daily file
-        </Button>
-        <Button variant="destructive" onClick={deleteDay} disabled={!runs.length}>
-          <Trash2 className="h-4 w-4 mr-2" />Delete day
-        </Button>
+      </div>
+
+      <div className="rounded-2xl border border-border/60 bg-card/60 p-4 space-y-3">
+        <div className="text-[13px] font-semibold">Daily files — full card details, kept for 30 days</div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => download({ liveOnly: false, format: "txt", from: day })}>
+            <Download className="h-4 w-4 mr-2" />All checks (.txt)
+          </Button>
+          <Button variant="outline" onClick={() => download({ liveOnly: false, format: "csv", from: day })}>
+            <Download className="h-4 w-4 mr-2" />All checks (.csv)
+          </Button>
+          <Button onClick={() => download({ liveOnly: true, format: "txt", from: day })}>
+            <Download className="h-4 w-4 mr-2" />LIVE only — this day
+          </Button>
+          <Button variant="secondary" onClick={() => download({ liveOnly: true, format: "csv", from: daysAgo(29), to: day })}>
+            <Download className="h-4 w-4 mr-2" />LIVE — last 30 days (.csv)
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Button variant="destructive" onClick={deleteDay} disabled={!runs.length}>
+            <Trash2 className="h-4 w-4 mr-2" />Delete this day
+          </Button>
+          <Button variant="outline" onClick={purgeOld}>
+            <Trash2 className="h-4 w-4 mr-2" />Purge older than 30 days
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-border/60 bg-card/60 overflow-hidden">
@@ -148,6 +193,9 @@ const AdminCheckerLogs = () => {
                   <div className="text-sm text-amber-600">{r.other} other</div>
                   <div className="ml-auto flex items-center gap-2">
                     <span className="text-[12px] text-muted-foreground">{r.status}</span>
+                    <Button size="sm" variant="ghost" title="Copy full list" onClick={() => copyRun(r)}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={() => deleteRun(r.taskId)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -157,22 +205,28 @@ const AdminCheckerLogs = () => {
                 {open.has(r.taskId) && (
                   <div className="bg-secondary/20 px-4 pb-4">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-[13px]">
+                      <table className="w-full text-[13px] min-w-[760px]">
                         <thead className="text-muted-foreground">
                           <tr>
-                            <th className="text-left py-2">Card</th>
+                            <th className="text-left py-2">Full card</th>
                             <th className="text-left">Status</th>
                             <th className="text-left">Category</th>
                             <th className="text-left">Message</th>
+                            <th className="text-right" />
                           </tr>
                         </thead>
                         <tbody>
                           {r.rows.map((c, i) => (
                             <tr key={`${c.card}-${i}`} className="border-t border-border/40">
-                              <td className="py-1.5 font-mono">{c.card}</td>
+                              <td className="py-1.5 font-mono">{c.full ?? c.card}</td>
                               <td className={`uppercase font-semibold ${statusColor(c.status)}`}>{c.status}</td>
                               <td>{c.category}</td>
                               <td className="text-muted-foreground">{c.msg}</td>
+                              <td className="text-right">
+                                <Button size="sm" variant="ghost" onClick={() => copy(c.full ?? c.card)}>
+                                  <Copy className="h-3.5 w-3.5" />
+                                </Button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
