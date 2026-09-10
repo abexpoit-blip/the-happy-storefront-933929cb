@@ -65,14 +65,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const watchdog = setTimeout(() => setLoading(false), 8000);
 
     try {
-      const [{ data: p, error: pErr }, { data: roles }] = await Promise.all([
+      type ProfileRow = {
+        username?: string; email?: string; avatar_url?: string | null;
+        balance?: number; bonus_balance?: number; check_credits?: number; blocked?: boolean;
+      };
+      const [profileRes, { data: roles }] = await Promise.all([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase as any).from("profiles").select("id, username, email, avatar_url, balance, bonus_balance, check_credits, blocked").eq("id", uid).maybeSingle() as Promise<{
-          data: { username?: string; email?: string; avatar_url?: string | null; balance?: number; bonus_balance?: number; check_credits?: number; blocked?: boolean } | null;
-          error: unknown;
-        }>,
+        (supabase as any).from("profiles")
+          .select("id, username, email, avatar_url, balance, bonus_balance, check_credits, blocked")
+          .eq("id", uid).maybeSingle(),
         supabase.from("user_roles").select("role").eq("user_id", uid),
       ]);
+      const p = (profileRes as { data: ProfileRow | null }).data;
+      const pErr = (profileRes as { error: unknown }).error;
       if (pErr) throw pErr;
 
       const roleList = (roles ?? []).map((r) => r.role as string);
