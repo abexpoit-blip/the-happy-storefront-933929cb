@@ -436,6 +436,64 @@ const ScanOverlay = ({ count, done = 0 }: { count: number; done?: number }) => {
 };
 
 
+/** Persistent check history — survives reloads because it is read from the database. */
+const CheckHistory = ({ rows, onOpen }: { rows: CardCheck[]; onOpen: (rows: CardCheck[]) => void }) => {
+  if (!rows.length) return null;
+  const settled = rows.filter((r) => r.status !== "pending");
+  const live = settled.filter((r) => r.status === "live").length;
+  const dead = settled.filter((r) => r.status === "dead").length;
+  const refunded = settled.reduce((s, r) => s + Number(r.refunded ?? 0), 0);
+
+  return (
+    <div className="mt-6 rounded-2xl border border-white/10 bg-[#0d1526] p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-[13px] font-semibold text-white">Check history</div>
+          <div className="text-[12px] text-white/50">
+            {live} live · {dead} dead · ${refunded.toFixed(2)} refunded
+          </div>
+        </div>
+        {settled.length > 0 && (
+          <button
+            onClick={() => onOpen(settled.slice(0, 100))}
+            className="rounded-lg border border-[#2196f3]/40 bg-[#2196f3]/10 px-3 py-1.5 text-[12px] font-semibold text-[#8fd0ff] hover:bg-[#2196f3]/20"
+          >
+            Open full result
+          </button>
+        )}
+      </div>
+
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[520px] text-[12.5px]">
+          <thead>
+            <tr className="text-left text-[11px] uppercase tracking-wider text-white/40">
+              <th className="py-1.5">Date</th><th>BIN</th><th>Last</th><th>Price</th><th>Status</th><th>Refunded</th>
+            </tr>
+          </thead>
+          <tbody className="text-white/75">
+            {rows.slice(0, 20).map((r) => (
+              <tr key={r.id} className="border-t border-white/5">
+                <td className="py-1.5 whitespace-nowrap">{new Date(r.created_at).toLocaleString()}</td>
+                <td className="font-mono">{r.bin || "—"}</td>
+                <td className="font-mono">{r.last_digits || "—"}</td>
+                <td className="font-mono">${Number(r.price).toFixed(2)}</td>
+                <td>
+                  <span className={
+                    r.status === "live" ? "text-[#7ee08a] font-semibold"
+                    : r.status === "dead" ? "text-[#f56c6c] font-semibold"
+                    : "text-[#f9d27a]"
+                  }>{r.status.toUpperCase()}</span>
+                </td>
+                <td className="font-mono">${Number(r.refunded ?? 0).toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: () => void }) => {
   const live = checks.filter((c) => c.status === "live");
   const dead = checks.filter((c) => c.status === "dead");
