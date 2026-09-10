@@ -153,7 +153,7 @@ const Checker = () => {
     skipped: rows.filter((r) => r.status === "skipped").length,
   }), [rows]);
 
-  const total = busy || rows.length ? Math.max(lines.length, rows.length) : lines.length;
+  const total = Math.max(expected, rows.length, busy ? lines.length : 0) || lines.length;
   const progress = total ? Math.round((rows.length / total) * 100) : 0;
   const hitRate = rows.length ? Math.round((counts.live / rows.length) * 100) : 0;
   const visible = rows.filter((r) => r.status === tab);
