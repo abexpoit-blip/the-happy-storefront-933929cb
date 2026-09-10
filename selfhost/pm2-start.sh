@@ -9,11 +9,22 @@ PORT="${PORT:-3002}"
 
 cd "$APP_DIR"
 
+SECRET_DIR="${SECRET_DIR:-/etc/zoru}"
+
 set -a
 # shellcheck disable=SC1091
 . ./.env
+# প্রতিটি সার্ভিসের key আলাদা ফাইল থেকে লোড হয় (plisio / checkerccv / smtp / telegram)
+for f in "$SECRET_DIR"/*.env; do
+  # shellcheck disable=SC1090
+  [ -e "$f" ] && . "$f"
+done
 set +a
 export PORT
+
+for v in PLISIO_API_KEY CHECKERCCV_API_KEY CHECKERCCV_TOKEN; do
+  [ -n "${!v:-}" ] || echo "WARN: $v missing — bash selfhost/set-secrets.sh <service> $v=VALUE" >&2
+done
 
 for v in SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY; do
   if [ -z "${!v:-}" ]; then
