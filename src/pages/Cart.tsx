@@ -136,7 +136,13 @@ const Cart = () => {
           try {
             const st = await pollTask({ data: { taskId: started.taskId } });
             setProgress({ done: st.processed, total: st.total || started.total });
-            if (st.done) break;
+            if (st.done) {
+              if (st.refundedCredits > 0) {
+                toast.success(`${st.refundedCredits} credits refunded for cards the checker could not process`);
+              }
+              break;
+            }
+
           } catch { /* transient gateway error — keep polling */ }
         }
       } catch (e) {
