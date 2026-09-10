@@ -1,63 +1,104 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import Seo from "@/components/Seo";
-import { PageHero, StatCard } from "@/components/PageHero";
 import { toast } from "sonner";
-import { Loader2, Radar, ShieldCheck, ShieldOff, Wallet, CreditCard, Sparkles } from "lucide-react";
+import {
+  Loader2, Radar, CreditCard, ChevronDown, ListChecks, History, Copy, Download,
+  CheckCircle2, XCircle, AlertTriangle, SkipForward, Wallet, Gauge,
+} from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { selfCheckConfig, startSelfCheck, pollSelfCheck, type SelfCheckRow } from "@/lib/selfcheck.functions";
+import {
+  selfCheckConfig, startSelfCheck, pollSelfCheck, checkerGates,
+  type SelfCheckRow, type SelfCheckStatus,
+} from "@/lib/selfcheck.functions";
 import { useAuth } from "@/hooks/useAuth";
 
-const SCAN_STEPS = [
-  "Opening secure checker session…",
-  "Connecting to gateway node…",
-  "Submitting cards…",
-  "Reading live / dead response…",
-  "Finalizing results…",
+type Tab = SelfCheckStatus;
+
+interface Gate { id: string; description: string; credit: number }
+
+const TABS: { key: Tab; label: string; icon: typeof CheckCircle2; on: string }[] = [
+  { key: "live", label: "Live", icon: CheckCircle2, on: "bg-[#12351d] text-[#7ee08a] border-[#2e7d32]" },
+  { key: "dead", label: "Dead", icon: XCircle, on: "bg-[#3a1414] text-[#ff8a80] border-[#c62828]" },
+  { key: "error", label: "Error", icon: AlertTriangle, on: "bg-[#3a2f10] text-[#f9d27a] border-[#f9a825]" },
+  { key: "skipped", label: "Skipped", icon: SkipForward, on: "bg-[#1b2438] text-[#9fb4d8] border-[#33507f]" },
 ];
+
+const Panel = ({ title, icon: Icon, right, children, className = "" }: {
+  title: string; icon: typeof Radar; right?: React.ReactNode; children: React.ReactNode; className?: string;
+}) => (
+  <section className={`rounded-2xl border border-white/10 bg-gradient-to-b from-[#111c33] to-[#0b1striped224] bg-[#0d1628] shadow-[0_18px_50px_rgba(4,10,24,0.55)] overflow-hidden ${className}`}>
+    <header className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
+      <Icon className="h-4 w-4 text-[#5ac8fa]" />
+      <h2 className="text-[12.5px] font-semibold uppercase tracking-[0.14em] text-white/85">{title}</h2>
+      <div className="ml-auto flex items-center gap-2">{right}</div>
+    </header>
+    {children}
+  </section>
+);
 
 const Checker = () => {
   const { profile, refresh } = useAuth();
   const getConfig = useServerFn(selfCheckConfig);
+  const getGates = useServerFn(checkerGates);
   const start = useServerFn(startSelfCheck);
   const poll = useServerFn(pollSelfCheck);
 
   const [price, setPrice] = useState(0.2);
+  const [gates, setGates] = useState<Gate[]>([]);
   const [gate, setGate] = useState("");
+  const [gateOpen, setGateOpen] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [step, setStep] = useState(0);
   const [rows, setRows] = useState<SelfCheckRow[]>([]);
+  const [tab, setTab] = useState<Tab>("live");
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    void getConfig({}).then((c) => { setPrice(c.price); setGate(c.gate); }).catch(() => undefined);
-  }, [getConfig]);
+    void getConfig({}).then((c) => { setPrice(c.price); setGate((g) => g || c.gate); }).catch(() => undefined);
+    void getGates({}).then((g) => setGates(g as Gate[])).catch(() => undefined);
+  }, [getConfig, getGates]);
 
   useEffect(() => {
-    if (!busy) { setStep(0); return; }
-    const t = setInterval(() => setStep((s) => Math.min(s + 1, SCAN_STEPS.length - 1)), 1400);
-    return () => clearInterval(t);
-  }, [busy]);
+    const close = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setGateOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
 
-  const lines = useMemo(
-    () => text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean),
-    [text],
-  );
+  const lines = useMemo(() => text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean), [text]);
   const cost = Math.round(lines.length * price * 100) / 100;
   const spendable = Number(profile?.balance ?? 0) + Number(profile?.bonus_balance ?? 0);
+
+  const counts = useMemo(() => ({
+    live: rows.filter((r) => r.status === "live").length,
+    dead: rows.filter((r) => r.status === "dead").length,
+    error: rows.filter((r) => r.status === "error").length,
+    skipped: rows.filter((r) => r.status === "skipped").length,
+  }), [rows]);
+
+  const total = busy || rows.length ? Math.max(lines.length, rows.length) : lines.length;
+  const progress = total ? Math.round((rows.length / total) * 100) : 0;
+  const hitRate = rows.length ? Math.round((counts.live / rows.length) * 100) : 0;
+  const visible = rows.filter((r) => r.status === tab);
+
+  const gateLabel = gates.find((g) => g.id === gate)?.description || gate || "Select gate";
 
   const run = async () => {
     if (!lines.length) return toast.error("Paste at least one card (PAN|MM|YYYY|CVV)");
     if (lines.length > 500) return toast.error("Maximum 500 cards per run");
     if (spendable < cost) return toast.error("Insufficient balance. Please top up.");
-    setBusy(true);
-    setRows([]);
+    setBusy(true); setRows([]); setStartedAt(Date.now());
     try {
-      const task = await start({ data: { cards: lines } });
+      const task = await start({ data: { cards: lines, gate: gate || undefined } });
+      setTaskId(task.taskId);
       toast.success(`Charged $${task.cost.toFixed(2)} — checking ${task.total} card(s)`);
       void refresh?.();
-      for (let i = 0; i < 40; i++) {
-        await new Promise((r) => setTimeout(r, i === 0 ? 5000 : 7000));
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, i === 0 ? 5000 : 6000));
         const st = await poll({ data: { taskId: task.taskId } });
         if (st.rows.length) setRows(st.rows);
         if (st.done) break;
@@ -66,7 +107,7 @@ const Checker = () => {
       const m = e instanceof Error ? e.message : String(e);
       toast.error(
         m.includes("insufficient_balance") ? "Insufficient balance."
-        : m.includes("no_valid_cards") ? "No valid cards found. Use PAN|MM|YYYY|CVV per line."
+        : m.includes("no_valid_cards") ? "No valid cards. Use PAN|MM|YYYY|CVV per line."
         : m.includes("checker_not_configured") ? "Checker gateway is not configured yet."
         : m,
         { duration: 8000 },
@@ -76,117 +117,202 @@ const Checker = () => {
     }
   };
 
-  const live = rows.filter((r) => r.status === "live").length;
-  const dead = rows.filter((r) => r.status === "dead").length;
+  const exportText = visible.map((r) => `${r.card} | ${r.status.toUpperCase()} | ${r.msg || r.category}`).join("\n");
+  const copyOut = async () => {
+    if (!exportText) return toast.error("Nothing to copy");
+    await navigator.clipboard.writeText(exportText);
+    toast.success("Copied");
+  };
+  const download = () => {
+    if (!exportText) return toast.error("Nothing to export");
+    const url = URL.createObjectURL(new Blob([exportText], { type: "text/plain" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = `check-${tab}-${Date.now()}.txt`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const eta = !busy ? "Done" : startedAt && rows.length
+    ? `${Math.max(1, Math.round(((Date.now() - startedAt) / 1000 / rows.length) * (total - rows.length)))}s`
+    : "…";
 
   return (
     <AppShell>
-      <Seo
-        title="Card Checker | Zoru Shop"
-        description="Check your own cards live/dead with your balance."
-        path="/checker"
-      />
+      <Seo title="Card Checker | Zoru Shop" description="Check your own cards live/dead with your balance." path="/checker" />
 
-      <PageHero
-        eyebrow="Checker"
-        eyebrowIcon={Radar}
-        title="Live / dead"
-        highlight="card checker"
-        description={`Paste your own cards and check them through our gateway. $${price.toFixed(2)} is charged per card from your balance (bonus balance is used first).`}
-      />
-
-      <div className="grid gap-3 sm:grid-cols-3 mb-4">
-        <StatCard label="Cards to check" icon={CreditCard} tone="blue" value={lines.length} hint={gate ? `gate: ${gate}` : "—"} />
-        <StatCard label="Total cost" icon={Sparkles} tone="green" value={`$${cost.toFixed(2)}`} hint={`$${price.toFixed(2)} per card`} />
-        <StatCard label="Available balance" icon={Wallet} tone="amber" value={`$${spendable.toFixed(2)}`} hint="bonus is spent first" />
-      </div>
-
-      <div className="rounded-xl border border-[#e6e6e6] bg-white p-4 shadow-[0_2px_10px_rgba(20,30,60,0.05)]">
-        <label className="text-[13px] font-semibold text-[#1f2d3d]">Your cards — one per line</label>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          disabled={busy}
-          rows={9}
-          spellCheck={false}
-          placeholder={"4111111111111111|09|2028|123\n5555555555554444:12:2027:456"}
-          className="mt-2 w-full rounded-lg border border-[#dcdcdc] bg-[#fbfcff] p-3 font-mono text-[12.5px] text-[#1f2d3d] outline-none focus:border-[#2196f3] disabled:opacity-60"
-        />
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <span className="text-[12px] text-[#777]">Format: <span className="font-mono">PAN|MM|YYYY|CVV</span></span>
-          <button
-            onClick={() => void run()}
-            disabled={busy || !lines.length}
-            className="ml-auto h-9 px-6 rounded-md bg-gradient-to-r from-[#2196f3] to-[#5ac8fa] text-white text-[13px] font-semibold shadow-[0_6px_18px_rgba(33,150,243,0.4)] hover:brightness-110 transition disabled:opacity-60 inline-flex items-center gap-2"
-          >
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
-            Check {lines.length || ""} card{lines.length === 1 ? "" : "s"} — ${cost.toFixed(2)}
-          </button>
-        </div>
-      </div>
-
-      {(rows.length > 0 || busy) && (
-        <div className="mt-4 rounded-xl border border-[#e6e6e6] bg-white overflow-x-auto shadow-[0_2px_10px_rgba(20,30,60,0.05)]">
-          <div className="flex flex-wrap items-center gap-3 border-b border-[#f0f0f0] px-4 py-3 text-[13px]">
-            <span className="font-semibold text-[#1f2d3d]">Results</span>
-            <span className="text-[#2e7d32]">LIVE {live}</span>
-            <span className="text-[#f56c6c]">DEAD {dead}</span>
-            <span className="text-[#888]">of {rows.length}</span>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)]">
+        {/* LIST CARD */}
+        <Panel
+          title="List card"
+          icon={CreditCard}
+          right={<span className="rounded-md border border-[#c62828]/40 bg-[#c62828]/15 px-2 py-0.5 text-[11px] text-[#ff8a80]">${price.toFixed(2)} per card</span>}
+        >
+          <div className="p-3">
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              disabled={busy}
+              rows={11}
+              spellCheck={false}
+              placeholder="Enter card details here (format: XXXXXXXXXXXXXXXX|MM|YYYY|CVV)…"
+              className="w-full resize-y rounded-xl border border-white/10 bg-[#0a1222] p-3 font-mono text-[12.5px] text-white/90 placeholder:text-white/25 outline-none focus:border-[#2196f3]/60 disabled:opacity-60"
+            />
+            <div className="mt-2 flex items-center justify-between text-[11.5px] text-white/45">
+              <span>Duplicates are removed automatically</span>
+              <span className="font-mono">{lines.length}/500</span>
+            </div>
           </div>
-          <table className="w-full min-w-[560px] text-[13px]">
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={`${r.card}-${i}`} className="border-b border-[#f5f5f5]">
-                  <td className="p-2.5 font-mono text-[#333]">{r.card}</td>
-                  <td className="p-2.5 text-center">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold border ${
-                        r.status === "live"
-                          ? "bg-[#e8f5e9] text-[#2e7d32] border-[#c8e6c9]"
-                          : r.status === "dead"
-                            ? "bg-[#fdecea] text-[#c62828] border-[#f5c6c3]"
-                            : "bg-[#f6f6f6] text-[#999] border-[#e6e6e6]"
-                      }`}
-                    >
-                      {r.status === "live" ? <ShieldCheck className="h-3 w-3" /> : <ShieldOff className="h-3 w-3" />}
-                      {r.status.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="p-2.5 text-[12px] text-[#666]">{r.msg || r.category || "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+        </Panel>
+
+        {/* GATE */}
+        <Panel title="Gate" icon={Gauge}>
+          <div className="p-3" ref={boxRef}>
+            <button
+              onClick={() => setGateOpen((o) => !o)}
+              disabled={busy}
+              className="flex w-full items-center gap-2 rounded-xl border border-white/12 bg-[#0a1222] px-3.5 py-3 text-left text-[13px] text-white/90 hover:border-[#2196f3]/50 transition disabled:opacity-60"
+            >
+              <span className="truncate">{gateLabel}</span>
+              <ChevronDown className={`ml-auto h-4 w-4 text-white/50 transition ${gateOpen ? "rotate-180" : ""}`} />
+            </button>
+            {gateOpen && (
+              <div className="mt-2 max-h-64 overflow-y-auto rounded-xl border border-white/12 bg-[#0a1222] shadow-[0_20px_50px_rgba(0,0,0,0.6)]">
+                {gates.length === 0 && <div className="px-3.5 py-3 text-[12.5px] text-white/45">No gates available</div>}
+                {gates.map((g) => (
+                  <button
+                    key={g.id}
+                    onClick={() => { setGate(g.id); setGateOpen(false); }}
+                    className={`flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[12.5px] transition hover:bg-white/[0.06] ${g.id === gate ? "text-[#5ac8fa]" : "text-white/80"}`}
+                  >
+                    <span className="truncate">{g.description}</span>
+                    {g.credit > 0 && <span className="ml-auto shrink-0 font-mono text-[11px] text-white/40">{g.credit}cr</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-3 grid grid-cols-2 gap-2 text-[12px]">
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                <div className="text-white/45">Total cost</div>
+                <div className="font-mono text-[15px] text-[#7ee08a]">${cost.toFixed(2)}</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                <div className="flex items-center gap-1 text-white/45"><Wallet className="h-3 w-3" /> Balance</div>
+                <div className="font-mono text-[15px] text-white/90">${spendable.toFixed(2)}</div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => void run()}
+              disabled={busy || !lines.length}
+              className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#2196f3] to-[#5ac8fa] text-[13.5px] font-semibold text-white shadow-[0_10px_26px_rgba(33,150,243,0.4)] transition hover:brightness-110 disabled:opacity-50"
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radar className="h-4 w-4" />}
+              {busy ? "Checking…" : `Start check${lines.length ? ` (${lines.length})` : ""}`}
+            </button>
+          </div>
+        </Panel>
+
+        {/* TASK & HISTORY */}
+        <Panel title="Task & history" icon={History}>
+          <div className="p-3">
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+              <div className="flex items-center justify-between">
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${busy ? "bg-[#2196f3]/15 text-[#5ac8fa]" : "bg-white/10 text-white/60"}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${busy ? "bg-[#5ac8fa] animate-pulse" : "bg-white/40"}`} />
+                  {busy ? "RUNNING" : "READY"}
+                </span>
+                <span className="font-mono text-[11px] text-white/35">{taskId ? taskId.slice(-8) : "--------"}</span>
+              </div>
+
+              <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                <div className="h-full rounded-full bg-gradient-to-r from-[#2196f3] to-[#43a047] transition-all" style={{ width: `${progress}%` }} />
+              </div>
+              <div className="mt-1 text-right font-mono text-[11px] text-white/45">{progress}%</div>
+
+              <div className="mt-3 grid grid-cols-4 gap-1.5 text-center text-[11.5px]">
+                <div className="rounded-lg bg-[#12351d] py-1.5 font-mono text-[#7ee08a]">{counts.live}</div>
+                <div className="rounded-lg bg-[#3a1414] py-1.5 font-mono text-[#ff8a80]">{counts.dead}</div>
+                <div className="rounded-lg bg-[#3a2f10] py-1.5 font-mono text-[#f9d27a]">{counts.error}</div>
+                <div className="rounded-lg bg-white/[0.06] py-1.5 font-mono text-white/60">{counts.skipped}</div>
+              </div>
+
+              <dl className="mt-3 space-y-1.5 text-[12px]">
+                <div className="flex justify-between"><dt className="text-white/45">Progress</dt><dd className="font-mono text-white/80">{rows.length}/{total}</dd></div>
+                <div className="flex justify-between"><dt className="text-white/45">ETA</dt><dd className="font-mono text-white/80">{eta}</dd></div>
+                <div className="flex justify-between"><dt className="text-white/45">Hit rate</dt><dd className="font-mono text-[#7ee08a]">{hitRate}%</dd></div>
+                <div className="flex justify-between"><dt className="text-white/45">Charged</dt><dd className="font-mono text-white/80">${cost.toFixed(2)}</dd></div>
+              </dl>
+            </div>
+          </div>
+        </Panel>
+      </div>
+
+      {/* RESULT */}
+      <div className="mt-4">
+        <Panel
+          title="Result"
+          icon={ListChecks}
+          right={
+            <>
+              <button onClick={() => void copyOut()} className="inline-flex items-center gap-1 rounded-md border border-white/12 px-2.5 py-1 text-[11.5px] text-white/70 hover:bg-white/[0.06]">
+                <Copy className="h-3 w-3" /> Copy
+              </button>
+              <button onClick={download} className="inline-flex items-center gap-1 rounded-md border border-white/12 px-2.5 py-1 text-[11.5px] text-white/70 hover:bg-white/[0.06]">
+                <Download className="h-3 w-3" /> Export
+              </button>
+            </>
+          }
+        >
+          <div className="flex flex-wrap gap-2 px-3 pt-3">
+            {TABS.map((t) => {
+              const active = tab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-[12.5px] font-semibold transition ${
+                    active ? t.on : "border-white/10 bg-white/[0.03] text-white/55 hover:bg-white/[0.06]"
+                  }`}
+                >
+                  <t.icon className="h-3.5 w-3.5" />
+                  {t.label}
+                  <span className="rounded-full bg-black/30 px-1.5 py-0.5 font-mono text-[11px]">{counts[t.key]}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="p-3">
+            <div className="min-h-[220px] rounded-xl border-l-2 border-[#2e7d32] bg-[#0a1222] p-3">
+              {visible.length === 0 ? (
+                <p className="font-mono text-[12.5px] italic text-white/30">
+                  {busy ? "Waiting for gateway results…" : `No ${tab} cards yet`}
+                </p>
+              ) : (
+                <ul className="space-y-1">
+                  {visible.map((r, i) => (
+                    <li key={`${r.card}-${i}`} className="flex flex-wrap items-center gap-2 font-mono text-[12.5px] text-white/85">
+                      <span>{r.card}</span>
+                      <span className="text-white/25">|</span>
+                      <span className={
+                        r.status === "live" ? "text-[#7ee08a]"
+                        : r.status === "dead" ? "text-[#ff8a80]"
+                        : r.status === "error" ? "text-[#f9d27a]" : "text-white/50"
+                      }>{r.status.toUpperCase()}</span>
+                      <span className="text-white/25">|</span>
+                      <span className="text-white/50">{r.msg || r.category || "—"}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </Panel>
+      </div>
 
       <p className="mt-3 text-[12px] text-[#777]">
-        The fee is charged per submitted card, whatever the result. Cards are sent to the gateway only — nothing is stored in plain form.
+        The fee is charged per submitted card whatever the result. Cards go straight to the gateway — nothing is stored in plain form.
       </p>
-
-      {busy && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#060b18]/80 backdrop-blur-xl p-4">
-          <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-white/15 bg-white/[0.06] p-8 text-center shadow-[0_30px_80px_rgba(0,0,0,0.65)] backdrop-blur-2xl">
-            <div className="pointer-events-none absolute -top-24 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-[#2196f3]/30 blur-3xl" />
-            <div className="relative mx-auto h-24 w-24">
-              <span className="absolute inset-0 rounded-full border border-white/20 animate-ping" />
-              <span className="absolute inset-4 rounded-full bg-white/10 backdrop-blur-md" />
-              <span className="absolute inset-0 grid place-items-center">
-                <Radar className="h-9 w-9 text-[#5ac8fa] animate-spin [animation-duration:2.4s]" />
-              </span>
-            </div>
-            <div className="relative mt-6 text-[15.5px] font-semibold text-white">Checking {lines.length} card(s)…</div>
-            <ul className="relative mt-5 space-y-1.5 text-left">
-              {SCAN_STEPS.map((s, i) => (
-                <li key={s} className={`flex items-center gap-2 text-[12px] ${i <= step ? "text-white/85" : "text-white/30"}`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${i < step ? "bg-[#7ee08a]" : i === step ? "bg-[#5ac8fa] animate-pulse" : "bg-white/25"}`} />
-                  {s}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
     </AppShell>
   );
 };
