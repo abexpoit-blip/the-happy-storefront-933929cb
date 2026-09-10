@@ -61,6 +61,7 @@ const ApiAccess = () => {
   };
 
   const fee = info?.fee ?? 50;
+  const price = info?.pricePerCard ?? 0.02;
   const balance = info?.balance ?? 0;
   const enough = balance >= fee;
 
@@ -76,7 +77,7 @@ const ApiAccess = () => {
       />
 
       <div className="grid gap-4 sm:grid-cols-3 mb-5">
-        <StatCard label="Access fee" value={`$${fee.toFixed(2)}`} icon={KeyRound} />
+        <StatCard label="Access fee" value={`$${fee.toFixed(2)}`} icon={KeyRound} hint={`Then $${(info?.pricePerCard ?? 0.02).toFixed(2)} per card checked`} />
         <StatCard label="Your balance" value={`$${balance.toFixed(2)}`} icon={Wallet} tone="green" />
         <StatCard
           label="Status"
@@ -90,7 +91,7 @@ const ApiAccess = () => {
           <>
             <div className="font-semibold">Your API key</div>
             <div className="text-[13px] text-[#555]">
-              <code className="font-mono">{info.key.prefix}…</code> · {info.key.credits} credits ·
+              <code className="font-mono">{info.key.prefix}…</code> · {info.key.credits} credits · ${price.toFixed(2)} per card ·
               {" "}{info.key.lockedIp ? `locked to ${info.key.lockedIp}` : "IP locks on first call"}
             </div>
             <div className="text-[12.5px] text-[#777]">
@@ -106,7 +107,8 @@ const ApiAccess = () => {
             <div className="font-semibold">Request API access</div>
             <div className="text-[13px] text-[#555]">
               API access costs <b>${fee.toFixed(2)}</b>, taken from your balance once. After approval you receive one
-              private key bound to your account and to one server IP.
+              private key bound to your account and to one server IP. Each card you check through the API then costs
+              <b> ${price.toFixed(2)}</b>, taken from your key credits first and from your account balance after that.
             </div>
             <Input
               value={purpose}
@@ -159,7 +161,9 @@ const ApiAccess = () => {
   }'
 
 # → { "status":"success", "task_id":"...", "total":1,
-#     "credits_charged":30, "credits_left":9970 }`}
+#     "price_per_card":0.02, "cost_usd":0.02,
+#     "credits_charged":20, "balance_charged":0,
+#     "credits_left":9980, "balance_left":42.5 }`}
         />
 
         <Snippet
@@ -170,6 +174,7 @@ const ApiAccess = () => {
   -d '{ "task_id": "TASK_ID" }'
 
 # → { "status":"success", "done":true, "total":1, "answered":1,
+#     "credits_refunded":0, "balance_refunded":0,
 #     "results":[{ "card":"411111****1111", "status":"live",
 #                  "category":"Approved", "msg":"..." }] }`}
         />
@@ -178,13 +183,14 @@ const ApiAccess = () => {
           title="3. Balance — GET /api/public/checker/balance"
           code={`curl ${BASE}/api/public/checker/balance -H "x-api-key: YOUR_KEY"
 
-# → { "status":"success", "label":"my-bot", "credits":9970 }`}
+# → { "status":"success", "label":"my-bot", "credits":9980,
+#     "balance":42.5, "price_per_card":0.02, "cards_affordable":2624 }`}
         />
 
         <div className="text-[12.5px] text-[#777] leading-relaxed">
           Errors return <code>{`{ "status":"error", "message":"..." }`}</code>:
           {" "}<code>missing_api_key</code> (401), <code>key_disabled</code> / <code>ip_not_allowed</code> (403),
-          {" "}<code>insufficient_credits</code> / <code>daily_limit_reached</code> (402),
+          {" "}<code>insufficient_balance</code> / <code>insufficient_credits</code> / <code>daily_limit_reached</code> (402),
           {" "}<code>no_valid_cards</code> / <code>invalid_body</code> (400).
           <br />Card format: <code>PAN|MM|YYYY|CVV</code>, max 500 cards per request. Poll results every 10–15 seconds.
         </div>
