@@ -126,9 +126,37 @@ export const pollCheckerTask = createServerFn({ method: "POST" })
     }
 
     const done = status === "completed" || status === "cancelled";
+
+    // Cards the gateway never answered are not billed — give those credits back once.
+    let refundedCredits = Number(taskRow.refunded_credits ?? 0);
+    if (done) {
+      const ids = Object.values(mapping);
+      if (ids.length) {
+        const { data: leftRaw } = await db
+          .from("card_checks")
+          .select("id")
+          .in("id", ids)
+          .eq("user_id", context.userId)
+          .eq("status", "pending")
+          .eq("credits_refunded", false);
+        const left = ((leftRaw ?? []) as { id: string }[]).map((r) => r.id);
+        if (left.length) {
+          const { data: costRow } = await db
+            .from("site_settings").select("value").eq("key", "check_credit_cost").maybeSingle();
+          const creditCost = Number((costRow as { value?: string } | null)?.value ?? 30) || 30;
+          const give = left.length * creditCost;
+          if (give > 0) {
+            await db.rpc("refund_check_credits", { _user_id: context.userId, _credits: give });
+            await db.from("card_checks").update({ credits_refunded: true }).in("id", left);
+            refundedCredits += give;
+          }
+        }
+      }
+    }
+
     await db
       .from("checker_tasks")
-      .update({ settled, status: done ? "completed" : "running" })
+      .update({ settled, status: done ? "completed" : "running", refunded_credits: refundedCredits })
       .eq("id", taskRow.id);
 
     return {
@@ -137,7 +165,9 @@ export const pollCheckerTask = createServerFn({ method: "POST" })
       total: Number(taskRow.total ?? 0),
       processed,
       settled,
+      refundedCredits,
     };
+
   });
 
 /** Admin: gateway credit + available gates. */

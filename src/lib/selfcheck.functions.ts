@@ -170,11 +170,29 @@ export const pollSelfCheck = createServerFn({ method: "POST" })
     }
 
     const done = status === "completed" || status === "cancelled";
+
+    // Only cards the gateway actually answered (LIVE / DEAD) are billed.
+    // Errors, skips and cards that never came back are refunded once.
+    let refunded = Number(task.refunded_credits ?? 0);
+    const total = Number(task.total ?? 0);
+    const answered = rows.filter((r) => r.status === "live" || r.status === "dead").length;
+    if (done) {
+      const { data: costRow } = await db
+        .from("site_settings").select("value").eq("key", "check_credit_cost").maybeSingle();
+      const creditCost = Number((costRow as { value?: string } | null)?.value ?? 30) || 30;
+      const owed = Math.max(0, total - answered) * creditCost - refunded;
+      if (owed > 0) {
+        await db.rpc("refund_check_credits", { _user_id: context.userId, _credits: owed });
+        refunded += owed;
+      }
+    }
+
     await db.from("self_checks")
-      .update({ results: rows, status: done ? "completed" : "running" })
+      .update({ results: rows, status: done ? "completed" : "running", refunded_credits: refunded })
       .eq("id", task.id);
 
-    return { done, status, total: Number(task.total ?? 0), rows };
+    return { done, status, total, rows, answered, refundedCredits: refunded };
+
   });
 
 /** Recent self-check tasks for the signed-in user (survives page reloads). */
