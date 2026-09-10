@@ -63,21 +63,29 @@ export const Route = createFileRoute("/api/public/checker/result")({
         const total = Number(task.total ?? 0);
         const answered = rows.filter((r) => r.status === "live" || r.status === "dead").length;
 
-        // Only answered cards stay charged.
-        let refunded = Number(task.refunded_credits ?? 0);
-        if (done) {
-          const { data: costRow } = await db
-            .from("site_settings").select("value").eq("key", "check_credit_cost").maybeSingle();
-          const creditCost = Number(costRow?.value ?? 30) || 30;
-          const owed = Math.max(0, total - answered) * creditCost - refunded;
-          if (owed > 0) {
-            await refundApiKey(auth.key.id, owed);
-            refunded += owed;
+        // Only answered cards stay charged — unanswered ones are paid back
+        // exactly the way they were taken (credits first, then balance).
+        let refundedCredits = Number(task.refunded_credits ?? 0);
+        let refundedUsd = Number(task.refunded_usd ?? 0);
+        if (done && total > 0) {
+          const share = Math.max(0, total - answered) / total;
+          const owedCredits = Math.floor(Number(task.charged_credits ?? 0) * share) - refundedCredits;
+          const owedUsd =
+            Math.round((Number(task.charged_usd ?? 0) * share - refundedUsd) * 10000) / 10000;
+          if (owedCredits > 0 || owedUsd > 0) {
+            await refundApiKey(auth.key.id, Math.max(0, owedCredits), Math.max(0, owedUsd));
+            refundedCredits += Math.max(0, owedCredits);
+            refundedUsd += Math.max(0, owedUsd);
           }
         }
 
         await db.from("self_checks")
-          .update({ results: rows, status: done ? "completed" : "running", refunded_credits: refunded })
+          .update({
+            results: rows,
+            status: done ? "completed" : "running",
+            refunded_credits: refundedCredits,
+            refunded_usd: refundedUsd,
+          })
           .eq("id", task.id);
 
         const submitted: Row[] = Array.isArray(task.submitted_cards) ? task.submitted_cards : [];
