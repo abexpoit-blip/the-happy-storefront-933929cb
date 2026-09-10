@@ -904,6 +904,17 @@ export const listPendingChecks = async (): Promise<CardCheck[]> => {
   return ((data ?? []) as Record<string, unknown>[]).map(mapCheck);
 };
 
+/** Recent checker history for the signed-in buyer (RLS scopes it to the user). */
+export const listMyChecks = async (limit = 50): Promise<CardCheck[]> => {
+  const { data, error } = await rawDb
+    .from("card_checks")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  return ((data ?? []) as Record<string, unknown>[]).map(mapCheck);
+};
+
 /** Manually run the checker for the given orders (or every pending check when empty). */
 export const runCardChecks = async (orderIds: string[]): Promise<CardCheck[]> => {
   const { error } = await rawDb.rpc("run_card_checks", {

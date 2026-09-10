@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Trash2, Loader2, ShieldCheck, ShieldOff, Radar, Sparkles, ShoppingCart, Wallet, CreditCard } from "lucide-react";
 import { PageHero, StatCard } from "@/components/PageHero";
 import { getCart, removeFromCart, clearCart, onCartChange, type CartLine } from "@/lib/cart";
-import { purchaseProduct, listChecksForOrders, listPendingChecks, runCardChecks, type CardCheck } from "@/lib/store";
+import { purchaseProduct, listChecksForOrders, listPendingChecks, listMyChecks, runCardChecks, type CardCheck } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { publicBase } from "@/lib/baseLabel";
@@ -27,11 +27,14 @@ const Cart = () => {
   const [checks, setChecks] = useState<CardCheck[] | null>(null);
   const [scanning, setScanning] = useState(false);
   const [pending, setPending] = useState<CardCheck[]>([]);
+  const [history, setHistory] = useState<CardCheck[]>([]);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
   const startTask = useServerFn(startCheckerTask);
   const pollTask = useServerFn(pollCheckerTask);
 
   const loadPending = async () => {
     try { setPending(await listPendingChecks()); } catch { /* ignore */ }
+    try { setHistory(await listMyChecks(50)); } catch { /* ignore */ }
   };
   useEffect(() => { void loadPending(); }, []);
 
@@ -119,16 +122,22 @@ const Cart = () => {
     }
     const orderIds = [...new Set(queue.map((p) => p.order_id).filter(Boolean) as string[])];
     setScanning(true);
+    setProgress({ done: 0, total: queue.length });
     try {
       let realOk = false;
       try {
         // real gateway checker (CheckerCCV)
         const started = await startTask({ data: { orderIds } });
         realOk = true;
-        for (let i = 0; i < 30; i++) {
-          await new Promise((r) => setTimeout(r, i === 0 ? 6000 : 8000));
-          const st = await pollTask({ data: { taskId: started.taskId } });
-          if (st.done) break;
+        setProgress({ done: 0, total: started.total });
+        // the gateway needs >= 10s between result polls for the same task
+        for (let i = 0; i < 60; i++) {
+          await new Promise((r) => setTimeout(r, i === 0 ? 6000 : 12000));
+          try {
+            const st = await pollTask({ data: { taskId: started.taskId } });
+            setProgress({ done: st.processed, total: st.total || started.total });
+            if (st.done) break;
+          } catch { /* transient gateway error — keep polling */ }
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -143,7 +152,9 @@ const Cart = () => {
       const results = await listChecksForOrders(orderIds);
       void refresh?.();
       await loadPending();
-      setChecks(results.filter((r) => r.status !== "pending"));
+      const settledRows = results.filter((r) => r.status !== "pending");
+      if (settledRows.length) setChecks(settledRows);
+      else toast.info("The checker is still working on these cards. Your cards stay in the queue — press Check again in a minute.", { duration: 8000 });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Check failed", { duration: 8000 });
     } finally {
@@ -349,7 +360,9 @@ const Cart = () => {
         Non-refund cards are never checked and never refunded.
       </p>
 
-      {scanning && <ScanOverlay count={pending.length} />}
+      <CheckHistory rows={history} onOpen={(rows) => setChecks(rows)} />
+
+      {scanning && <ScanOverlay count={progress.total || pending.length} done={progress.done} />}
       {checks && <CheckResultDialog checks={checks} onClose={() => { setChecks(null); void loadPending(); }} />}
     </AppShell>
   );
@@ -364,7 +377,7 @@ const SCAN_STEPS = [
   "Finalizing results…",
 ];
 
-const ScanOverlay = ({ count }: { count: number }) => {
+const ScanOverlay = ({ count, done = 0 }: { count: number; done?: number }) => {
   const [step, setStep] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setStep((s) => Math.min(s + 1, SCAN_STEPS.length - 1)), 700);
@@ -390,9 +403,17 @@ const ScanOverlay = ({ count }: { count: number }) => {
         <div className="relative mt-1 text-[12.5px] text-white/65">
           Live check running on {count} refund card{count === 1 ? "" : "s"}. Please don't close this window.
         </div>
+        <div className="relative mt-2 font-mono text-[13px] text-[#5ac8fa]">{done} / {count} checked</div>
 
         <div className="relative mt-5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-          <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#2196f3] via-[#5ac8fa] to-[#43a047]" style={{ animation: "cartScan 1.4s ease-in-out infinite" }} />
+          {done > 0 && count > 0 ? (
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-[#2196f3] via-[#5ac8fa] to-[#43a047] transition-all duration-500"
+              style={{ width: `${Math.min(100, Math.round((done / count) * 100))}%` }}
+            />
+          ) : (
+            <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#2196f3] via-[#5ac8fa] to-[#43a047]" style={{ animation: "cartScan 1.4s ease-in-out infinite" }} />
+          )}
         </div>
 
         <ul className="relative mt-5 space-y-1.5 text-left">
@@ -414,6 +435,64 @@ const ScanOverlay = ({ count }: { count: number }) => {
   );
 };
 
+
+/** Persistent check history — survives reloads because it is read from the database. */
+const CheckHistory = ({ rows, onOpen }: { rows: CardCheck[]; onOpen: (rows: CardCheck[]) => void }) => {
+  if (!rows.length) return null;
+  const settled = rows.filter((r) => r.status !== "pending");
+  const live = settled.filter((r) => r.status === "live").length;
+  const dead = settled.filter((r) => r.status === "dead").length;
+  const refunded = settled.reduce((s, r) => s + Number(r.refunded ?? 0), 0);
+
+  return (
+    <div className="mt-6 rounded-2xl border border-white/10 bg-[#0d1526] p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-[13px] font-semibold text-white">Check history</div>
+          <div className="text-[12px] text-white/50">
+            {live} live · {dead} dead · ${refunded.toFixed(2)} refunded
+          </div>
+        </div>
+        {settled.length > 0 && (
+          <button
+            onClick={() => onOpen(settled.slice(0, 100))}
+            className="rounded-lg border border-[#2196f3]/40 bg-[#2196f3]/10 px-3 py-1.5 text-[12px] font-semibold text-[#8fd0ff] hover:bg-[#2196f3]/20"
+          >
+            Open full result
+          </button>
+        )}
+      </div>
+
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[520px] text-[12.5px]">
+          <thead>
+            <tr className="text-left text-[11px] uppercase tracking-wider text-white/40">
+              <th className="py-1.5">Date</th><th>BIN</th><th>Last</th><th>Price</th><th>Status</th><th>Refunded</th>
+            </tr>
+          </thead>
+          <tbody className="text-white/75">
+            {rows.slice(0, 20).map((r) => (
+              <tr key={r.id} className="border-t border-white/5">
+                <td className="py-1.5 whitespace-nowrap">{new Date(r.created_at).toLocaleString()}</td>
+                <td className="font-mono">{r.bin || "—"}</td>
+                <td className="font-mono">{r.last_digits || "—"}</td>
+                <td className="font-mono">${Number(r.price).toFixed(2)}</td>
+                <td>
+                  <span className={
+                    r.status === "live" ? "text-[#7ee08a] font-semibold"
+                    : r.status === "dead" ? "text-[#f56c6c] font-semibold"
+                    : "text-[#f9d27a]"
+                  }>{r.status.toUpperCase()}</span>
+                </td>
+                <td className="font-mono">${Number(r.refunded ?? 0).toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
 
 const CheckResultDialog = ({ checks, onClose }: { checks: CardCheck[]; onClose: () => void }) => {
   const live = checks.filter((c) => c.status === "live");

@@ -102,19 +102,30 @@ export const pollCheckerTask = createServerFn({ method: "POST" })
     if (!taskRow) throw new Error("task_not_found");
 
     const mapping = (taskRow.mapping ?? {}) as Record<string, string>;
-    const page = await getResults(data.taskId, 0, 500);
 
+    // Results arrive page by page — walk the cursor so nothing is missed.
+    let cursor = 0;
+    let processed = 0;
     let settled = 0;
-    for (const row of page.results) {
-      const pan = String(row.card ?? "").split("|")[0]?.replace(/\D/g, "") ?? "";
-      const checkId = mapping[pan];
-      const v = verdict(row.category);
-      if (!checkId || !v) continue;
-      await db.rpc("settle_card_check", { _check_id: checkId, _status: v });
-      settled++;
+    let status = String(taskRow.status ?? "running");
+    for (let page = 0; page < 6; page++) {
+      const res = await getResults(data.taskId, cursor, 500);
+      status = res.status;
+      for (const row of res.results) {
+        const pan = String(row.card ?? "").split("|")[0]?.replace(/\D/g, "") ?? "";
+        const checkId = mapping[pan];
+        const v = verdict(row.category);
+        processed++;
+        if (!checkId || !v) continue;
+        await db.rpc("settle_card_check", { _check_id: checkId, _status: v });
+        settled++;
+      }
+      const next = res.nextCursor > cursor ? res.nextCursor : cursor + res.results.length;
+      if (res.results.length === 0 || next <= cursor) break;
+      cursor = next;
     }
 
-    const done = page.status === "completed" || page.status === "cancelled";
+    const done = status === "completed" || status === "cancelled";
     await db
       .from("checker_tasks")
       .update({ settled, status: done ? "completed" : "running" })
@@ -122,9 +133,10 @@ export const pollCheckerTask = createServerFn({ method: "POST" })
 
     return {
       done,
-      status: page.status,
-      total: page.total || Number(taskRow.total ?? 0),
-      processed: page.results.length,
+      status,
+      total: Number(taskRow.total ?? 0),
+      processed,
+      settled,
     };
   });
 
