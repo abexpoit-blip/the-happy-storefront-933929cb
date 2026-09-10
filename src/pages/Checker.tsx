@@ -14,6 +14,7 @@ import {
 } from "@/lib/selfcheck.functions";
 import { useAuth } from "@/hooks/useAuth";
 import { buyCheckCredits } from "@/lib/store";
+import { SystemStatusPanel } from "@/components/SystemStatus";
 
 type Tab = SelfCheckStatus;
 
