@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { flagEmoji, resolveCountryCode, resolveCountryName } from "@/lib/countries";
 
 export const BRANDS = ["VISA", "MASTERCARD", "AMEX", "DISCOVER", "JCB", "DINERS"] as const;
 export type Brand = (typeof BRANDS)[number];
@@ -219,16 +220,29 @@ export const CatalogBrandIcon = ({ brand }: { brand: string }): ReactNode => {
   );
 };
 
-/** SVG flag image (emoji flags don't render on Windows/Linux). */
-export const CountryFlagImg = ({ code, className = "h-3.5 w-5" }: { code?: string | null; className?: string }) => {
-  const cc = countryCode(code);
-  if (!cc || cc.length !== 2) return <span className={className} />;
+/** Glossy 3D-style flag chip. Works for every ISO country code. */
+export const CountryFlagImg = ({ code, className = "h-5 w-7" }: { code?: string | null; className?: string }) => {
+  const cc = resolveCountryCode(code);
+  if (!cc || !/^[A-Z]{2}$/.test(cc)) {
+    return (
+      <span className={`${className} inline-flex items-center justify-center rounded-[4px] bg-gradient-to-b from-[#eceff1] to-[#cfd8dc] text-[10px]`}>
+        🌐
+      </span>
+    );
+  }
   return (
-    <img
-      src={`https://flagcdn.com/w40/${cc.toLowerCase()}.png`}
-      alt={cc}
-      loading="lazy"
-      className={`${className} inline-block object-cover align-middle`}
-    />
+    <span
+      className={`${className} relative inline-block overflow-hidden rounded-[4px] ring-1 ring-black/15 shadow-[0_2px_5px_-2px_rgba(0,0,0,0.55)] align-middle`}
+      title={resolveCountryName(cc)}
+    >
+      <img
+        src={`https://flagcdn.com/w80/${cc.toLowerCase()}.png`}
+        srcSet={`https://flagcdn.com/w160/${cc.toLowerCase()}.png 2x`}
+        alt={resolveCountryName(cc)}
+        loading="lazy"
+        className="h-full w-full object-cover"
+      />
+      <span className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/45 via-white/5 to-black/25" />
+    </span>
   );
 };
