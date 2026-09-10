@@ -177,7 +177,7 @@ const Checker = () => {
         eyebrowIcon={Radar}
         title="Check your cards"
         highlight="live or dead"
-        description={`Paste your cards, pick a gate and pay with credits — ${creditCost} credits ($${price.toFixed(2)}) per card. $1 = ${creditsPerUsd} credits.`}
+        description={`Paste your cards, pick a gate and pay with credits — ${creditCost} credits per card. $1 = ${creditsPerUsd} credits.`}
         right={
           <div className="flex flex-wrap gap-2">
             <div className="rounded-xl border border-white/12 bg-white/[0.06] px-4 py-3 text-right">
@@ -211,7 +211,7 @@ const Checker = () => {
         <Panel
           title="List card"
           icon={CreditCard}
-          right={<span className="rounded-md border border-[#c62828]/40 bg-[#c62828]/15 px-2 py-0.5 text-[11px] text-[#ff8a80]">{creditCost} credits (${price.toFixed(2)}) per card</span>}
+          right={<span className="rounded-md border border-[#c62828]/40 bg-[#c62828]/15 px-2 py-0.5 text-[11px] text-[#ff8a80]">{creditCost} credits per card</span>}
         >
           <div className="p-3">
             <textarea
@@ -251,7 +251,7 @@ const Checker = () => {
                     className={`flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[12.5px] transition hover:bg-white/[0.06] ${g.id === gate ? "text-[#5ac8fa]" : "text-white/80"}`}
                   >
                     <span className="truncate">{g.description}</span>
-                    {g.credit > 0 && <span className="ml-auto shrink-0 font-mono text-[11px] text-white/40">{g.credit}cr</span>}
+                    
                   </button>
                 ))}
               </div>
@@ -261,7 +261,6 @@ const Checker = () => {
               <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
                 <div className="text-white/45">Total cost</div>
                 <div className="font-mono text-[15px] text-[#7ee08a]">{needCredits} cr</div>
-                <div className="font-mono text-[11px] text-white/40">${cost.toFixed(2)}</div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
                 <div className="flex items-center gap-1 text-white/45"><Wallet className="h-3 w-3" /> Your credits</div>
@@ -285,7 +284,7 @@ const Checker = () => {
                 <Zap className="h-3.5 w-3.5" /> Buy credits
               </div>
               <p className="mt-1 text-[11.5px] text-white/50">
-                $1 = {creditsPerUsd} credits · 1 check = {creditCost} credits (${price.toFixed(2)})
+                $1 = {creditsPerUsd} credits · 1 check = {creditCost} credits
               </p>
               <div className="mt-2 flex gap-2">
                 <input
