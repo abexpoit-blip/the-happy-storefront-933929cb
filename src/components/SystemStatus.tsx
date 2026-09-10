@@ -35,13 +35,13 @@ export function SystemStatusBadge({ className = "" }: { className?: string }) {
   const up = allOnline(status);
   const partial = !!status && !up && (status.checker.state === "online" || status.payments.state === "online");
   const color = loading && !status ? "#9aa4ae" : up ? "#2fb344" : partial ? "#f9a825" : "#e53935";
-  const label = loading && !status ? "Checking…" : up ? "All systems online" : partial ? "Partial outage" : "Offline";
+  const label = loading && !status ? "Checking…" : up ? "Online" : partial ? "Partially online" : "Offline";
 
   return (
     <span
       title={
         status
-          ? `Checker: ${status.checker.state}${status.checker.note ? ` (${status.checker.note})` : ""} · Payments: ${status.payments.state}${status.payments.note ? ` (${status.payments.note})` : ""}`
+          ? `Checker: ${status.checker.state === "online" ? "Online" : "Offline"} · Payment: ${status.payments.state === "online" ? "Online" : "Offline"}`
           : "Checking services…"
       }
       className={`inline-flex items-center gap-1.5 rounded-full border border-[#e6e6e6] px-2.5 py-1 text-[12px] ${className}`}
