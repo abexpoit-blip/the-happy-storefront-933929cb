@@ -44,7 +44,9 @@ for kv in "$@"; do
   esac
   tmp=$(mktemp)
   grep -v "^$key=" "$FILE" > "$tmp" || true
-  printf '%s=%s\n' "$key" "$val" >> "$tmp"
+  # These files are sourced by Bash. %q prevents spaces, #, $, backticks, or
+  # other shell characters in a provider key from changing its value.
+  printf '%s=%q\n' "$key" "$val" >> "$tmp"
   mv "$tmp" "$FILE"
   chmod 600 "$FILE"
   echo "saved $key -> $FILE"

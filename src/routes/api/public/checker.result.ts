@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
-import { authorizeApiKey, refundApiKey, json } from "@/lib/apiAuth.server";
+import { authorizeApiKey, json } from "@/lib/apiAuth.server";
 import { digits, maskPan } from "@/lib/cardLine";
 
 const bodySchema = z.object({ task_id: z.string().min(1).max(120) });
@@ -68,23 +68,21 @@ export const Route = createFileRoute("/api/public/checker/result")({
         let refundedCredits = Number(task.refunded_credits ?? 0);
         let refundedUsd = Number(task.refunded_usd ?? 0);
         if (done && total > 0) {
-          const share = Math.max(0, total - answered) / total;
-          const owedCredits = Math.floor(Number(task.charged_credits ?? 0) * share) - refundedCredits;
-          const owedUsd =
-            Math.round((Number(task.charged_usd ?? 0) * share - refundedUsd) * 10000) / 10000;
-          if (owedCredits > 0 || owedUsd > 0) {
-            await refundApiKey(auth.key.id, Math.max(0, owedCredits), Math.max(0, owedUsd));
-            refundedCredits += Math.max(0, owedCredits);
-            refundedUsd += Math.max(0, owedUsd);
-          }
+          const { data: refund, error: refundError } = await db.rpc("settle_api_check_refund", {
+            _check_id: task.id,
+            _key_id: auth.key.id,
+            _answered: answered,
+          });
+          if (refundError) return json({ status: "error", message: "refund_settlement_failed" }, 500);
+          const settled = Array.isArray(refund) ? refund[0] : refund;
+          refundedCredits = Number(settled?.refunded_credits ?? refundedCredits);
+          refundedUsd = Number(settled?.refunded_usd ?? refundedUsd);
         }
 
         await db.from("self_checks")
           .update({
             results: rows,
             status: done ? "completed" : "running",
-            refunded_credits: refundedCredits,
-            refunded_usd: refundedUsd,
           })
           .eq("id", task.id);
 
