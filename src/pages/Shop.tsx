@@ -267,7 +267,7 @@ const Shop = () => {
 
       {/* TABLE */}
       <div className="mt-3 rounded-xl border border-[#e6e6e6] bg-white overflow-x-auto shadow-[0_14px_40px_-26px_rgba(31,45,61,0.6)] -mx-3 sm:mx-0">
-        <table className="w-full min-w-[1040px] text-[13px] border-collapse">
+        <table className="w-full min-w-[1120px] text-[13px] border-collapse">
           <thead>
             <tr className="bg-gradient-to-b from-[#f7f9fb] to-[#eceff1] text-[#455a64] text-[12px]">
               <th className="p-2 w-8 border-b border-[#e0e0e0]">
@@ -278,20 +278,20 @@ const Shop = () => {
                   className="cursor-pointer accent-[#2196f3]"
                 />
               </th>
-              {["CARD","refund","month","year","city","state","zip","country","tel","email","prices","base","operation"].map((h) => (
-                <th key={h} className="p-2 text-center font-semibold uppercase tracking-wide border-b border-[#e0e0e0]">{h}</th>
+              {["DB","BIN","BRAND","EXPIRY","CVV","COUNTRY","REGION","INFO","ZIP","REFUND","PRICE","ACTIONS"].map((h) => (
+                <th key={h} className="p-2 text-left font-semibold uppercase tracking-wide border-b border-[#e0e0e0] whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading && Array.from({ length: 6 }).map((_, i) => (
               <tr key={i} className="border-b border-[#f0f0f0]">
-                <td colSpan={14} className="p-3"><div className="h-4 rounded bg-[#f1f4f6] animate-pulse" /></td>
+                <td colSpan={13} className="p-3"><div className="h-4 rounded bg-[#f1f4f6] animate-pulse" /></td>
               </tr>
             ))}
             {!loading && pageCards.map((c) => (
-              <tr key={c.id} className="border-b border-[#f2f4f6] odd:bg-white even:bg-[#fcfdfe] hover:bg-[#f2f8ff] transition">
-                <td className="p-2 text-center">
+              <tr key={c.id} className="border-b border-[#eef1f4] odd:bg-white even:bg-[#fafbfc] hover:bg-[#f2f8ff] transition">
+                <td className="p-2 text-center align-middle">
                   <input
                     type="checkbox"
                     checked={selected.has(c.id)}
@@ -299,54 +299,84 @@ const Shop = () => {
                     className="cursor-pointer accent-[#2196f3]"
                   />
                 </td>
-                <td className="p-2 text-center font-mono text-[#263238]">
-                  <span className="inline-flex items-center gap-2">
-                    <BrandLogo brand={c.brand || detectBrandFromBin(c.bin ?? "")} className="h-5 w-8 shrink-0 drop-shadow-sm" />
-                    <span>
-                      {c.bin ?? "—"}
-                      <span className="text-[#bbb]">••••</span>
-                      <span className="text-[#1f2d3d] font-semibold">{c.last_digits ?? "•••"}</span>
-                    </span>
+                <td className="p-2 align-middle max-w-[210px]">
+                  <span
+                    title={publicBase(c.base) || ""}
+                    className="inline-block max-w-full truncate rounded-md border border-[#c8e6c9] bg-[#eaf7ec] px-2 py-1 text-[11px] font-medium text-[#2e7d32]"
+                  >
+                    {publicBase(c.base) || "—"}
                   </span>
                 </td>
-                <td className="p-2 text-center">
+                <td className="p-2 align-middle">
+                  <span className="inline-block rounded-md bg-gradient-to-b from-[#37474f] to-[#1f2d3d] px-2 py-1 font-mono text-[11px] font-semibold text-white shadow-[0_4px_10px_-6px_rgba(31,45,61,0.9)]">
+                    {c.bin ?? "—"}
+                  </span>
+                  {c.last_digits ? (
+                    <span className="ml-1 font-mono text-[11px] text-[#90a4ae]">••{c.last_digits}</span>
+                  ) : null}
+                </td>
+                <td className="p-2 align-middle">
+                  <BrandLogo brand={c.brand || detectBrandFromBin(c.bin ?? "")} className="h-5 w-8 drop-shadow-sm" />
+                </td>
+                <td className="p-2 align-middle font-mono text-[12px] text-[#37474f] whitespace-nowrap">
+                  {(c.exp_month ?? "--")}/{(c.exp_year ?? "--")}
+                </td>
+                <td className="p-2 align-middle">
+                  <CheckCircle2 className="h-4 w-4 text-[#2e7d32]" />
+                </td>
+                <td className="p-2 align-middle whitespace-nowrap">
+                  {c.country ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <CountryFlagImg code={c.country} className="h-3.5 w-5 rounded-[2px]" />
+                      <span className="text-[12px] font-semibold text-[#37474f]">{countryCode(c.country)}</span>
+                    </span>
+                  ) : <span className="text-[#bbb]">—</span>}
+                </td>
+                <td className="p-2 align-middle max-w-[170px]">
+                  {c.city || c.state ? (
+                    <span
+                      title={[c.city, c.state].filter(Boolean).join(", ")}
+                      className="inline-block max-w-full truncate rounded-md border border-[#ffe0a3] bg-[#fff6e0] px-2 py-1 text-[11px] font-semibold uppercase text-[#8d6e00]"
+                    >
+                      {[c.city, c.state].filter(Boolean).join(", ")}
+                    </span>
+                  ) : <span className="text-[#bbb]">—</span>}
+                </td>
+                <td className="p-2 align-middle min-w-[150px]">
+                  <span className="flex flex-wrap gap-1">
+                    {c.zip ? <InfoChip>+zip</InfoChip> : null}
+                    {c.city ? <InfoChip>+city</InfoChip> : null}
+                    {c.state ? <InfoChip>+state</InfoChip> : null}
+                    {c.has_phone ? <InfoChip>+phone</InfoChip> : null}
+                    {c.has_email ? <InfoChip>+email</InfoChip> : null}
+                    {!c.zip && !c.city && !c.state && !c.has_phone && !c.has_email ? (
+                      <span className="text-[11px] text-[#bbb]">none</span>
+                    ) : null}
+                  </span>
+                </td>
+                <td className="p-2 align-middle font-mono text-[12px] text-[#c62828]">{c.zip ?? "N/A"}</td>
+                <td className="p-2 align-middle">
                   <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                     c.refundable
                       ? "bg-[#e8f5e9] text-[#2e7d32] border border-[#c8e6c9]"
                       : "bg-[#fdecea] text-[#c62828] border border-[#f5c6c2]"
                   }`}>
-                    {c.refundable ? "YES" : "NO"}
+                    {c.refundable ? "Yes" : "No"}
                   </span>
                 </td>
-                <td className="p-2 text-center font-mono">{c.exp_month ?? "—"}</td>
-                <td className="p-2 text-center font-mono">{c.exp_year ?? "—"}</td>
-                <td className="p-2 text-center max-w-[140px] truncate" title={c.city ?? ""}>{c.city ?? "—"}</td>
-                <td className="p-2 text-center">{c.state ?? "—"}</td>
-                <td className="p-2 text-center font-mono">{c.zip ?? "—"}</td>
-                <td className="p-2 text-center">
-                  {c.country ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <CountryFlagImg code={c.country} className="h-3.5 w-5" />
-                      <span>{countryCode(c.country)}</span>
-                    </span>
-                  ) : "—"}
+                <td className="p-2 align-middle font-mono text-[13px] font-bold text-[#1f2d3d] whitespace-nowrap">
+                  ${Number(c.price).toFixed(2)}
                 </td>
-                <td className="p-2 text-center">{c.has_phone ? "yes" : "no"}</td>
-                <td className="p-2 text-center">{c.has_email ? "yes" : "no"}</td>
-                <td className="p-2 text-center font-mono font-semibold text-[#1f2d3d]">{Number(c.price).toFixed(2)}</td>
-                <td className="p-2 text-center text-[11px] text-[#666] max-w-[180px]">
-                  <span className="whitespace-pre-line break-words">{publicBase(c.base) || "—"}</span>
-                </td>
-                <td className="p-2 text-center">
+                <td className="p-2 align-middle">
                   {c.delivery_type === "key" && c.stock <= 0 ? (
-                    <span className="text-[#bbb] text-[12px]">out of stock</span>
+                    <span className="text-[#bbb] text-[12px]">sold</span>
                   ) : (
                     <button
                       onClick={() => buyMany([c.id])}
                       disabled={buying}
-                      className="h-7 px-2.5 rounded-md border border-[#bbdefb] bg-gradient-to-b from-[#e3f2fd] to-[#d3e8fb] text-[#1565c0] text-[12px] hover:border-[#2196f3] active:translate-y-px transition disabled:opacity-50"
+                      className="h-7 px-3 rounded-md bg-gradient-to-b from-[#66bb6a] to-[#2e7d32] text-white text-[12px] font-semibold inline-flex items-center gap-1.5 shadow-[0_6px_14px_-7px_rgba(46,125,50,0.9)] active:translate-y-px transition disabled:opacity-50"
                     >
-                      Add to cart
+                      <ShoppingCart className="h-3.5 w-3.5" /> Buy
                     </button>
                   )}
                 </td>
@@ -354,7 +384,7 @@ const Shop = () => {
             ))}
             {!loading && noResults && (
               <tr>
-                <td colSpan={14} className="p-10 text-center text-[#888] text-[13px]">
+                <td colSpan={13} className="p-10 text-center text-[#888] text-[13px]">
                   {lastBin
                     ? <>No cards match BIN prefix <code className="px-1 bg-[#f5f5f5] font-mono">{lastBin}</code>.</>
                     : "No cards match your filters."}
@@ -460,6 +490,14 @@ function pageNumbers(page: number, total: number): (number | "…")[] {
   if (end < total - 1) out.push("…");
   out.push(total);
   return out;
+}
+
+function InfoChip({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded border border-[#cfe6ff] bg-[#eaf4ff] px-1.5 py-[1px] text-[10px] font-medium text-[#1565c0]">
+      {children}
+    </span>
+  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
