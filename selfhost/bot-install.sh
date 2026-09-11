@@ -26,11 +26,25 @@ export BOT_ADMIN_SECRET="${BOT_ADMIN_SECRET:-${TELEGRAM_BOT_ADMIN_SECRET:-}}"
 
 DB_CONTAINER="${DB_CONTAINER:-}"
 if [ -z "$DB_CONTAINER" ]; then
-  DB_CONTAINER=$(docker ps --format '{{.Names}} {{.Image}}' \
-    | awk 'tolower($0) ~ /postgres|supabase.*db/ {print $1; exit}')
+  # Pick a running container that actually HAS psql inside. Name/image matching
+  # alone can hit PostgREST/API containers (e.g. *-rest) which have no psql.
+  while read -r name; do
+    [ -z "$name" ] && continue
+    if docker exec "$name" sh -c 'command -v psql >/dev/null 2>&1' 2>/dev/null; then
+      DB_CONTAINER="$name"
+      break
+    fi
+  done < <(docker ps --format '{{.Names}} {{.Image}}' \
+    | awk 'tolower($0) ~ /postgres|supabase.*db|postgrest|-rest/ {print $1}')
 fi
 if [ -z "$DB_CONTAINER" ]; then
-  echo "FAIL: running PostgreSQL Docker container was not found" >&2
+  echo "FAIL: no running Docker container with psql was found." >&2
+  echo "      Run: docker ps   and re-run with DB_CONTAINER=<name> bash selfhost/bot-install.sh" >&2
+  exit 1
+fi
+if ! docker exec "$DB_CONTAINER" sh -c 'command -v psql >/dev/null 2>&1' 2>/dev/null; then
+  echo "FAIL: container '$DB_CONTAINER' has no psql inside (not the database container)." >&2
+  echo "      Run: docker ps   and re-run with DB_CONTAINER=<real-db-name> bash selfhost/bot-install.sh" >&2
   exit 1
 fi
 
