@@ -93,10 +93,9 @@ const Shop = () => {
   const cards = useMemo(() => {
     if (!searched) return [];
     return all.filter((p) => {
-      if (section) {
-        const s = `${(p as any).section ?? ""} ${(p as any).kind ?? ""} ${(p as any).category ?? ""}`.toLowerCase();
-        if (!s.includes(section)) return false;
-      }
+      // BIN and DUMP live on their own pages — the card shop shows cards only.
+      const sec = `${(p as { section?: string }).section ?? "card"}`.toLowerCase();
+      if (sec === "bin" || sec === "dump") return false;
       if (q.bin && !(p.bin ?? "").startsWith(q.bin)) return false;
       if (q.base !== "all" && (p.base ?? "") !== q.base) return false;
       if (q.country && resolveCountryCode(p.country) !== q.country) return false;

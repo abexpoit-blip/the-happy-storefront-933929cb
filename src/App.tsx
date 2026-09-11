@@ -28,8 +28,12 @@ const Recharge = lazy(() => import("./pages/Recharge"));
 const Referrals = lazy(() => import("./pages/Referrals"));
 const ApiAccess = lazy(() => import("./pages/ApiAccess"));
 const Profile = lazy(() => import("./pages/Profile"));
+const Bins = lazy(() => import("./pages/Bins"));
+const Dumps = lazy(() => import("./pages/Dumps"));
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminCards = lazy(() => import("./pages/AdminCards"));
+const AdminBins = lazy(() => import("./pages/AdminBins"));
+const AdminDumps = lazy(() => import("./pages/AdminDumps"));
 const AdminPaymentGateway = lazy(() => import("./pages/AdminPaymentGateway"));
 const AdminPayments = lazy(() => import("./pages/AdminPayments"));
 const AdminCategories = lazy(() => import("./pages/AdminCategories"));
@@ -83,6 +87,8 @@ const App = () => (
             <Route path="/admin/site" element={<AdminRoute><AdminSiteSettings /></AdminRoute>} />
 
             <Route path="/admin/cards" element={<AdminRoute><AdminCards /></AdminRoute>} />
+            <Route path="/admin/bins" element={<AdminRoute><AdminBins /></AdminRoute>} />
+            <Route path="/admin/dumps" element={<AdminRoute><AdminDumps /></AdminRoute>} />
 
             <Route path="/admin/payments" element={<AdminRoute><AdminPayments /></AdminRoute>} />
             <Route path="/admin/payment-gateway" element={<AdminRoute><AdminPaymentGateway /></AdminRoute>} />
@@ -96,6 +102,8 @@ const App = () => (
             {/* Buyer routes — Scorpion-style: only 5 nav pages */}
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/shop" element={<ProtectedRoute><Shop /></ProtectedRoute>} />
+            <Route path="/bins" element={<ProtectedRoute><Bins /></ProtectedRoute>} />
+            <Route path="/dumps" element={<ProtectedRoute><Dumps /></ProtectedRoute>} />
             <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
             <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
             <Route path="/recharge" element={<ProtectedRoute><Recharge /></ProtectedRoute>} />
