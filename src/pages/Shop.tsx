@@ -376,7 +376,7 @@ const Shop = () => {
 
       {/* TABLE */}
       <div className="mt-3 rounded-xl border border-[#e6e6e6] bg-white overflow-x-auto shadow-[0_14px_40px_-26px_rgba(31,45,61,0.6)] -mx-3 sm:mx-0">
-        <table className="w-full min-w-[1080px] text-[13px] border-collapse">
+        <table className="w-full min-w-[1320px] text-[13px] border-collapse">
           <thead>
             <tr className="bg-gradient-to-b from-[#37474f] to-[#1f2d3d] text-white text-[11.5px]">
               <th className="p-2 w-8 border-b border-[#e0e0e0]">
