@@ -8,6 +8,7 @@ import { LanguageToggle, useLanguage } from "@/lib/i18n";
 import { useSessionTimeout } from "@/hooks/useSessionTimeout";
 import { cartCount, onCartChange } from "@/lib/cart";
 import { UserAvatar } from "@/components/UserAvatar";
+import dragonLogo from "@/assets/dragon-logo.png";
 
 
 const buyerNav = [
@@ -68,36 +69,67 @@ export const AppShell = ({ children, wide }: { children: ReactNode; wide?: boole
       {/* TOP NAV */}
       <header className="bg-[#304156] text-white sticky top-0 z-40">
         <div className="mx-auto max-w-[1400px] px-4 sm:px-6 h-12 flex items-center justify-between gap-6">
-          <nav className="hidden lg:flex items-center h-full text-[13px] tracking-wide">
-            {items.map((n) => (
-              <NavLink
-                key={n.to}
-                to={n.to}
-                end={(n as any).end}
-                className={({ isActive }) =>
-                  `h-full px-4 flex items-center transition-colors border-b-2 relative ${
-                    isActive
-                      ? "text-[#409EFF] border-[#409EFF] bg-[#263445]"
-                      : "text-[#bfcbd9] border-transparent hover:text-white"
-                  }`
-                }
-              >
-                {n[lang]}
-                {n.to === "/cart" && cartN > 0 && (
-                  <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#f56c6c] px-1 text-[10px] font-bold text-white">
-                    {cartN}
-                  </span>
-                )}
-              </NavLink>
-            ))}
-          </nav>
-          <button
-            onClick={() => setDrawerOpen((v) => !v)}
-            className="lg:hidden p-2 -ml-2 text-white"
-            aria-label={lang === "en" ? "Menu" : "Меню"}
-          >
-            {drawerOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
+          <div className="flex items-center h-full gap-3">
+            {/* Logo before HOME with high clarity and contrast */}
+            <Link
+              to="/"
+              className="flex items-center gap-2 py-1 pr-3 hover:opacity-90 transition group"
+              title="Zoru Shop"
+            >
+              <div className="relative h-9 w-9 rounded-xl bg-gradient-to-br from-[#1a2332] to-[#0d141e] border border-[#ffb300]/40 p-0.5 shadow-[0_0_12px_rgba(255,179,0,0.25)] flex items-center justify-center overflow-hidden">
+                <img
+                  src={dragonLogo}
+                  alt="Zoru"
+                  className="h-full w-full object-contain drop-shadow-[0_0_6px_rgba(255,179,0,0.8)]"
+                />
+              </div>
+              <span className="font-extrabold tracking-wider text-[15px] bg-clip-text text-transparent bg-gradient-to-r from-[#ffd54f] via-[#ffb300] to-[#ff8c1a] drop-shadow-sm font-mono">
+                ZORU
+              </span>
+            </Link>
+
+            <nav className="hidden lg:flex items-center h-full text-[13px] tracking-wide">
+              {items.map((n) => (
+                <NavLink
+                  key={n.to}
+                  to={n.to}
+                  end={(n as any).end}
+                  className={({ isActive }) =>
+                    `h-full px-4 flex items-center transition-colors border-b-2 relative ${
+                      isActive
+                        ? "text-[#409EFF] border-[#409EFF] bg-[#263445]"
+                        : "text-[#bfcbd9] border-transparent hover:text-white"
+                    }`
+                  }
+                >
+                  {n[lang]}
+                  {n.to === "/cart" && cartN > 0 && (
+                    <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#f56c6c] px-1 text-[10px] font-bold text-white">
+                      {cartN}
+                    </span>
+                  )}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
+
+          <div className="flex lg:hidden items-center gap-2">
+            <button
+              onClick={() => setDrawerOpen((v) => !v)}
+              className="p-2 -ml-2 text-white"
+              aria-label={lang === "en" ? "Menu" : "Меню"}
+            >
+              {drawerOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+            <Link to="/" className="flex items-center gap-1.5 py-1">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[#1a2332] to-[#0d141e] border border-[#ffb300]/40 p-0.5 shadow-sm flex items-center justify-center overflow-hidden">
+                <img src={dragonLogo} alt="Zoru" className="h-full w-full object-contain" />
+              </div>
+              <span className="font-extrabold text-[14px] bg-clip-text text-transparent bg-gradient-to-r from-[#ffd54f] to-[#ff8c1a] font-mono">
+                ZORU
+              </span>
+            </Link>
+          </div>
           <div className="text-[13px] font-medium tracking-wide text-white/90 truncate">
             {settings.shop_name}
           </div>
