@@ -49,19 +49,36 @@ if ! docker exec "$DB_CONTAINER" sh -c 'command -v psql >/dev/null 2>&1' 2>/dev/
 fi
 
 echo "Using database container: $DB_CONTAINER"
+# Full migration chain in creation order (schema.sql is the one-time base and is
+# applied by setup-supabase.sh, never here). Every file below is idempotent.
 for migration in \
-  selfhost/bonus-and-check-fee.sql \
+  selfhost/scale.sql \
+  selfhost/last-digits.sql \
+  selfhost/refund-checker.sql \
   selfhost/referrals.sql \
+  selfhost/bonus-and-check-fee.sql \
+  selfhost/check-ratio.sql \
+  selfhost/support.sql \
+  selfhost/manual-check.sql \
+  selfhost/real-checker.sql \
   selfhost/self-checker.sql \
   selfhost/credits.sql \
+  selfhost/check-refund.sql \
   selfhost/checker-admin-api.sql \
   selfhost/api-access-full-logs.sql \
   selfhost/api-usd-billing.sql \
+  selfhost/order-check.sql \
+  selfhost/sold-hide.sql \
+  selfhost/cart-order.sql \
+  selfhost/profile-and-api-100.sql \
+  selfhost/bin-dump.sql \
+  selfhost/card-meta-and-api-100.sql \
   selfhost/bot-accounts.sql
 do
   echo "Applying $migration"
   docker exec -i "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$migration"
 done
+
 
 echo "Building website"
 npm install --no-audit --no-fund
