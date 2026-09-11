@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { newsApi, announcementsApi, ordersApi } from "@/lib/api";
 import { AppShell } from "@/components/AppShell";
 import Seo from "@/components/Seo";
+import { BuildBotBanner } from "@/components/BuildBotBanner";
 
 /**
  * Buyer HOME — Scorpion-style layout copy:
