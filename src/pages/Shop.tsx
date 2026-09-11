@@ -157,6 +157,37 @@ const Shop = () => {
     }
   }, [bin]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // TYPE / BANK / LEVEL: stored on the product when the admin filled it in,
+  // otherwise resolved from the BIN lookup service for the visible rows only.
+  const [binMeta, setBinMeta] = useState<Record<string, CardMeta>>({});
+  useEffect(() => {
+    const missing = [...new Set(pageCards.map((c) => (c.bin ?? "").replace(/\D/g, "").slice(0, 8)))]
+      .filter((b) => b.length >= 6 && !binMeta[b]);
+    if (!missing.length) return;
+    let alive = true;
+    void (async () => {
+      const found: Record<string, CardMeta> = {};
+      await Promise.all(
+        missing.slice(0, 100).map(async (b) => {
+          const info = await lookupBin(b);
+          found[b] = { type: info?.type ?? null, level: info?.level ?? null, bank: info?.bank ?? null };
+        }),
+      );
+      if (alive) setBinMeta((m) => ({ ...m, ...found }));
+    })();
+    return () => { alive = false; };
+  }, [pageCards]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const metaFor = (c: Product): CardMeta => {
+    const p = c as unknown as { card_type?: string | null; card_level?: string | null; bank?: string | null };
+    const fromBin = binMeta[(c.bin ?? "").replace(/\D/g, "").slice(0, 8)] ?? { type: null, level: null, bank: null };
+    return {
+      type: p.card_type || fromBin.type,
+      level: p.card_level || fromBin.level,
+      bank: p.bank || fromBin.bank,
+    };
+  };
+
   const [count, setCount] = useState(0);
   useEffect(() => {
     setCount(cartCount());
