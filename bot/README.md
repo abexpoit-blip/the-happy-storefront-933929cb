@@ -41,13 +41,21 @@ BOT_API_BASE=https://zoru.cc
 ## Run
 
 ```bash
-bash selfhost/bot-start.sh
+bash selfhost/bot-install.sh
 pm2 logs zoru-bot --lines 40 --nostream
 ```
 
 Successful startup logs show the authenticated Telegram username, the website
 API base, and the complete bridge pattern. An invalid or revoked token is
 rejected before PM2 starts the process.
+
+Startup also verifies the protected website bridge and creates or confirms the
+first account in `TELEGRAM_ADMIN_IDS`. A mismatched shared secret, missing
+database migration, or broken account trigger therefore fails before polling.
+
+`bot-install.sh` applies every bot prerequisite migration in the required
+order, rebuilds the website, reloads its secrets, verifies the configured
+Telegram admin account, and starts both PM2 processes.
 
 ## Database
 

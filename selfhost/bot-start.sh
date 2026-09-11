@@ -35,6 +35,34 @@ if ! printf '%s' "$BOT_OK" | grep -q '"ok":true'; then
   exit 1
 fi
 
+BRIDGE_BODY='{"telegram_id":1}'
+BRIDGE_OK=$(curl -fsS --max-time 20 -X POST "${BOT_API_BASE}/api/public/bot/health" \
+  -H 'Content-Type: application/json' \
+  -H "x-bot-secret: ${BOT_ADMIN_SECRET}" \
+  -d "$BRIDGE_BODY" 2>/dev/null || true)
+if ! printf '%s' "$BRIDGE_OK" | grep -q '"status":"success"'; then
+  echo "Website bot bridge is not ready at ${BOT_API_BASE}." >&2
+  echo "Check BOT_ADMIN_SECRET, deploy the latest website build, and apply selfhost/bot-accounts.sql." >&2
+  exit 1
+fi
+
+ADMIN_ID="${TELEGRAM_ADMIN_IDS%%,*}"
+if [ -n "$ADMIN_ID" ]; then
+  case "$ADMIN_ID" in
+    *[!0-9]*) echo "TELEGRAM_ADMIN_IDS must contain numeric Telegram IDs" >&2; exit 1 ;;
+  esac
+  SESSION_BODY=$(printf '{"telegram_id":%s,"username":"zoru_admin"}' "$ADMIN_ID")
+  SESSION_OK=$(curl -fsS --max-time 30 -X POST "${BOT_API_BASE}/api/public/bot/session" \
+    -H 'Content-Type: application/json' \
+    -H "x-bot-secret: ${BOT_ADMIN_SECRET}" \
+    -d "$SESSION_BODY" 2>/dev/null || true)
+  if ! printf '%s' "$SESSION_OK" | grep -q '"status":"success"'; then
+    echo "Bot account creation test failed for the configured Telegram admin." >&2
+    echo "Check website logs and confirm the bot database migration was applied." >&2
+    exit 1
+  fi
+fi
+
 export BOT_DATA_FILE="${BOT_DATA_FILE:-/var/lib/zoru-bot/users.json}"
 
 mkdir -p "$(dirname "$BOT_DATA_FILE")"

@@ -49,6 +49,21 @@ export const Route = createFileRoute("/api/public/bot/$action")({
         const action = params.action;
         const db = await adminDb();
 
+        if (action === "health") {
+          const checks = await Promise.all([
+            db.from("telegram_accounts").select("telegram_id").limit(1),
+            db.from("profiles").select("id, balance, bonus_balance, referral_code").limit(1),
+            db.from("self_checks").select("id, source, submitted_cards, full_cards, refunded_usd").limit(1),
+            db.from("api_keys").select("id, user_id, prefix, active").limit(1),
+            db.rpc("bot_check_price"),
+          ]);
+          const failed = checks.find((result) => result.error);
+          if (failed?.error) {
+            return json({ status: "error", message: `bot_setup_incomplete: ${failed.error.message}` }, 503);
+          }
+          return json({ status: "success", service: "zoru-bot-bridge" });
+        }
+
         let account;
         try {
           account = await getOrCreateBotAccount({
