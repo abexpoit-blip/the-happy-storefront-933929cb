@@ -78,6 +78,9 @@ const ApiAccess = () => {
         description="Run card checks from your own bot, site or script — straight from our server."
       />
 
+      <BuildBotBanner className="mb-5" />
+
+
       <div className="grid gap-4 sm:grid-cols-3 mb-5">
         <StatCard label="Access fee" value={`$${fee.toFixed(2)}`} icon={KeyRound} hint={`Then $${(info?.pricePerCard ?? 0.02).toFixed(2)} per card checked`} />
         <StatCard label="Your balance" value={`$${balance.toFixed(2)}`} icon={Wallet} tone="green" />
