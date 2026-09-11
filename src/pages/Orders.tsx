@@ -511,6 +511,15 @@ const OrderDetail = ({
           <span className="text-[12px] text-white/55">
             Dead cards are refunded automatically · {pendingCount} card{pendingCount === 1 ? "" : "s"} left to check
           </span>
+          <span
+            className={`rounded-md border px-3 py-1.5 text-[12px] font-semibold font-mono ${
+              windowLeft > 0
+                ? "border-[#ffb300]/40 bg-[#ffb300]/10 text-[#ffca62]"
+                : "border-[#c62828]/40 bg-[#c62828]/10 text-[#ff8a80]"
+            }`}
+          >
+            {windowLeft > 0 ? `Refund check time left: ${fmtLeft(windowLeft)}` : "Time expired"}
+          </span>
         </div>
       )}
 
