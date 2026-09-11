@@ -57,13 +57,18 @@ DECLARE
   _bal numeric;
 BEGIN
   IF _cards IS NULL OR _cards < 1 THEN RAISE EXCEPTION 'no_cards'; END IF;
+  IF _cards > 500 THEN RAISE EXCEPTION 'too_many_cards'; END IF;
   _cost := round(_price * _cards, 2);
 
-  SELECT balance INTO _bal FROM profiles WHERE id = _user_id FOR UPDATE;
+  SELECT COALESCE(balance, 0) + COALESCE(bonus_balance, 0) INTO _bal
+    FROM profiles WHERE id = _user_id FOR UPDATE;
   IF _bal IS NULL THEN RAISE EXCEPTION 'account_not_found'; END IF;
   IF _bal < _cost THEN RAISE EXCEPTION 'insufficient_balance_%', _cost::text; END IF;
 
-  UPDATE profiles SET balance = balance - _cost WHERE id = _user_id;
+  UPDATE profiles
+     SET bonus_balance = bonus_balance - LEAST(COALESCE(bonus_balance, 0), _cost),
+         balance = balance - GREATEST(_cost - COALESCE(bonus_balance, 0), 0)
+   WHERE id = _user_id;
   INSERT INTO balance_transactions (user_id, amount, kind, description)
   VALUES (_user_id, -_cost, 'bot_check', _cards::text || ' card(s) checked from Telegram bot');
 

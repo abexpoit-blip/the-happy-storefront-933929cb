@@ -134,7 +134,7 @@ export async function getOrCreateBotAccount(input: {
 /** Everything the bot shows on the profile / main menu. */
 export async function botAccountSnapshot(account: BotAccount) {
   const db = await adminDb();
-  const [{ data: profile }, { data: refs }, { data: key }, { data: settings }, { count: orderCount }] =
+  const [profileResult, refsResult, keyResult, settingsResult, ordersResult] =
     await Promise.all([
       db
         .from("profiles")
@@ -158,6 +158,17 @@ export async function botAccountSnapshot(account: BotAccount) {
       ]),
       db.from("orders").select("id", { count: "exact", head: true }).eq("user_id", account.userId),
     ]);
+
+  const failed = [profileResult, refsResult, keyResult, settingsResult, ordersResult].find(
+    (result) => result.error,
+  );
+  if (failed?.error) throw new Error(`bot_snapshot_failed: ${failed.error.message}`);
+  const profile = profileResult.data;
+  if (!profile) throw new Error("bot_profile_missing");
+  const refs = refsResult.data;
+  const key = keyResult.data;
+  const settings = settingsResult.data;
+  const orderCount = ordersResult.count;
 
   const map = Object.fromEntries(
     ((settings ?? []) as { key: string; value: string }[]).map((r) => [r.key, r.value]),

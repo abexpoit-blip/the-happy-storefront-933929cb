@@ -138,6 +138,17 @@ export const Route = createFileRoute("/api/public/bot/$action")({
               const origin = siteOrigin(request);
 
               await db.rpc("expire_stale_deposits");
+              const { data: openDeposit } = await db
+                .from("deposits")
+                .select("id")
+                .eq("user_id", account.userId)
+                .eq("status", "pending")
+                .gte("created_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
+                .limit(1)
+                .maybeSingle();
+              if (openDeposit) {
+                return json({ status: "error", message: "deposit_already_pending" }, 409);
+              }
               const { data: dep, error } = await db
                 .from("deposits")
                 .insert({

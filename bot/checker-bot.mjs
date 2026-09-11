@@ -123,6 +123,7 @@ function friendlyError(error) {
   if (raw.includes("account_banned")) return "This account is banned.";
   if (raw.includes("insufficient_balance")) return "Not enough balance. Use ➕ Deposit to top up.";
   if (raw.includes("invalid_gate")) return "That checking gate is not available.";
+  if (raw.includes("deposit_already_pending")) return "You already have a pending deposit. Open Deposit history before creating another.";
   if (raw.includes("checker_not_configured")) return "The checker service is temporarily unavailable.";
   if (raw.includes("refund_settlement_failed")) return "Result saved, but refund settlement needs support.";
   if (raw.includes("server_error") || raw.includes("fetch failed")) return "The website service is temporarily unavailable.";
@@ -242,6 +243,14 @@ async function runCheck(chat, from, cards) {
     `⏳ Checking <b>${task.total}</b> card(s) on <code>${esc(task.gate)}</code>\nCharged: <b>${money(task.cost)}</b>`,
   );
 
+  // Poll in the background so this chat can still use balance/menu commands.
+  void pollCheck(chat, from, task, status).catch(async (error) => {
+    console.error("check polling error", error);
+    await menu(chat, `⚠️ ${esc(friendlyError(error))}`).catch(() => {});
+  });
+}
+
+async function pollCheck(chat, from, task, status) {
   const started = Date.now();
   let last = "";
   while (Date.now() - started < 20 * 60 * 1000) {
