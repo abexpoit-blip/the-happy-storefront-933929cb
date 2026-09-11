@@ -73,7 +73,7 @@ const Bins = () => {
 
   return (
     <AppShell>
-      <Seo title="BIN Shop — Zoru" description="Verified BIN list with card type, level, brand and category." />
+      <Seo title="BIN Shop — Zoru" description="Verified BIN list with card type, level, brand and category." path="/bins" />
 
       <div className="rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent p-6 mb-6">
         <div className="flex items-center gap-3">

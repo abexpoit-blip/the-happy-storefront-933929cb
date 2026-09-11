@@ -70,7 +70,7 @@ const Dumps = () => {
 
   return (
     <AppShell>
-      <Seo title="DUMP — bulk card files" description="Bulk remaining / expiring card files sold as ready-to-download packs." />
+      <Seo title="DUMP — bulk card files" description="Bulk remaining / expiring card files sold as ready-to-download packs." path="/dumps" />
 
       <div className="rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent p-6 mb-6">
         <div className="flex items-center gap-3">
