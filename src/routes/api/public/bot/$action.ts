@@ -78,7 +78,7 @@ export const Route = createFileRoute("/api/public/bot/$action")({
             /* ---------------- gates ---------------- */
             case "gates": {
               const { listGates, GATE_CATALOG } = await import("@/lib/checkerccv.server");
-              let gates;
+              let gates: { id: string; description?: string }[];
               try {
                 gates = await listGates(true);
               } catch {
