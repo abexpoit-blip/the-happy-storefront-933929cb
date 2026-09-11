@@ -355,6 +355,34 @@ const AdminBotControl = () => {
                   Effective cost: ${((settings.check_credit_cost || 0) / (settings.credits_per_usd || 1000)).toFixed(4)} per check
                 </p>
               </div>
+
+              {/* Admin Contact URL */}
+              <div>
+                <Label className="text-[10px] uppercase font-bold tracking-widest text-[#38bdf8]">Contact Admin URL / Telegram</Label>
+                <Input
+                  value={settings.bot_admin_contact}
+                  onChange={(e) => setS("bot_admin_contact", e.target.value)}
+                  placeholder="https://t.me/samexpoit"
+                  className="mt-1.5 bg-[#131f40] border-slate-600 text-white font-medium"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Telegram user or support link opened when users tap "📩 Contact Admin" in the bot.
+                </p>
+              </div>
+
+              {/* Website URL */}
+              <div>
+                <Label className="text-[10px] uppercase font-bold tracking-widest text-[#38bdf8]">Website URL</Label>
+                <Input
+                  value={settings.bot_website_url}
+                  onChange={(e) => setS("bot_website_url", e.target.value)}
+                  placeholder="https://zoru.cc/"
+                  className="mt-1.5 bg-[#131f40] border-slate-600 text-white font-medium"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Website URL opened when users tap "🌐 Website" in the bot.
+                </p>
+              </div>
             </div>
 
             <Button onClick={handleSaveSettings} disabled={saving} className="bg-blue-600 hover:bg-blue-500 text-white font-bold">

@@ -1,4 +1,4 @@
-﻿import { createServerFn } from "@tanstack/react-start";
+import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
@@ -27,6 +27,8 @@ export interface BotSettings {
   min_deposit: number;
   check_credit_cost: number;
   credits_per_usd: number;
+  bot_admin_contact: string;
+  bot_website_url: string;
 }
 
 export interface BroadcastRow {
@@ -79,6 +81,7 @@ export const getBotSettings = createServerFn({ method: "GET" })
     const keys = [
       "bot_maintenance", "bot_maintenance_msg", "bot_notice",
       "checker_enabled", "min_deposit", "check_credit_cost", "credits_per_usd",
+      "bot_admin_contact", "bot_website_url",
     ];
     const { data: rows } = await db.from("site_settings").select("key, value").in("key", keys);
     const map: Record<string, string> = {};
@@ -91,6 +94,8 @@ export const getBotSettings = createServerFn({ method: "GET" })
       min_deposit: Number(map["min_deposit"] ?? 5),
       check_credit_cost: Number(map["check_credit_cost"] ?? 30),
       credits_per_usd: Number(map["credits_per_usd"] ?? 1000),
+      bot_admin_contact: map["bot_admin_contact"] ?? "https://t.me/samexpoit",
+      bot_website_url: map["bot_website_url"] ?? "https://zoru.cc/",
     };
   });
 
@@ -105,6 +110,8 @@ export const saveBotSettings = createServerFn({ method: "POST" })
       min_deposit: z.number().min(0).optional(),
       check_credit_cost: z.number().min(0).optional(),
       credits_per_usd: z.number().min(1).optional(),
+      bot_admin_contact: z.string().max(300).optional(),
+      bot_website_url: z.string().max(300).optional(),
     }).parse(input ?? {})
   )
   .handler(async ({ data, context }) => {
@@ -120,6 +127,8 @@ export const saveBotSettings = createServerFn({ method: "POST" })
     if (data.min_deposit !== undefined) pairs.push(["min_deposit", String(data.min_deposit)]);
     if (data.check_credit_cost !== undefined) pairs.push(["check_credit_cost", String(data.check_credit_cost)]);
     if (data.credits_per_usd !== undefined) pairs.push(["credits_per_usd", String(data.credits_per_usd)]);
+    if (data.bot_admin_contact !== undefined) pairs.push(["bot_admin_contact", data.bot_admin_contact]);
+    if (data.bot_website_url !== undefined) pairs.push(["bot_website_url", data.bot_website_url]);
     await Promise.all(
       pairs.map(([k, v]) =>
         db.from("site_settings").upsert({ key: k, value: v }, { onConflict: "key" })

@@ -55,27 +55,35 @@ async function tg(method, payload, timeoutMs = TELEGRAM_REQUEST_TIMEOUT_MS) {
   return data.result;
 }
 
-/* ── Premium MENU ── */
-const MENU = {
-  inline_keyboard: [
-    [
-      { text: "💎 Balance & Profile", callback_data: "balance" },
-      { text: "📥 Deposit", callback_data: "deposit" },
+/* ── Premium MENU (Modern 2-Column Grid) ── */
+function buildMenuKeyboard(settings = settingsCache) {
+  const adminContactUrl = settings.bot_admin_contact || "https://t.me/samexpoit";
+  const websiteUrl = settings.bot_website_url || BASE;
+
+  return {
+    inline_keyboard: [
+      [
+        { text: "💳 Check Card", callback_data: "check" },
+        { text: "💰 Earn Credit", callback_data: "refer" },
+      ],
+      [
+        { text: "💰 Balance", callback_data: "balance" },
+        { text: "⚡ Gate", callback_data: "gates" },
+      ],
+      [
+        { text: "💎 Recharge", callback_data: "deposit" },
+        { text: "📊 Statistics", callback_data: "tasks" },
+      ],
+      [
+        { text: "🔑 API Info", callback_data: "api" },
+        { text: "🌐 Website", url: websiteUrl },
+      ],
+      [
+        { text: "📩 Contact Admin", url: adminContactUrl },
+      ],
     ],
-    [
-      { text: "🃏 Check Cards", callback_data: "check" },
-      { text: "⚡ Gate", callback_data: "gates" },
-    ],
-    [
-      { text: "👥 Referrals", callback_data: "refer" },
-      { text: "🔑 API Access", callback_data: "api" },
-    ],
-    [
-      { text: "📋 My Tasks", callback_data: "tasks" },
-      { text: "🌐 Website", url: BASE },
-    ],
-  ],
-};
+  };
+}
 
 const send = (chat, text, extra = {}) =>
   tg("sendMessage", { chat_id: chat, text, parse_mode: "HTML", disable_web_page_preview: true, ...extra });
@@ -84,16 +92,24 @@ const edit = (chat, msgId, text, extra = {}) =>
   tg("editMessageText", { chat_id: chat, message_id: msgId, text, parse_mode: "HTML", disable_web_page_preview: true, ...extra }).catch(() => {});
 
 const menu = async (chat, text) => {
-  const notice = await getBotNotice();
-  const fullText = notice ? `${text}\n\n<i>${esc(notice)}</i>` : text;
-  return send(chat, fullText, { reply_markup: MENU });
+  const s = await getSettings();
+  const notice = s.bot_notice;
+  const fullText = notice ? `${text}\n\n<i>📢 ${esc(notice)}</i>` : text;
+  return send(chat, fullText, { reply_markup: buildMenuKeyboard(s) });
 };
 
 /* ------------------------------------------------------------------ */
-/* Bot settings cache (refreshed every 5 min)                         */
+/* Bot settings cache (refreshed every 2 min)                         */
 /* ------------------------------------------------------------------ */
 
-let settingsCache = { bot_maintenance: false, bot_maintenance_msg: "", bot_notice: "", checker_enabled: true };
+let settingsCache = {
+  bot_maintenance: false,
+  bot_maintenance_msg: "",
+  bot_notice: "",
+  checker_enabled: true,
+  bot_admin_contact: "https://t.me/samexpoit",
+  bot_website_url: BASE,
+};
 let settingsCachedAt = 0;
 
 async function refreshSettings() {
@@ -104,13 +120,15 @@ async function refreshSettings() {
       bot_maintenance_msg: String(d.bot_maintenance_msg || "🔧 Under maintenance. Please check back shortly."),
       bot_notice: String(d.bot_notice || ""),
       checker_enabled: Boolean(d.checker_enabled !== false),
+      bot_admin_contact: String(d.bot_admin_contact || "https://t.me/samexpoit"),
+      bot_website_url: String(d.bot_website_url || BASE),
     };
   } catch { /* keep previous */ }
   settingsCachedAt = Date.now();
 }
 
 async function getSettings() {
-  if (Date.now() - settingsCachedAt > 5 * 60 * 1000) await refreshSettings();
+  if (Date.now() - settingsCachedAt > 2 * 60 * 1000) await refreshSettings();
   return settingsCache;
 }
 
@@ -170,30 +188,37 @@ function formatCountdown(expiresMs) {
 
 function buildDepositCard(d, expiresMs) {
   return [
-    `💳 <b>Deposit Invoice</b>`,
+    `━━━━━━━━━━━━━━━━━━━`,
+    `💎 <b>CRYPTO RECHARGE INVOICE</b>`,
+    `━━━━━━━━━━━━━━━━━━━`,
+    `<b>Status:</b> ⏳ Waiting for payment`,
     ``,
-    `💵 You will receive: <b>${money(d.credit)}</b>`,
-    d.fee > 0 ? `💸 Fee: ${money(d.fee)} · Total charged: <b>${money(d.charged)}</b>` : `💵 Amount: <b>${money(d.charged)}</b>`,
+    `💰 <b>Amount Details:</b>`,
+    `┌ Credit to wallet: <b>${money(d.credit)}</b>`,
+    d.fee > 0 ? `├ Network fee: <b>${money(d.fee)}</b>` : "",
+    `└ Total charged: <b>${money(d.charged)}</b>`,
     ``,
-    `🔗 Send exactly:`,
+    `🔗 <b>Send Exactly (LTC):</b>`,
     `<code>${esc(d.crypto_amount)} LTC</code>`,
+    `<i>(Tap amount to copy)</i>`,
     ``,
-    `📬 To wallet address:`,
+    `📬 <b>Deposit Address:</b>`,
     `<code>${esc(d.wallet_address)}</code>`,
+    `<i>(Tap address to copy)</i>`,
     ``,
-    formatCountdown(expiresMs),
+    `⏱ ${formatCountdown(expiresMs)}`,
+    d.invoice_url ? `\n🌐 <a href="${esc(d.invoice_url)}"><b>Open Hosted Payment Page</b></a>` : "",
     ``,
-    d.invoice_url ? `<a href="${esc(d.invoice_url)}">🌐 Open payment page</a>` : ``,
-    ``,
-    `✅ Balance is credited <b>automatically</b> once confirmed.`,
-  ].filter((l) => l !== undefined).join("\n");
+    `⚡ <i>Funds will be added automatically to your account balance after 1 network confirmation.</i>`,
+    `━━━━━━━━━━━━━━━━━━━`,
+  ].filter((l) => l !== "").join("\n");
 }
 
 function depositButtons(depositId) {
   return {
     inline_keyboard: [
       [
-        { text: "✅ Check payment status", callback_data: `dep_status:${depositId}` },
+        { text: "🔄 Check Payment Status", callback_data: `dep_status:${depositId}` },
         { text: "❌ Cancel", callback_data: "balance" },
       ],
     ],
@@ -262,30 +287,68 @@ function enqueue(chat, job) {
 
 async function showAccount(chat, from) {
   const { account } = await api("session", from);
+  const handle = account.username ? `@${account.username}` : esc(from.first_name || "User");
+  const tgId = from.id;
+  const gateName = account.gate || account.default_gate;
+  const isBanned = Boolean(account.blocked);
+
   const lines = [
-    `<b>👤 ${esc(account.username || from.first_name || "user")}</b>`,
+    `━━━━━━━━━━━━━━━━━━━`,
+    `👤 <b>USER PROFILE</b>`,
+    `━━━━━━━━━━━━━━━━━━━`,
+    `<b>Username:</b> ${handle}`,
+    `<b>User ID:</b> <code>${tgId}</code>`,
+    `<b>Status:</b> ${isBanned ? "🔴 Banned" : "🟢 Active Member"}`,
     ``,
-    `💎 Balance: <b>${money(account.balance)}</b>`,
-    `🎁 Bonus: <b>${money(account.bonus_balance)}</b>`,
-    `🃏 Price per check: <b>${money(account.price_per_card)}</b>`,
-    `⚡ Gate: <code>${esc(account.gate || account.default_gate)}</code>`,
-    `👥 Referrals: <b>${account.referral_count}</b> · earned <b>${money(account.referral_earned)}</b>`,
-    `🔑 API: ${account.api_key?.active ? `active (<code>${esc(account.api_key.prefix)}…</code>)` : `not active — ${money(account.api_fee)}`}`,
+    `💰 <b>WALLET DETAILS</b>`,
+    `┌ <b>Balance:</b> <code>${money(account.balance)}</code>`,
+    `├ <b>Bonus Balance:</b> <code>${money(account.bonus_balance)}</code>`,
+    `└ <b>Total Available:</b> <code>${money((account.balance || 0) + (account.bonus_balance || 0))}</code>`,
+    ``,
+    `⚙️ <b>CHECKER CONFIG</b>`,
+    `┌ <b>Active Gate:</b> <code>${esc(gateName)}</code>`,
+    `└ <b>Rate:</b> <code>${money(account.price_per_card)}</code> / card`,
+    ``,
+    `🤝 <b>AFFILIATE & REWARDS</b>`,
+    `┌ <b>Invited:</b> <b>${account.referral_count}</b> users`,
+    `└ <b>Earned:</b> <code>${money(account.referral_earned)}</code>`,
+    `━━━━━━━━━━━━━━━━━━━`,
   ];
-  if (account.blocked) lines.push("", "🚫 <b>This account is banned.</b>");
+
+  if (isBanned) {
+    lines.push("", "⚠️ <i>Your account is currently suspended. Please contact support.</i>");
+  }
+
   await menu(chat, lines.join("\n"));
 }
 
 async function startDeposit(chat) {
   pendingAction.set(chat, "deposit");
+  const s = await getSettings();
   await send(chat, [
-    `📥 <b>Add funds</b>`,
+    `━━━━━━━━━━━━━━━━━━━`,
+    `💎 <b>RECHARGE BALANCE (LTC)</b>`,
+    `━━━━━━━━━━━━━━━━━━━`,
+    `Please type the amount in USD you want to deposit into your account:`,
     ``,
-    `Send the amount in USD you want to deposit.`,
-    `Example: <code>50</code>`,
+    `💡 <i>Examples:</i> <code>10</code>, <code>25</code>, <code>50</code>, <code>100</code>`,
     ``,
-    `Minimum: $5 · Payment method: <b>LTC (Litecoin)</b>`,
-  ].join("\n"));
+    `⚡ <b>Payment Method:</b> Litecoin (LTC)`,
+    `💵 <b>Minimum Recharge:</b> <code>$${s.min_deposit || 5}</code>`,
+    `━━━━━━━━━━━━━━━━━━━`,
+  ].join("\n"), {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "$10", callback_data: "recharge:10" },
+          { text: "$25", callback_data: "recharge:25" },
+          { text: "$50", callback_data: "recharge:50" },
+          { text: "$100", callback_data: "recharge:100" },
+        ],
+        [{ text: "🔙 Cancel", callback_data: "balance" }],
+      ],
+    },
+  });
 }
 
 async function createDeposit(chat, from, amount) {
@@ -337,27 +400,54 @@ async function checkDepositStatus(chat, from, depositId) {
 
 async function showReferrals(chat, from) {
   const { account } = await api("session", from);
-  const link = `${BASE}/auth?ref=${account.referral_code || ""}`;
+  const webOrigin = settingsCache.bot_website_url || BASE;
+  const link = `${webOrigin.replace(/\/+$/, "")}/auth?ref=${account.referral_code || ""}`;
+
   await menu(
     chat,
     [
-      `<b>👥 Referral program</b>`,
+      `━━━━━━━━━━━━━━━━━━━`,
+      `💰 <b>EARN CREDIT & AFFILIATE</b>`,
+      `━━━━━━━━━━━━━━━━━━━`,
+      `Invite friends or customers to our platform and earn automatic cash bonuses directly to your balance!`,
       ``,
-      `Your code: <code>${esc(account.referral_code || "-")}</code>`,
-      `Your link: ${esc(link)}`,
+      `🎟 <b>Your Referral Code:</b> <code>${esc(account.referral_code || "-")}</code>`,
+      `🔗 <b>Your Invite Link:</b>`,
+      `<code>${esc(link)}</code>`,
       ``,
-      `You earn <b>${money(account.referral_bonus)}</b> for every referred user who makes a successful deposit (paid once per user).`,
-      `Referrals: <b>${account.referral_count}</b> · Earned: <b>${money(account.referral_earned)}</b>`,
+      `🎁 <b>Commission Rate:</b> <code>${money(account.referral_bonus)}</code> per approved deposit`,
+      `👥 <b>Total Invited:</b> <b>${account.referral_count}</b> users`,
+      `💵 <b>Total Bonus Earned:</b> <code>${money(account.referral_earned)}</code>`,
+      `━━━━━━━━━━━━━━━━━━━`,
     ].join("\n"),
   );
 }
 
 async function showGates(chat, from) {
   const g = await api("gates", from);
-  const rows = g.gates.slice(0, 20).map((gate) => [{ text: `⚡ ${gate.id}`, callback_data: `gate:${gate.id}` }]);
-  await send(chat, `⚡ Current gate: <code>${esc(g.selected)}</code>\nPick a gate:`, {
-    reply_markup: { inline_keyboard: rows.length ? rows : MENU.inline_keyboard },
-  });
+  const rows = g.gates.slice(0, 20).map((gate) => [
+    {
+      text: `${gate.id === g.selected ? "✅ " : "⚡ "}${gate.id}`,
+      callback_data: `gate:${gate.id}`,
+    },
+  ]);
+  rows.push([{ text: "🔙 Main Menu", callback_data: "balance" }]);
+
+  await send(
+    chat,
+    [
+      `━━━━━━━━━━━━━━━━━━━`,
+      `⚡ <b>CHECKER GATES SELECTION</b>`,
+      `━━━━━━━━━━━━━━━━━━━`,
+      `Current Active Gate: <code>${esc(g.selected)}</code>`,
+      ``,
+      `Select a gateway below to activate:`,
+      `━━━━━━━━━━━━━━━━━━━`,
+    ].join("\n"),
+    {
+      reply_markup: { inline_keyboard: rows },
+    },
+  );
 }
 
 async function startCheck(chat) {
@@ -365,12 +455,17 @@ async function startCheck(chat) {
   await send(
     chat,
     [
-      "🃏 <b>Send cards to check</b>",
-      "",
-      "Single card or bulk — one per line, or upload a <code>.txt</code> file (max 500).",
-      "Format: <code>PAN|MM|YYYY|CVV</code>",
-      "",
-      "Example: <code>4111111111111111|12|2028|123</code>",
+      `━━━━━━━━━━━━━━━━━━━`,
+      `💳 <b>CHECK CARDS (SINGLE / BULK)</b>`,
+      `━━━━━━━━━━━━━━━━━━━`,
+      `Send your card(s) now in the chat or upload a <code>.txt</code> file (up to 500 cards).`,
+      ``,
+      `📋 <b>Standard Format:</b>`,
+      `<code>PAN|MM|YYYY|CVV</code>`,
+      ``,
+      `💡 <i>Example:</i>`,
+      `<code>4111111111111111|12|2028|123</code>`,
+      `━━━━━━━━━━━━━━━━━━━`,
     ].join("\n"),
   );
 }
@@ -378,11 +473,11 @@ async function startCheck(chat) {
 async function runCheck(chat, from, cards) {
   const settings = await getSettings();
   if (!settings.checker_enabled) {
-    await menu(chat, "🚫 <b>Checker is currently disabled.</b>\n\nPlease check back later.");
+    await menu(chat, "🚫 <b>Checker is currently disabled by admin.</b>\n\nPlease check back later.");
     return;
   }
   if (!cards.length) {
-    await send(chat, "No valid cards found. Format: <code>PAN|MM|YYYY|CVV</code>");
+    await send(chat, "❌ No valid cards found. Format: <code>PAN|MM|YYYY|CVV</code>");
     return;
   }
   let task;
@@ -391,7 +486,7 @@ async function runCheck(chat, from, cards) {
   } catch (e) {
     const msg = String(e.message || "");
     if (msg.includes("insufficient_balance")) {
-      await menu(chat, "❌ Not enough balance. Use 📥 Deposit to top up.");
+      await menu(chat, "❌ <b>Insufficient Balance</b>\nPlease recharge your balance first using 💎 Recharge.");
       return;
     }
     await menu(chat, `❌ ${esc(msg)}`);
@@ -400,7 +495,12 @@ async function runCheck(chat, from, cards) {
 
   const status = await send(
     chat,
-    `⏳ Checking <b>${task.total}</b> card(s) on <code>${esc(task.gate)}</code>\nCharged: <b>${money(task.cost)}</b>`,
+    [
+      `⏳ <b>Checking Started...</b>`,
+      `Cards: <b>${task.total}</b>`,
+      `Gate: <code>${esc(task.gate)}</code>`,
+      `Charged: <b>${money(task.cost)}</b>`,
+    ].join("\n"),
   );
 
   void pollCheck(chat, from, task, status).catch(async (error) => {
@@ -416,30 +516,34 @@ async function pollCheck(chat, from, task, status) {
     await new Promise((r) => setTimeout(r, 4000));
     let res;
     try { res = await api("result", from, { task_id: task.task_id }); } catch { continue; }
-    const line = `⏳ ${res.answered}/${res.total} done · ✅ ${res.live} live · ❌ ${res.dead} dead`;
+    const line = `⏳ <b>Checking:</b> ${res.answered}/${res.total} | 🟢 <b>${res.live} Live</b> | 🔴 <b>${res.dead} Dead</b>`;
     if (line !== last && status) {
       last = line;
       await tg("editMessageText", { chat_id: chat, message_id: status.message_id, text: line, parse_mode: "HTML" }).catch(() => {});
     }
     if (res.done) { await sendResults(chat, task, res); return; }
   }
-  await menu(chat, "Task is taking too long — use 📋 My tasks to fetch the result later.");
+  await menu(chat, "⚠️ Task took longer than expected — use 📊 Statistics to fetch the result.");
 }
 
 async function sendResults(chat, task, res) {
   const lives = res.rows.filter((r) => r.status === "live");
   const summary = [
-    `<b>✅ Check finished</b>`,
+    `━━━━━━━━━━━━━━━━━━━`,
+    `✅ <b>CHECK COMPLETED</b>`,
+    `━━━━━━━━━━━━━━━━━━━`,
+    `📊 <b>Results:</b>`,
+    `┌ Total: <b>${res.total}</b>`,
+    `├ 🟢 Live: <b>${res.live}</b>`,
+    `├ 🔴 Dead: <b>${res.dead}</b>`,
+    res.refunded > 0 ? `└ 💸 Refunded: <b>${money(res.refunded)}</b>` : `└ Unresolved: <b>${res.total - res.live - res.dead}</b>`,
     ``,
-    `Total: <b>${res.total}</b> · Live: <b>${res.live}</b> · Dead: <b>${res.dead}</b>`,
-    res.refunded > 0 ? `Refunded (no answer): <b>${money(res.refunded)}</b>` : "",
-    ``,
+    `🟢 <b>LIVE CARDS:</b>`,
     lives.length
-      ? lives.slice(0, 20).map((r) => `✅ <code>${esc(r.card)}</code> — ${esc(r.category)}`).join("\n")
-      : "No live cards.",
-  ]
-    .filter(Boolean)
-    .join("\n");
+      ? lives.slice(0, 20).map((r) => `✅ <code>${esc(r.card)}</code> — <i>${esc(r.category || "Approved")}</i>`).join("\n")
+      : "<i>No live cards in this batch.</i>",
+    `━━━━━━━━━━━━━━━━━━━`,
+  ].join("\n");
   await menu(chat, summary);
 
   const body = res.rows.map((r) => `${r.status.toUpperCase()} | ${r.card} | ${r.category} | ${r.msg}`).join("\n");
@@ -451,56 +555,106 @@ async function sendResults(chat, task, res) {
 
 async function showTasks(chat, from) {
   const t = await api("tasks", from);
-  if (!t.tasks.length) { await menu(chat, "No checks yet."); return; }
-  await menu(
-    chat,
-    [
-      "<b>📋 Recent checks</b>",
-      "",
-      ...t.tasks.map((x) => `<code>${esc(x.task_id)}</code> · ${x.total} cards · ${x.status} · ${money(x.cost)}`),
-      "",
-      "Fetch one with <code>/task &lt;id&gt;</code>",
-    ].join("\n"),
-  );
+  if (!t.tasks.length) {
+    await menu(chat, "📊 <b>Statistics & History</b>\n\nNo check tasks performed yet.");
+    return;
+  }
+  const lines = [
+    `━━━━━━━━━━━━━━━━━━━`,
+    `📊 <b>CHECK STATISTICS & RECENT RUNS</b>`,
+    `━━━━━━━━━━━━━━━━━━━`,
+    ...t.tasks.map(
+      (x) =>
+        `• <code>${esc(x.task_id)}</code>\n  └ <b>${x.total}</b> cards | Gate: <code>${esc(x.gate)}</code> | ${x.status === "finished" ? "🟢 Done" : "⏳ " + x.status} | ${money(x.cost)}`,
+    ),
+    ``,
+    `🔍 <i>Fetch details of any task:</i>`,
+    `<code>/task &lt;id&gt;</code>`,
+    `━━━━━━━━━━━━━━━━━━━`,
+  ];
+  await menu(chat, lines.join("\n"));
 }
 
 async function showApi(chat, from) {
   const { account } = await api("session", from);
+  const webOrigin = settingsCache.bot_website_url || BASE;
+
   if (account.api_key?.active) {
     await menu(chat, [
-      "<b>🔑 API access — active</b>",
-      "",
-      `Key prefix: <code>${esc(account.api_key.prefix)}…</code>`,
-      "",
-      "Endpoints:",
-      `<code>POST ${BASE}/api/public/checker/check</code>`,
-      `<code>POST ${BASE}/api/public/checker/result</code>`,
-      `<code>GET  ${BASE}/api/public/checker/balance</code>`,
-      "",
-      "Send your key in the <code>x-api-key</code> header.",
+      `━━━━━━━━━━━━━━━━━━━`,
+      `🔑 <b>REST API ACCESS (ACTIVE)</b>`,
+      `━━━━━━━━━━━━━━━━━━━`,
+      `<b>Status:</b> 🟢 Active & Ready`,
+      `<b>Key Prefix:</b> <code>${esc(account.api_key.prefix)}…</code>`,
+      ``,
+      `📡 <b>API Endpoints:</b>`,
+      `• <b>Check Cards:</b>`,
+      `  <code>POST ${webOrigin}/api/public/checker/check</code>`,
+      `• <b>Check Status / Result:</b>`,
+      `  <code>POST ${webOrigin}/api/public/checker/result</code>`,
+      `• <b>Balance & Limits:</b>`,
+      `  <code>GET  ${webOrigin}/api/public/checker/balance</code>`,
+      ``,
+      `🛡 <b>Authentication:</b>`,
+      `Pass your secret API key in the header:`,
+      `<code>x-api-key: YOUR_API_KEY</code>`,
+      ``,
+      `📖 <i>Tip: For documentation, open the website API section.</i>`,
+      `━━━━━━━━━━━━━━━━━━━`,
     ].join("\n"));
     return;
   }
+
   await send(
     chat,
     [
-      "<b>🔑 API access</b>",
-      "",
-      `One-time fee: <b>${money(account.api_fee)}</b> — same as the website.`,
-      "It is charged from your balance and the key is shown once.",
+      `━━━━━━━━━━━━━━━━━━━`,
+      `🔑 <b>DEVELOPER API ACCESS</b>`,
+      `━━━━━━━━━━━━━━━━━━━`,
+      `Integrate our high-speed CCV & CCN checker directly into your own tools, scripts, or custom bots.`,
+      ``,
+      `⚡ <b>Features:</b>`,
+      `• Real-time CCV & CCN auth check results`,
+      `• High concurrency & minimal latency`,
+      `• JSON response with card bins & status`,
+      `• Auto-refund for unresolved checks`,
+      ``,
+      `💳 <b>Lifetime Setup Fee:</b> <code>${money(account.api_fee)}</code>`,
+      `<i>Charged once from your bot balance. Your key will be generated immediately.</i>`,
+      `━━━━━━━━━━━━━━━━━━━`,
     ].join("\n"),
-    { reply_markup: { inline_keyboard: [[{ text: `🔑 Buy API access (${money(account.api_fee)})`, callback_data: "buyapi" }]] } },
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: `🔑 Purchase API Key (${money(account.api_fee)})`, callback_data: "buyapi" }],
+          [{ text: "🔙 Main Menu", callback_data: "balance" }],
+        ],
+      },
+    },
   );
 }
 
 async function buyApi(chat, from) {
   try {
     const r = await api("apikey", from);
-    await menu(chat, `✅ API access active.\n\nYour key (shown once):\n<code>${esc(r.key)}</code>`);
+    await menu(
+      chat,
+      [
+        `━━━━━━━━━━━━━━━━━━━`,
+        `✅ <b>API ACCESS ACTIVATED!</b>`,
+        `━━━━━━━━━━━━━━━━━━━`,
+        `Your secret API Key has been generated:`,
+        ``,
+        `<code>${esc(r.key)}</code>`,
+        ``,
+        `⚠️ <b>IMPORTANT:</b> Copy and save this key safely now! It will <b>not</b> be shown again for security.`,
+        `━━━━━━━━━━━━━━━━━━━`,
+      ].join("\n"),
+    );
   } catch (e) {
     const msg = String(e.message || "");
-    if (msg.includes("insufficient_balance")) await menu(chat, "❌ Not enough balance for API access.");
-    else if (msg.includes("api_already_active")) await menu(chat, "You already have an active API key.");
+    if (msg.includes("insufficient_balance")) await menu(chat, "❌ <b>Insufficient Balance</b>\nPlease recharge your balance first using 💎 Recharge.");
+    else if (msg.includes("api_already_active")) await menu(chat, "ℹ️ You already have an active API key.");
     else await menu(chat, `❌ ${esc(msg)}`);
   }
 }
@@ -541,22 +695,24 @@ async function handleMessage(msg) {
       case "/start": {
         const ref = args[0] ? { ref: args[0] } : {};
         await api("session", from, ref);
+        const name = esc(from.first_name || from.username || "Member");
         await menu(
           chat,
           [
-            `<b>🎉 Welcome to Zoru Checker Bot!</b>`,
+            `━━━━━━━━━━━━━━━━━━━`,
+            `👋 <b>WELCOME TO ZORU CHECKER, ${name.toUpperCase()}!</b>`,
+            `━━━━━━━━━━━━━━━━━━━`,
+            `Your Telegram profile is <b>automatically synced</b> with our website platform with instant zero-fee LTC funding.`,
             ``,
-            `Your account is <b>instantly linked</b> to the website — same balance, same history.`,
+            `🚀 <b>What you can do:</b>`,
+            `┌ 💳 <b>Check Card:</b> Real-time fast CCV/CCN validation`,
+            `├ 💎 <b>Recharge:</b> Instant automated LTC deposit`,
+            `├ ⚡ <b>Gateways:</b> 7 Auth gates (Amazon, DoorDash, Braintree)`,
+            `├ 💰 <b>Affiliate:</b> Earn bonuses per referred user`,
+            `└ 🔑 <b>API Info:</b> Developer access & endpoints`,
             ``,
-            `<b>What you can do here:</b>`,
-            `💎 Check your balance &amp; profile`,
-            `📥 Deposit LTC to add funds`,
-            `🃏 Check cards (single or bulk up to 500)`,
-            `⚡ Choose your checking gate`,
-            `👥 Earn from the referral program`,
-            `🔑 Purchase API access`,
-            ``,
-            `Use the buttons below to get started 👇`,
+            `👇 <i>Select an option from the menu below:</i>`,
+            `━━━━━━━━━━━━━━━━━━━`,
           ].join("\n"),
         );
         return;
@@ -606,16 +762,19 @@ async function handleMessage(msg) {
         await menu(
           chat,
           [
-            "<b>📖 Commands</b>",
-            "",
-            "/balance — 💎 Profile &amp; balance",
-            "/deposit [amount] — 📥 Add funds with LTC",
-            "/check — 🃏 Check one card or bulk (or send a .txt)",
-            "/gate — ⚡ Pick a checking gate",
-            "/refer — 👥 Referral link &amp; earnings",
-            "/api — 🔑 API access",
-            "/tasks — 📋 Recent checks",
-            "/status — 🔍 Active deposit status",
+            `━━━━━━━━━━━━━━━━━━━`,
+            `📖 <b>BOT COMMANDS</b>`,
+            `━━━━━━━━━━━━━━━━━━━`,
+            `• /balance — 👤 User profile & wallet balance`,
+            `• /deposit [amount] — 💎 Recharge funds via LTC`,
+            `• /check — 💳 Check cards (single/bulk or file)`,
+            `• /gate — ⚡ Select checker gateway`,
+            `• /refer — 💰 Earn credit & referral code`,
+            `• /api — 🔑 REST API documentation & key`,
+            `• /tasks — 📊 Recent check tasks & stats`,
+            `• /status — 🔍 Check active deposit invoice`,
+            `• /menu — 📱 Main interactive menu`,
+            `━━━━━━━━━━━━━━━━━━━`,
           ].join("\n"),
         );
         return;
@@ -666,6 +825,15 @@ async function handleCallback(q) {
     return;
   }
 
+  if (data.startsWith("recharge:")) {
+    const amt = Number(data.slice(9));
+    if (amt > 0) {
+      pendingAction.delete(chat);
+      await createDeposit(chat, from, amt);
+      return;
+    }
+  }
+
   switch (data) {
     case "balance": return showAccount(chat, from);
     case "deposit": return startDeposit(chat);
@@ -691,15 +859,15 @@ async function main() {
   await tg("deleteWebhook", { drop_pending_updates: false });
   await tg("setMyCommands", {
     commands: [
-      { command: "menu", description: "Main menu" },
-      { command: "balance", description: "💎 Profile & balance" },
-      { command: "deposit", description: "📥 Add funds (LTC)" },
-      { command: "check", description: "🃏 Check cards" },
-      { command: "gate", description: "⚡ Choose gate" },
-      { command: "refer", description: "👥 Referral program" },
-      { command: "api", description: "🔑 API access" },
-      { command: "tasks", description: "📋 Recent checks" },
-      { command: "status", description: "🔍 Active deposit status" },
+      { command: "menu", description: "📱 Main interactive menu" },
+      { command: "balance", description: "👤 Profile & balance" },
+      { command: "deposit", description: "💎 Recharge balance (LTC)" },
+      { command: "check", description: "💳 Check cards (single/bulk)" },
+      { command: "gate", description: "⚡ Select checking gate" },
+      { command: "refer", description: "💰 Referral program & earn" },
+      { command: "api", description: "🔑 REST API documentation" },
+      { command: "tasks", description: "📊 Check statistics & history" },
+      { command: "status", description: "🔍 Check active deposit invoice" },
       { command: "help", description: "📖 Commands list" },
     ],
   });

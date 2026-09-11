@@ -474,7 +474,14 @@ export const Route = createFileRoute("/api/public/bot/$action")({
               const { data: rows, error: settErr } = await db
                 .from("site_settings")
                 .select("key, value")
-                .in("key", ["bot_maintenance", "bot_maintenance_msg", "bot_notice", "checker_enabled"]);
+                .in("key", [
+                  "bot_maintenance",
+                  "bot_maintenance_msg",
+                  "bot_notice",
+                  "checker_enabled",
+                  "bot_admin_contact",
+                  "bot_website_url",
+                ]);
               if (settErr) return json({ status: "error", message: "settings_fetch_failed" }, 500);
               const map: Record<string, string> = {};
               for (const r of rows ?? []) map[(r as { key: string; value: string }).key] = (r as { key: string; value: string }).value;
@@ -484,6 +491,8 @@ export const Route = createFileRoute("/api/public/bot/$action")({
                 bot_maintenance_msg: map["bot_maintenance_msg"] ?? "🔧 Under maintenance.",
                 bot_notice: map["bot_notice"] ?? "",
                 checker_enabled: map["checker_enabled"] !== "false",
+                bot_admin_contact: map["bot_admin_contact"] ?? "https://t.me/samexpoit",
+                bot_website_url: map["bot_website_url"] ?? "https://zoru.cc/",
               });
             }
 
