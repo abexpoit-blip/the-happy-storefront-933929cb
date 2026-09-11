@@ -9,6 +9,7 @@ import { myApiAccess, requestApiAccess, type MyApiAccess } from "@/lib/apiAccess
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { KeyRound, Terminal, Wallet, ShieldCheck, Copy } from "lucide-react";
+import { BuildBotBanner } from "@/components/BuildBotBanner";
 
 const BASE = typeof window !== "undefined" ? window.location.origin : "https://zoru.cc";
 
