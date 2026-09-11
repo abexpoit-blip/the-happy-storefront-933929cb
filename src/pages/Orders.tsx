@@ -339,8 +339,25 @@ const OrderDetail = ({
   const [checks, setChecks] = useState<CardCheck[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [bins, setBins] = useState<Record<string, BinInfo | null>>({});
+  const [now, setNow] = useState(() => Date.now());
   const start = useServerFn(startOrderCardCheck);
   const poll = useServerFn(pollOrderCardCheck);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  /** milliseconds left in the 2 minute refund-check window (0 = expired) */
+  const leftMs = useCallback((created: string) => {
+    const t = new Date(created).getTime();
+    if (!Number.isFinite(t)) return 0;
+    return Math.max(0, CHECK_WINDOW_MS - (now - t));
+  }, [now]);
+  const fmtLeft = (ms: number) => {
+    const s = Math.ceil(ms / 1000);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  };
 
   const loadChecks = useCallback(async () => {
     try { setChecks(await listChecksForOrders([order.id])); } catch { /* ignore */ }
