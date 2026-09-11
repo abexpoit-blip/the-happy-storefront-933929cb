@@ -37,11 +37,9 @@ done
 bash "$APP_DIR/selfhost/check-env.sh" "$APP_DIR/.env"
 
 
-if pm2 describe "$APP_NAME" >/dev/null 2>&1; then
-  pm2 restart "$APP_NAME" --update-env
-else
-  pm2 start .output/server/index.mjs --name "$APP_NAME" --update-env
-fi
+# Recreate instead of restart so removed/rotated values cannot survive in PM2.
+pm2 delete "$APP_NAME" >/dev/null 2>&1 || true
+pm2 start .output/server/index.mjs --name "$APP_NAME" --update-env
 pm2 save
 
 echo "OK: $APP_NAME restarted on port $PORT with env from .env"

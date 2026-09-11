@@ -115,6 +115,29 @@ function extractCards(text) {
 /* ------------------------------------------------------------------ */
 
 const pendingAction = new Map(); // chat id -> "deposit" | "check"
+const chatQueues = new Map(); // serialize updates from the same chat
+
+function friendlyError(error) {
+  const raw = String(error instanceof Error ? error.message : error || "server_error");
+  if (raw.includes("unauthorized")) return "Bot authorization failed. Please contact support.";
+  if (raw.includes("account_banned")) return "This account is banned.";
+  if (raw.includes("insufficient_balance")) return "Not enough balance. Use ➕ Deposit to top up.";
+  if (raw.includes("invalid_gate")) return "That checking gate is not available.";
+  if (raw.includes("checker_not_configured")) return "The checker service is temporarily unavailable.";
+  if (raw.includes("refund_settlement_failed")) return "Result saved, but refund settlement needs support.";
+  if (raw.includes("server_error") || raw.includes("fetch failed")) return "The website service is temporarily unavailable.";
+  return raw.replace(/^.*?:\s*/, "").slice(0, 180);
+}
+
+function enqueue(chat, job) {
+  const previous = chatQueues.get(chat) ?? Promise.resolve();
+  const current = previous.catch(() => {}).then(job);
+  chatQueues.set(chat, current);
+  current.finally(() => {
+    if (chatQueues.get(chat) === current) chatQueues.delete(chat);
+  });
+  return current;
+}
 
 async function showAccount(chat, from) {
   const { account } = await api("session", from);
@@ -346,6 +369,10 @@ async function handleMessage(msg) {
   const text = (msg.text || msg.caption || "").trim();
 
   if (msg.document) {
+    if (Number(msg.document.file_size ?? 0) > 1024 * 1024) {
+      await menu(chat, "The file is too large. Upload a text file under 1 MB (max 500 cards).");
+      return;
+    }
     const file = await tg("getFile", { file_id: msg.document.file_id });
     const res = await fetch(`https://api.telegram.org/file/bot${TOKEN}/${file.file_path}`);
     const content = await res.text();
@@ -517,13 +544,13 @@ async function main() {
       const updates = await tg("getUpdates", { offset, timeout: 30, allowed_updates: ["message", "callback_query"] });
       for (const u of updates ?? []) {
         offset = u.update_id + 1;
-        const run = u.message ? handleMessage(u.message) : u.callback_query ? handleCallback(u.callback_query) : null;
-        if (run)
-          run.catch(async (e) => {
+        const chat = u.message?.chat?.id ?? u.callback_query?.message?.chat?.id;
+        if (chat) {
+          enqueue(chat, () => (u.message ? handleMessage(u.message) : handleCallback(u.callback_query))).catch(async (e) => {
             console.error("handler error", e);
-            const chat = u.message?.chat?.id ?? u.callback_query?.message?.chat?.id;
-            if (chat) await menu(chat, `⚠️ ${esc(e.message || "Something went wrong")}`).catch(() => {});
+            await menu(chat, `⚠️ ${esc(friendlyError(e))}`).catch(() => {});
           });
+        }
       }
     } catch (e) {
       console.error("poll error", e);
