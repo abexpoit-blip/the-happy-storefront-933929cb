@@ -25,13 +25,16 @@ const items: Item[] = [
 
 const SidebarContent = ({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) => (
   <>
-    <div className="flex items-center gap-3 mb-6 px-2">
-      <div className="h-10 w-10 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center">
-        <Shield className="h-5 w-5 text-primary-glow" />
+    <div className="mb-6 flex items-center gap-3 rounded-2xl border border-white/10 bg-gradient-to-br from-[#16224a] to-[#0c1430] px-3 py-3 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.9)]">
+      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#f9a825] to-[#ff7043] shadow-[0_10px_24px_-12px_rgba(249,168,37,0.9)]">
+        <Shield className="h-5 w-5 text-[#101a33]" />
       </div>
-      <span className="font-display font-bold tracking-[0.15em] text-primary-glow text-base uppercase">Admin</span>
+      <div className="leading-tight">
+        <span className="block text-[15px] font-bold uppercase tracking-[0.18em] text-white">Admin</span>
+        <span className="block text-[11px] uppercase tracking-wider text-white/45">Control center</span>
+      </div>
     </div>
-    <nav className="space-y-1.5">
+    <nav className="space-y-1">
       {items.map((it) => {
         const active = it.to === "/admin" ? pathname === "/admin" : pathname.startsWith(it.to);
         const Icon = it.icon;
@@ -40,14 +43,19 @@ const SidebarContent = ({ pathname, onNavigate }: { pathname: string; onNavigate
             key={it.to}
             to={it.to}
             onClick={onNavigate}
-            className={`flex items-center gap-3.5 px-4 py-3.5 rounded-xl text-[15px] font-medium transition-all ${
+            className={`group relative flex items-center gap-3 rounded-xl px-3.5 py-3 text-[14px] font-medium transition-all ${
               active
-                ? "bg-gradient-to-r from-primary/20 to-primary/5 text-primary-glow border border-primary/40 shadow-gold"
-                : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground border border-transparent"
+                ? "border border-[#f9a825]/40 bg-gradient-to-r from-[#f9a825]/20 via-[#f9a825]/10 to-transparent text-[#ffd54f] shadow-[0_14px_30px_-22px_rgba(249,168,37,0.95)]"
+                : "border border-transparent text-white/60 hover:border-white/10 hover:bg-white/[0.06] hover:text-white"
             }`}
           >
-            <Icon className={`h-5 w-5 shrink-0 ${active ? "text-primary-glow" : ""}`} />
-            <span>{it.label}</span>
+            <span
+              className={`absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full transition-all ${
+                active ? "bg-gradient-to-b from-[#f9a825] to-[#ff7043]" : "bg-transparent"
+              }`}
+            />
+            <Icon className={`h-[18px] w-[18px] shrink-0 ${active ? "text-[#ffd54f]" : "text-white/45 group-hover:text-white"}`} />
+            <span className="truncate">{it.label}</span>
           </NavLink>
         );
       })}
