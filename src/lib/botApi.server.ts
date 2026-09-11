@@ -4,7 +4,7 @@
  * mapped onto a real website account, so balance, deposits, referrals, checking
  * and API access all run through exactly the same rules as the web app.
  */
-import { randomBytes } from "crypto";
+import { createHash, randomBytes, timingSafeEqual } from "crypto";
 
 export interface BotAccount {
   telegramId: number;
@@ -19,7 +19,17 @@ export function botSecretOk(request: Request): boolean {
   const expected = process.env.BOT_ADMIN_SECRET?.trim();
   if (!expected) return false;
   const got = (request.headers.get("x-bot-secret") ?? "").trim();
-  return got.length > 0 && got === expected;
+  if (!got) return false;
+  const expectedBytes = Buffer.from(expected);
+  const gotBytes = Buffer.from(got);
+  return expectedBytes.length === gotBytes.length && timingSafeEqual(expectedBytes, gotBytes);
+}
+
+/** Safe identifier used to prove both processes loaded the same secret. */
+export function botSecretTag(): string {
+  const secret = process.env.BOT_ADMIN_SECRET?.trim();
+  if (!secret) return "missing";
+  return createHash("sha256").update(`zoru-bot:${secret}`).digest("hex").slice(0, 12);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,14 +49,15 @@ export async function getOrCreateBotAccount(input: {
   ref?: string | null;
 }): Promise<BotAccount> {
   const db = await adminDb();
-  const { data: existing } = await db
+  const { data: existing, error: lookupError } = await db
     .from("telegram_accounts")
     .select("telegram_id, user_id, username, banned, gate")
     .eq("telegram_id", input.telegramId)
     .maybeSingle();
+  if (lookupError) throw new Error(`bot_account_lookup_failed: ${lookupError.message}`);
 
   if (existing) {
-    await db
+    const { error: updateError } = await db
       .from("telegram_accounts")
       .update({
         last_seen: new Date().toISOString(),
@@ -54,6 +65,7 @@ export async function getOrCreateBotAccount(input: {
         first_name: input.firstName ?? undefined,
       })
       .eq("telegram_id", input.telegramId);
+    if (updateError) throw new Error(`bot_account_update_failed: ${updateError.message}`);
     return {
       telegramId: Number(existing.telegram_id),
       userId: String(existing.user_id),
@@ -86,12 +98,29 @@ export async function getOrCreateBotAccount(input: {
     if (!userId) throw new Error(error?.message || "bot_account_create_failed");
   }
 
-  await db.from("telegram_accounts").insert({
+  const { error: linkError } = await db.from("telegram_accounts").insert({
     telegram_id: input.telegramId,
     user_id: userId,
     username: input.username ?? null,
     first_name: input.firstName ?? null,
   });
+
+  if (linkError) {
+    // A simultaneous /start may have linked this Telegram ID first.
+    const { data: raced, error: racedError } = await db
+      .from("telegram_accounts")
+      .select("telegram_id, user_id, username, banned, gate")
+      .eq("telegram_id", input.telegramId)
+      .maybeSingle();
+    if (racedError || !raced) throw new Error(`bot_account_link_failed: ${linkError.message}`);
+    return {
+      telegramId: Number(raced.telegram_id),
+      userId: String(raced.user_id),
+      username: raced.username ?? null,
+      banned: Boolean(raced.banned),
+      gate: raced.gate ?? null,
+    };
+  }
 
   return {
     telegramId: input.telegramId,
@@ -105,7 +134,7 @@ export async function getOrCreateBotAccount(input: {
 /** Everything the bot shows on the profile / main menu. */
 export async function botAccountSnapshot(account: BotAccount) {
   const db = await adminDb();
-  const [{ data: profile }, { data: refs }, { data: key }, { data: settings }, { data: orders }] =
+  const [{ data: profile }, { data: refs }, { data: key }, { data: settings }, { count: orderCount }] =
     await Promise.all([
       db
         .from("profiles")
@@ -147,7 +176,7 @@ export async function botAccountSnapshot(account: BotAccount) {
     referral_count: referralRows.length,
     referral_earned: referralRows.reduce((s, r) => s + Number(r.bonus_amount ?? 0), 0),
     referral_bonus: Number(map["referral_bonus"] ?? 0.1) || 0.1,
-    orders: Number((orders as { length?: number } | null)?.length ?? 0),
+    orders: Number(orderCount ?? 0),
     price_per_card: Math.round((creditCost / creditsPerUsd) * 10000) / 10000,
     api_fee: Number(map["api_access_fee"] ?? 100) || 100,
     default_gate: String(map["self_check_gate"] || "CCV_Braintree_Auth"),

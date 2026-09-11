@@ -14,6 +14,13 @@ CREATE TABLE IF NOT EXISTS public.telegram_accounts (
   last_seen timestamptz NOT NULL DEFAULT now()
 );
 
+DO $$ BEGIN
+  ALTER TABLE public.telegram_accounts
+    ADD CONSTRAINT telegram_accounts_user_id_fkey
+    FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 GRANT ALL ON public.telegram_accounts TO service_role;
 ALTER TABLE public.telegram_accounts ENABLE ROW LEVEL SECURITY;
 
@@ -79,6 +86,52 @@ BEGIN
 END;
 $$;
 
+-- Atomically refund unanswered bot checks. Concurrent result polls cannot
+-- refund the same task twice.
+CREATE OR REPLACE FUNCTION public.settle_bot_check_refund(
+  _check_id uuid,
+  _user_id uuid,
+  _answered integer
+)
+RETURNS numeric
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _task RECORD;
+  _unanswered integer;
+  _target numeric;
+  _add numeric;
+BEGIN
+  SELECT * INTO _task
+    FROM self_checks
+   WHERE id = _check_id AND user_id = _user_id AND source = 'bot'
+   FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'task_not_found'; END IF;
+
+  _unanswered := GREATEST(COALESCE(_task.total, 0) - GREATEST(COALESCE(_answered, 0), 0), 0);
+  IF COALESCE(_task.total, 0) > 0 THEN
+    _target := ROUND(COALESCE(_task.cost, 0)::numeric * _unanswered / _task.total, 2);
+  ELSE
+    _target := 0;
+  END IF;
+  _add := GREATEST(_target - COALESCE(_task.refunded_usd, 0), 0);
+
+  IF _add > 0 THEN
+    UPDATE profiles SET balance = balance + _add WHERE id = _user_id;
+    INSERT INTO balance_transactions (user_id, amount, kind, description)
+    VALUES (_user_id, _add, 'bot_check_refund', 'Refund for cards the gateway did not answer');
+  END IF;
+
+  UPDATE self_checks
+     SET refunded_usd = COALESCE(refunded_usd, 0) + _add
+   WHERE id = _check_id;
+
+  RETURN COALESCE(_task.refunded_usd, 0) + _add;
+END;
+$$;
+
 -- ---------- $100 API access for a bot account (same rules as the website) ----------
 CREATE OR REPLACE FUNCTION public.bot_purchase_api_key(_user_id uuid)
 RETURNS text
@@ -121,10 +174,12 @@ $$;
 
 REVOKE ALL ON FUNCTION public.bot_charge_check(uuid, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.bot_refund_check(uuid, numeric) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.settle_bot_check_refund(uuid, uuid, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.bot_purchase_api_key(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.bot_check_price() TO service_role, authenticated;
 GRANT EXECUTE ON FUNCTION public.bot_charge_check(uuid, integer) TO service_role;
 GRANT EXECUTE ON FUNCTION public.bot_refund_check(uuid, numeric) TO service_role;
+GRANT EXECUTE ON FUNCTION public.settle_bot_check_refund(uuid, uuid, integer) TO service_role;
 GRANT EXECUTE ON FUNCTION public.bot_purchase_api_key(uuid) TO service_role;
 
 -- ---------- bot checks live in the same table as web/API checks ----------
