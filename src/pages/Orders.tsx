@@ -586,14 +586,20 @@ const OrderDetail = ({
                       >
                         <Copy className="h-3 w-3" /> Copy
                       </button>
-                      {check && status === "pending" && (
+                      {check && status === "pending" && leftMs(check.created_at) > 0 && (
                         <button
                           onClick={() => void runCheck(check.id)}
                           disabled={!!busy}
                           className="rounded-md bg-gradient-to-r from-[#2196f3] to-[#5ac8fa] px-3 py-1 text-[11.5px] font-semibold text-white hover:brightness-110 disabled:opacity-50 inline-flex items-center gap-1"
                         >
                           {busy === check.id ? <Loader2 className="h-3 w-3 animate-spin" /> : null} CHECK
+                          <span className="font-mono opacity-80">{fmtLeft(leftMs(check.created_at))}</span>
                         </button>
+                      )}
+                      {check && status === "pending" && leftMs(check.created_at) === 0 && (
+                        <span className="rounded-md border border-[#c62828]/40 bg-[#c62828]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[#ff8a80]">
+                          Time expired
+                        </span>
                       )}
                     </div>
                   </td>
