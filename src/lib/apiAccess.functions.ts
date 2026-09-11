@@ -21,7 +21,7 @@ export const myApiAccess = createServerFn({ method: "POST" })
     const sb = context.supabase as any;
     const { data: feeRow } = await sb
       .from("site_settings").select("value").eq("key", "api_access_fee").maybeSingle();
-    const fee = Number((feeRow as { value?: string } | null)?.value ?? 50) || 50;
+    const fee = Number((feeRow as { value?: string } | null)?.value ?? 100) || 100;
 
     const { data: priceRow } = await sb
       .from("site_settings").select("value").eq("key", "api_check_price").maybeSingle();
@@ -69,26 +69,26 @@ export const myApiAccess = createServerFn({ method: "POST" })
     };
   });
 
-/** Pay the access fee from the balance and queue the request for admin approval. */
+/** Pay the access fee from the balance and receive the API key immediately. */
 export const requestApiAccess = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({ purpose: z.string().max(300).optional() }).parse(input ?? {}))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data, context }): Promise<{ key: string }> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: id, error } = await (context.supabase as any).rpc("request_api_access", {
+    const { data: key, error } = await (context.supabase as any).rpc("request_api_access_paid", {
       _purpose: data.purpose ?? null,
     });
     if (error) {
       const m = String(error.message ?? "");
       if (m.includes("insufficient_balance")) {
-        const need = m.split("insufficient_balance_")[1]?.replace(/[^0-9.]/g, "") || "50";
+        const need = m.split("insufficient_balance_")[1]?.replace(/[^0-9.]/g, "") || "100";
         throw new Error(`insufficient_balance:${need}`);
       }
-      if (m.includes("request_already_pending")) throw new Error("request_already_pending");
       if (m.includes("api_already_active")) throw new Error("api_already_active");
       throw new Error(m || "request_failed");
     }
-    return { id: String(id) };
+    if (!key) throw new Error("request_failed");
+    return { key: String(key) };
   });
 
 export interface AdminApiRequest {
