@@ -614,8 +614,9 @@ const OrderDetail = ({
       </div>
 
       <p className="mt-3 text-[12px] text-[#777]">
-        Only refund cards show a CHECK button. Checking costs the per-card fee, the result is shown here instantly,
-        and DEAD cards are refunded to your balance — a dead card can no longer be copied.
+        Only refund cards show a CHECK button, and only for 2 minutes after the purchase. Checking always costs the
+        per-card fee: DEAD is refunded to your balance, LIVE stays charged. After 2 minutes the button turns into
+        “Time expired” and no refund is possible. The stand-alone Checker page only shows LIVE/DEAD — it never refunds.
       </p>
     </div>
   );
