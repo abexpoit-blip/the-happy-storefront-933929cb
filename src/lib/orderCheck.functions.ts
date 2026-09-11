@@ -4,6 +4,9 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const digits = (s: string) => s.replace(/\D/g, "");
 
+/** Buyers can only run the refund check for 2 minutes after the purchase. */
+export const CHECK_WINDOW_MS = 2 * 60 * 1000;
+
 /** Turn a stored card line (pipe format) into `PAN|MM|YYYY|CVV`. */
 function toCardLine(content: string): { line: string; pan: string } | null {
   const first = content.split(/\r?\n/).map((l) => l.trim()).find(Boolean);
@@ -35,12 +38,18 @@ export const startOrderCardCheck = createServerFn({ method: "POST" })
 
     const { data: check } = await db
       .from("card_checks")
-      .select("id, product_id, order_id, status")
+      .select("id, product_id, order_id, status, created_at")
       .eq("id", data.checkId)
       .eq("user_id", context.userId)
       .maybeSingle();
     if (!check) throw new Error("check_not_found");
     if (check.status !== "pending") throw new Error("already_checked");
+
+    // Refund checking is only allowed inside the 2 minute window after purchase.
+    const boughtAt = new Date(String(check.created_at ?? "")).getTime();
+    if (!Number.isFinite(boughtAt) || Date.now() - boughtAt > CHECK_WINDOW_MS) {
+      throw new Error("check_window_expired");
+    }
 
     // resume an already-running task for this card instead of paying twice
     const { data: running } = await db

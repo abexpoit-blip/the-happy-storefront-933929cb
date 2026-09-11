@@ -3,7 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { listMyOrders, listChecksForOrders, type CardCheck } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
 import { useServerFn } from "@tanstack/react-start";
-import { startOrderCardCheck, pollOrderCardCheck } from "@/lib/orderCheck.functions";
+import { startOrderCardCheck, pollOrderCardCheck, CHECK_WINDOW_MS } from "@/lib/orderCheck.functions";
 import { lookupBin, type BinInfo } from "@/lib/bin";
 import {
   Search, RotateCcw, ChevronLeft, ChevronRight, Package, Receipt, CreditCard,
@@ -339,8 +339,25 @@ const OrderDetail = ({
   const [checks, setChecks] = useState<CardCheck[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [bins, setBins] = useState<Record<string, BinInfo | null>>({});
+  const [now, setNow] = useState(() => Date.now());
   const start = useServerFn(startOrderCardCheck);
   const poll = useServerFn(pollOrderCardCheck);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  /** milliseconds left in the 2 minute refund-check window (0 = expired) */
+  const leftMs = useCallback((created: string) => {
+    const t = new Date(created).getTime();
+    if (!Number.isFinite(t)) return 0;
+    return Math.max(0, CHECK_WINDOW_MS - (now - t));
+  }, [now]);
+  const fmtLeft = (ms: number) => {
+    const s = Math.ceil(ms / 1000);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  };
 
   const loadChecks = useCallback(async () => {
     try { setChecks(await listChecksForOrders([order.id])); } catch { /* ignore */ }
@@ -396,6 +413,7 @@ const OrderDetail = ({
       const msg = e instanceof Error ? e.message : String(e);
       toast.error(
         msg.includes("insufficient_balance") ? "Not enough balance for the check fee"
+        : msg.includes("check_window_expired") ? "Time expired — the 2 minute refund check window is over"
         : msg.includes("already_checked") ? "This card was already checked"
         : msg.includes("no_card_data") ? "Card data unavailable for this check"
         : msg,
@@ -409,11 +427,21 @@ const OrderDetail = ({
 
   const checkAll = async () => {
     for (const p of pairs) {
-      if (p.check && p.check.status === "pending") await runCheck(p.check.id);
+      if (p.check && p.check.status === "pending" && leftMs(p.check.created_at) > 0) {
+        await runCheck(p.check.id);
+      }
     }
   };
 
-  const pendingCount = refundable.filter((p) => p.check?.status === "pending").length;
+  const pendingCount = refundable.filter(
+    (p) => p.check?.status === "pending" && leftMs(p.check.created_at) > 0,
+  ).length;
+  const windowLeft = Math.max(
+    0,
+    ...refundable
+      .filter((p) => p.check?.status === "pending")
+      .map((p) => leftMs(p.check!.created_at)),
+  );
 
   return (
     <div className="text-[13px]">
@@ -483,6 +511,15 @@ const OrderDetail = ({
           <span className="text-[12px] text-white/55">
             Dead cards are refunded automatically · {pendingCount} card{pendingCount === 1 ? "" : "s"} left to check
           </span>
+          <span
+            className={`rounded-md border px-3 py-1.5 text-[12px] font-semibold font-mono ${
+              windowLeft > 0
+                ? "border-[#ffb300]/40 bg-[#ffb300]/10 text-[#ffca62]"
+                : "border-[#c62828]/40 bg-[#c62828]/10 text-[#ff8a80]"
+            }`}
+          >
+            {windowLeft > 0 ? `Refund check time left: ${fmtLeft(windowLeft)}` : "Time expired"}
+          </span>
         </div>
       )}
 
@@ -549,14 +586,20 @@ const OrderDetail = ({
                       >
                         <Copy className="h-3 w-3" /> Copy
                       </button>
-                      {check && status === "pending" && (
+                      {check && status === "pending" && leftMs(check.created_at) > 0 && (
                         <button
                           onClick={() => void runCheck(check.id)}
                           disabled={!!busy}
                           className="rounded-md bg-gradient-to-r from-[#2196f3] to-[#5ac8fa] px-3 py-1 text-[11.5px] font-semibold text-white hover:brightness-110 disabled:opacity-50 inline-flex items-center gap-1"
                         >
                           {busy === check.id ? <Loader2 className="h-3 w-3 animate-spin" /> : null} CHECK
+                          <span className="font-mono opacity-80">{fmtLeft(leftMs(check.created_at))}</span>
                         </button>
+                      )}
+                      {check && status === "pending" && leftMs(check.created_at) === 0 && (
+                        <span className="rounded-md border border-[#c62828]/40 bg-[#c62828]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[#ff8a80]">
+                          Time expired
+                        </span>
                       )}
                     </div>
                   </td>
@@ -571,8 +614,9 @@ const OrderDetail = ({
       </div>
 
       <p className="mt-3 text-[12px] text-[#777]">
-        Only refund cards show a CHECK button. Checking costs the per-card fee, the result is shown here instantly,
-        and DEAD cards are refunded to your balance — a dead card can no longer be copied.
+        Only refund cards show a CHECK button, and only for 2 minutes after the purchase. Checking always costs the
+        per-card fee: DEAD is refunded to your balance, LIVE stays charged. After 2 minutes the button turns into
+        “Time expired” and no refund is possible. The stand-alone Checker page only shows LIVE/DEAD — it never refunds.
       </p>
     </div>
   );
