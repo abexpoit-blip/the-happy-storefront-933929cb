@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   Loader2, Save, CreditCard, Eye, EyeOff, Percent, DollarSign,
-  ShieldCheck, Wallet, AlertTriangle,
+  ShieldCheck, Wallet, AlertTriangle, ToggleLeft, ToggleRight,
 } from "lucide-react";
 import { DEFAULT_SETTINGS, refreshSiteSettings, SiteSettings } from "@/hooks/useSiteSettings";
 
@@ -55,6 +55,7 @@ const AdminPaymentGateway = () => {
         writeSiteSetting("deposit_fee_flat", String(settings.deposit_fee_flat)),
         writeSiteSetting("default_commission_percent", String(settings.default_commission_percent)),
         writeSiteSetting("min_card_price", String(settings.min_card_price)),
+        writeSiteSetting("payment_crypto_enabled", String(settings.payment_crypto_enabled)),
       ]);
       await refreshSiteSettings();
       toast.success("Payment settings saved");
@@ -88,6 +89,40 @@ const AdminPaymentGateway = () => {
 
         {/* Plisio API Key */}
         <Section icon={ShieldCheck} title="Payment Gateway · Plisio">
+          {/* Gateway Service Status Toggle */}
+          <div className="mb-4 flex items-center justify-between p-3.5 rounded-xl border border-border/40 bg-secondary/15">
+            <div>
+              <div className="text-xs font-semibold text-white flex items-center gap-2">
+                <span className={`h-2.5 w-2.5 rounded-full ${settings.payment_crypto_enabled ? "bg-emerald-400" : "bg-red-400"}`} />
+                Crypto Deposits (Litecoin / Plisio) Service
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {settings.payment_crypto_enabled
+                  ? "Gateway is ACTIVE — Users can deposit LTC on the website."
+                  : "Gateway is DISABLED — Deposit flow is paused for maintenance."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => set("payment_crypto_enabled", !settings.payment_crypto_enabled)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+                settings.payment_crypto_enabled
+                  ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
+                  : "border-red-500/50 bg-red-500/15 text-red-300"
+              }`}
+            >
+              {settings.payment_crypto_enabled ? (
+                <>
+                  <ToggleRight className="h-4 w-4" /> ACTIVE
+                </>
+              ) : (
+                <>
+                  <ToggleLeft className="h-4 w-4" /> DISABLED
+                </>
+              )}
+            </button>
+          </div>
+
           <div className="flex items-start gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20 mb-4">
             <AlertTriangle className="h-4 w-4 text-primary-glow shrink-0 mt-0.5" />
             <p className="text-xs text-muted-foreground">

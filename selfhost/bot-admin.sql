@@ -1,14 +1,18 @@
-﻿-- =============================================================
+-- =============================================================
 -- selfhost/bot-admin.sql
 -- Run once on VPS:  psql $DATABASE_URL < selfhost/bot-admin.sql
 -- =============================================================
 
--- Bot-specific settings (stored in the existing site_settings KV table)
+-- Site and Bot settings (stored in the existing site_settings KV table)
 INSERT INTO site_settings (key, value) VALUES
-  ('bot_maintenance',     'false'),
-  ('bot_maintenance_msg', '🔧 Bot is under maintenance. Please check back shortly.'),
-  ('bot_notice',          ''),
-  ('checker_enabled',     'true')
+  ('site_maintenance',       'false'),
+  ('site_maintenance_msg',   'Сайт временно закрыт на плановое техническое обслуживание. Пожалуйста, зайдите позже.'),
+  ('enabled_checker_gates',  '[]'),
+  ('payment_crypto_enabled', 'true'),
+  ('bot_maintenance',        'false'),
+  ('bot_maintenance_msg',    '🔧 Bot is under maintenance. Please check back shortly.'),
+  ('bot_notice',             ''),
+  ('checker_enabled',        'true')
 ON CONFLICT (key) DO NOTHING;
 
 -- Broadcast log

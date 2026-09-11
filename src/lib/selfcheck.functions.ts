@@ -68,20 +68,44 @@ export const selfCheckConfig = createServerFn({ method: "POST" })
 /** Gates the user can pick in the checker UI. */
 export const checkerGates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async () => {
+  .handler(async ({ context }) => {
     const { listGates, GATE_CATALOG } = await import("@/lib/checkerccv.server");
     const shape = (g: { id?: string; description?: string; creditGate?: number }) => ({
       id: String(g.id),
       description: String(g.description ?? g.id),
       credit: Number(g.creditGate ?? 0),
     });
-    try {
-      const gates = await listGates(true);
-      if (gates.length > 0) return gates.map(shape);
-    } catch {
-      // gateway unreachable / key missing — নিচের catalog দেখাই
+
+    const { data: settingRow } = await context.supabase
+      .from("site_settings")
+      .select("value")
+      .eq("key", "enabled_checker_gates")
+      .maybeSingle();
+
+    let enabledIds: string[] | null = null;
+    if (settingRow?.value) {
+      try {
+        const parsed = typeof settingRow.value === "string" ? JSON.parse(settingRow.value) : settingRow.value;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          enabledIds = parsed.map(String);
+        }
+      } catch {
+        /* ignore */
+      }
     }
-    return GATE_CATALOG.map(shape);
+
+    let gates: { id: string; description?: string; creditGate?: number }[] = [];
+    try {
+      gates = await listGates(true);
+    } catch {
+      gates = GATE_CATALOG;
+    }
+
+    if (enabledIds && enabledIds.length > 0) {
+      gates = gates.filter((g) => enabledIds!.includes(g.id));
+    }
+
+    return gates.map(shape);
   });
 
 /** Remaining credit on the checking gateway account. */
@@ -107,6 +131,20 @@ export const startSelfCheck = createServerFn({ method: "POST" })
     const { data: gateRow } = await context.supabase
       .from("site_settings").select("value").eq("key", "self_check_gate").maybeSingle();
     const gate = data.gate?.trim() || String((gateRow as { value?: string } | null)?.value || "CCV_Braintree_Auth");
+
+    // Check if gate is enabled in admin settings
+    const { data: enabledSetting } = await context.supabase
+      .from("site_settings").select("value").eq("key", "enabled_checker_gates").maybeSingle();
+    if (enabledSetting?.value) {
+      try {
+        const parsed = typeof enabledSetting.value === "string" ? JSON.parse(enabledSetting.value) : enabledSetting.value;
+        if (Array.isArray(parsed) && parsed.length > 0 && !parsed.includes(gate)) {
+          throw new Error("gate_disabled");
+        }
+      } catch (e) {
+        if (e instanceof Error && e.message === "gate_disabled") throw new Error("This checking gate is currently disabled.");
+      }
+    }
 
     // credits are charged first — no credits, no check
     const { data: creditsSpent, error } = await context.supabase.rpc("charge_self_check", { _cards: lines.length });

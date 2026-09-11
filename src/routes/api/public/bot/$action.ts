@@ -108,10 +108,25 @@ export const Route = createFileRoute("/api/public/bot/$action")({
               } catch {
                 gates = [];
               }
-              const list = (gates.length ? gates : GATE_CATALOG).map((g) => ({
+              let list = (gates.length ? gates : GATE_CATALOG).map((g) => ({
                 id: String(g.id),
                 description: String(g.description ?? g.id),
               }));
+
+              const { data: enabledRow } = await db
+                .from("site_settings")
+                .select("value")
+                .eq("key", "enabled_checker_gates")
+                .maybeSingle();
+              if (enabledRow?.value) {
+                try {
+                  const parsed = typeof enabledRow.value === "string" ? JSON.parse(enabledRow.value) : enabledRow.value;
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    list = list.filter((g) => parsed.includes(g.id));
+                  }
+                } catch { /* ignore */ }
+              }
+
               return json({ status: "success", gates: list, selected: snapshot.gate ?? snapshot.default_gate });
             }
 
@@ -126,6 +141,21 @@ export const Route = createFileRoute("/api/public/bot/$action")({
               } catch {
                 // Fall back to the local catalog when the provider is unavailable.
               }
+
+              const { data: enabledRow } = await db
+                .from("site_settings")
+                .select("value")
+                .eq("key", "enabled_checker_gates")
+                .maybeSingle();
+              if (enabledRow?.value) {
+                try {
+                  const parsed = typeof enabledRow.value === "string" ? JSON.parse(enabledRow.value) : enabledRow.value;
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    allowed = allowed.filter((id) => parsed.includes(id));
+                  }
+                } catch { /* ignore */ }
+              }
+
               if (!allowed.includes(gate)) return json({ status: "error", message: "invalid_gate" }, 400);
               const { error } = await db
                 .from("telegram_accounts")

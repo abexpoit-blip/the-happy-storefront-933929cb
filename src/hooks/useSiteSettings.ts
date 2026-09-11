@@ -20,6 +20,10 @@ export interface SiteSettings {
   credits_per_usd: number;
   check_credit_cost: number;
   referral_bonus: number;
+  site_maintenance: boolean;
+  site_maintenance_msg: string;
+  enabled_checker_gates: string[];
+  payment_crypto_enabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: SiteSettings = {
@@ -47,6 +51,10 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   credits_per_usd: 1000,
   check_credit_cost: 30,
   referral_bonus: 5,
+  site_maintenance: false,
+  site_maintenance_msg: "Сайт временно закрыт на плановое техническое обслуживание. Пожалуйста, зайдите позже.",
+  enabled_checker_gates: [],
+  payment_crypto_enabled: true,
 };
 
 let cache: SiteSettings | null = null;
@@ -79,7 +87,12 @@ export const refreshSiteSettings = async (): Promise<SiteSettings> => {
         ? (row.ticker_items as string[])
         : DEFAULT_SETTINGS.ticker_items,
       min_deposit: (row.min_deposit != null && Number(row.min_deposit) > 0) ? Number(row.min_deposit) : DEFAULT_SETTINGS.min_deposit,
-
+      site_maintenance: row.site_maintenance === true || row.site_maintenance === "true",
+      site_maintenance_msg: typeof row.site_maintenance_msg === "string" && row.site_maintenance_msg.trim()
+        ? row.site_maintenance_msg
+        : DEFAULT_SETTINGS.site_maintenance_msg,
+      enabled_checker_gates: Array.isArray(row.enabled_checker_gates) ? (row.enabled_checker_gates as string[]) : [],
+      payment_crypto_enabled: row.payment_crypto_enabled !== false && row.payment_crypto_enabled !== "false",
     };
     broadcast(merged);
     return merged;

@@ -5,8 +5,34 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Loader2, Save, Globe, Megaphone, Palette, Coins, Trash2, Plus, ShieldCheck } from "lucide-react";
+import { Loader2, Save, Globe, Megaphone, Palette, Coins, Trash2, Plus, ShieldCheck, ShieldAlert, Zap, ToggleLeft, ToggleRight, Check, X } from "lucide-react";
 import { DEFAULT_SETTINGS, refreshSiteSettings, SiteSettings } from "@/hooks/useSiteSettings";
+
+export const ALL_GATES = [
+  { id: "CCV_Amazon_Auth", name: "CCV Amazon US Auth", credit: 15 },
+  { id: "CCN_Amazon_Auth", name: "CCN Amazon Prime US Auth", credit: 15 },
+  { id: "CCN_Amazon_Auth_Logo", name: "CCN Amazon Auth Logo Bank", credit: 15 },
+  { id: "CCV_Academy_Auth", name: "CCV Academy Auth - Walmart.Com", credit: 12 },
+  { id: "CCN_Academy_Auth", name: "CCN Academy Auth", credit: 12 },
+  { id: "CCV_Doordash_Auth", name: "CCV DoorDash Auth - Stripe", credit: 8 },
+  { id: "CCN_Doordash_Auth", name: "CCN DoorDash Auth - Stripe", credit: 8 },
+  { id: "CCV_Braintree_Auth", name: "CCV Braintree Auth - Multi BIN", credit: 5 },
+  { id: "CCN_Braintree_Auth", name: "CCN Braintree Auth", credit: 5 },
+  { id: "CCV_Stripe_Auth", name: "CCV Stripe $1 Auth", credit: 10 },
+  { id: "CCN_Stripe_Auth", name: "CCN Stripe Auth", credit: 10 },
+  { id: "CCV_Shopify_Auth", name: "CCV Shopify / Spreedly", credit: 10 },
+  { id: "CCN_Shopify_Auth", name: "CCN Shopify Auth", credit: 10 },
+  { id: "CCV_Authorize_Auth", name: "CCV Authorize.Net 1$ Auth", credit: 8 },
+  { id: "CCN_Authorize_Auth", name: "CCN Authorize.Net Auth", credit: 8 },
+  { id: "CCV_Square_Auth", name: "CCV Squareup $1 Auth", credit: 10 },
+  { id: "CCN_Square_Auth", name: "CCN Squareup Auth", credit: 10 },
+  { id: "CCV_Cybersource_Auth", name: "CCV CyberSource Auth", credit: 12 },
+  { id: "CCN_Cybersource_Auth", name: "CCN CyberSource Auth", credit: 12 },
+  { id: "CCV_Adyen_Auth", name: "CCV Adyen Auth", credit: 12 },
+  { id: "CCV_Paypal_Auth", name: "CCV PayPal Braintree", credit: 10 },
+  { id: "CCV_Bestbuy_Auth", name: "CCV BestBuy Auth", credit: 12 },
+  { id: "CCV_Target_Auth", name: "CCV Target US Auth", credit: 12 },
+];
 
 const AdminSiteSettings = () => {
   const [s, setS] = useState<SiteSettings>(DEFAULT_SETTINGS);
@@ -48,6 +74,29 @@ const AdminSiteSettings = () => {
     live: checks.filter((c) => c.status === "live").length,
     dead: checks.filter((c) => c.status === "dead").length,
     refunded: checks.reduce((sum, c) => sum + c.refunded, 0),
+  };
+
+  const currentEnabledGates: string[] =
+    s.enabled_checker_gates && s.enabled_checker_gates.length > 0
+      ? s.enabled_checker_gates
+      : ALL_GATES.map((g) => g.id);
+
+  const toggleGate = (id: string) => {
+    let next: string[];
+    if (currentEnabledGates.includes(id)) {
+      next = currentEnabledGates.filter((g) => g !== id);
+    } else {
+      next = [...currentEnabledGates, id];
+    }
+    set("enabled_checker_gates", next);
+  };
+
+  const enableAllGates = () => {
+    set("enabled_checker_gates", ALL_GATES.map((g) => g.id));
+  };
+
+  const disableAllGates = () => {
+    set("enabled_checker_gates", []);
   };
 
   const updateTicker = (i: number, v: string) =>
@@ -223,6 +272,122 @@ const AdminSiteSettings = () => {
               </table>
             </div>
           )}
+        </Section>
+
+        {/* Main Website Maintenance */}
+        <Section icon={ShieldAlert} title="Website Maintenance Mode">
+          <div className="space-y-4">
+            <div className="flex items-start gap-4 flex-wrap">
+              <button
+                type="button"
+                onClick={() => set("site_maintenance", !s.site_maintenance)}
+                className={`flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold border transition-all ${
+                  s.site_maintenance
+                    ? "border-red-500/50 bg-red-500/15 text-red-300 hover:bg-red-500/25"
+                    : "border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
+                }`}
+              >
+                {s.site_maintenance ? (
+                  <>
+                    <ToggleRight className="h-5 w-5 text-red-400" />
+                    <span>Maintenance ACTIVE (Website blocked)</span>
+                  </>
+                ) : (
+                  <>
+                    <ToggleLeft className="h-5 w-5 text-emerald-400" />
+                    <span>Maintenance OFF (Website live)</span>
+                  </>
+                )}
+              </button>
+              <div className="flex-1 min-w-[280px]">
+                <Field label="Maintenance message (shown to regular visitors)">
+                  <Input
+                    value={s.site_maintenance_msg}
+                    onChange={(e) => set("site_maintenance_msg", e.target.value)}
+                    placeholder="Сайт временно закрыт на плановое техническое обслуживание..."
+                  />
+                </Field>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              When Maintenance Mode is ON, all regular users are blocked by a maintenance screen. Admins can still sign in and access the full site and admin panel.
+            </p>
+          </div>
+        </Section>
+
+        {/* Checker Gateways Service Control */}
+        <Section icon={Zap} title="Checker Gateways (Service Management)">
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground">
+                Turn specific checker gateways ON or OFF. Disabled gateways are hidden from the website checker and the Telegram bot, preventing checks on those gates.
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs px-2.5 py-1 rounded-full bg-primary/10 border border-primary/25 text-primary-glow font-mono font-medium">
+                  {currentEnabledGates.length} of {ALL_GATES.length} active
+                </span>
+                <button
+                  type="button"
+                  onClick={enableAllGates}
+                  className="rounded-lg border border-border/50 px-3 py-1 text-xs text-muted-foreground hover:bg-secondary/40 hover:text-white transition"
+                >
+                  Enable all
+                </button>
+                <button
+                  type="button"
+                  onClick={disableAllGates}
+                  className="rounded-lg border border-border/50 px-3 py-1 text-xs text-muted-foreground hover:bg-secondary/40 hover:text-white transition"
+                >
+                  Disable all
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-[420px] overflow-y-auto p-1 rounded-xl border border-border/30 bg-secondary/10">
+              {ALL_GATES.map((g) => {
+                const isEnabled = currentEnabledGates.includes(g.id);
+                return (
+                  <div
+                    key={g.id}
+                    onClick={() => toggleGate(g.id)}
+                    className={`cursor-pointer rounded-xl border p-3 flex items-center justify-between gap-3 transition-all ${
+                      isEnabled
+                        ? "border-emerald-500/40 bg-emerald-500/10 hover:border-emerald-500/60"
+                        : "border-border/40 bg-secondary/20 hover:border-border/60 opacity-60"
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-xs text-white truncate flex items-center gap-1.5">
+                        <span className={`inline-block h-2 w-2 rounded-full ${isEnabled ? "bg-emerald-400" : "bg-muted-foreground"}`} />
+                        {g.name}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate">
+                        {g.id} · {g.credit} credits
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className={`h-7 px-2.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 shrink-0 border transition ${
+                        isEnabled
+                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50"
+                          : "bg-secondary/40 text-muted-foreground border-border/50"
+                      }`}
+                    >
+                      {isEnabled ? (
+                        <>
+                          <Check className="h-3 w-3" /> ON
+                        </>
+                      ) : (
+                        <>
+                          <X className="h-3 w-3" /> OFF
+                        </>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </Section>
       </div>
     </AdminLayout>

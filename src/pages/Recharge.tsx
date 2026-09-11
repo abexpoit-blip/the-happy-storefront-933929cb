@@ -171,6 +171,9 @@ const Recharge = () => {
   const amtNum = Number(amount) || 0;
 
   const createInvoice = async () => {
+    if (settings.payment_crypto_enabled === false) {
+      return toast.error("Приём депозитов временно приостановлен для технического обслуживания.");
+    }
     if (!amtNum || amtNum < MIN_DEPOSIT) return toast.error(`Минимальная сумма пополнения — $${MIN_DEPOSIT}.`);
     setBusy(true);
     try {
@@ -456,9 +459,16 @@ const Recharge = () => {
                 </div>
 
 
+                {settings.payment_crypto_enabled === false && (
+                  <div className="p-3 mb-3 bg-[#fff8e1] border border-[#ffe0a0] text-[#b26a00] text-xs flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>Приём депозитов временно приостановлен администратором для технического обслуживания.</span>
+                  </div>
+                )}
+
                 <button
                   onClick={createInvoice}
-                  disabled={busy || amtNum < MIN_DEPOSIT}
+                  disabled={busy || amtNum < MIN_DEPOSIT || settings.payment_crypto_enabled === false}
                   className="w-full h-11 mt-4 bg-[#2196f3] hover:bg-[#1e88e5] disabled:opacity-50 text-white text-[13px] uppercase tracking-wider inline-flex items-center justify-center gap-2"
                 >
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}

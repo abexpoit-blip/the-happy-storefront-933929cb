@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, LogOut, Menu, X } from "lucide-react";
+import { ChevronDown, LogOut, Menu, X, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -61,6 +61,12 @@ export const AppShell = ({ children, wide }: { children: ReactNode; wide?: boole
       className="min-h-screen bg-white text-[#1a1a1a] flex flex-col"
       style={{ fontFamily: '"DM Sans", "Segoe UI", system-ui, sans-serif' }}
     >
+      {settings.site_maintenance && profile?.role === "admin" && (
+        <div className="bg-amber-500 text-black text-xs font-semibold px-4 py-2 text-center flex items-center justify-center gap-2 sticky top-0 z-50 shadow-sm">
+          <span>⚠️ <b>Технические работы включены (Maintenance Mode Active)</b> — Обычные пользователи не могут зайти на сайт.</span>
+          <Link to="/admin/site" className="underline hover:text-black/80 font-bold ml-2">Настройки сайта</Link>
+        </div>
+      )}
 
       {/* TOP NAV */}
       <header className="bg-[#304156] text-white sticky top-0 z-40">
@@ -228,6 +234,7 @@ export const AppShell = ({ children, wide }: { children: ReactNode; wide?: boole
 
 export const ProtectedRoute = ({ children }: { children: ReactNode }) => {
   const { user, profile, loading, signOut, profileError } = useAuth();
+  const settings = useSiteSettings();
   const nav = useNavigate();
   const loc = useLocation();
   // 30-minute session limit — regular users only, admins are exempt.
@@ -246,6 +253,42 @@ export const ProtectedRoute = ({ children }: { children: ReactNode }) => {
       </div>
     );
   }
+
+  // Site maintenance guard — admins are exempt
+  if (settings.site_maintenance && profile?.role !== "admin") {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#0c1322] text-white text-center">
+        <div className="max-w-md w-full p-8 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md shadow-2xl space-y-5">
+          <div className="mx-auto h-16 w-16 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <ShieldAlert className="h-8 w-8" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-white mb-2">Технические работы</h1>
+            <p className="text-sm text-white/70 leading-relaxed">
+              {settings.site_maintenance_msg || "Сайт временно закрыт на плановое техническое обслуживание. Пожалуйста, зайдите позже."}
+            </p>
+          </div>
+          <div className="pt-3 border-t border-white/10 flex flex-col gap-2">
+            <Link
+              to="/crzr-x9k2-panel"
+              className="text-xs text-white/40 hover:text-[#5ac8fa] transition-colors"
+            >
+              Вход для администратора
+            </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => { await signOut(); nav("/auth"); }}
+              className="mt-1"
+            >
+              Выйти
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return <>{children}</>;
 };
 
