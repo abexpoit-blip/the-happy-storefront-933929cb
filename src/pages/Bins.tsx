@@ -7,7 +7,8 @@ import { toast } from "sonner";
 import { Search, Loader2, CreditCard, RotateCcw } from "lucide-react";
 import { listSection, type SectionProduct } from "@/lib/sections";
 import { purchaseProduct, translatePurchaseError } from "@/lib/store";
-import { CountryFlagImg, resolveLabel } from "@/lib/binsFormat";
+import { CountryFlagImg } from "@/lib/brands";
+import { resolveCountryName as resolveLabel } from "@/lib/countries";
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
