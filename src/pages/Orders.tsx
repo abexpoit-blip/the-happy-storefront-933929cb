@@ -427,11 +427,21 @@ const OrderDetail = ({
 
   const checkAll = async () => {
     for (const p of pairs) {
-      if (p.check && p.check.status === "pending") await runCheck(p.check.id);
+      if (p.check && p.check.status === "pending" && leftMs(p.check.created_at) > 0) {
+        await runCheck(p.check.id);
+      }
     }
   };
 
-  const pendingCount = refundable.filter((p) => p.check?.status === "pending").length;
+  const pendingCount = refundable.filter(
+    (p) => p.check?.status === "pending" && leftMs(p.check.created_at) > 0,
+  ).length;
+  const windowLeft = Math.max(
+    0,
+    ...refundable
+      .filter((p) => p.check?.status === "pending")
+      .map((p) => leftMs(p.check!.created_at)),
+  );
 
   return (
     <div className="text-[13px]">
