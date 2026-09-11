@@ -6,7 +6,7 @@ import { Search, RotateCcw, Loader2, Copy, CheckCircle2, X, ShoppingCart, Chevro
 import { Button } from "@/components/ui/button";
 import { listProducts, type Product } from "@/lib/store";
 import { addToCart, cartCount, onCartChange } from "@/lib/cart";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { publicBase } from "@/lib/baseLabel";
 import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode, countryName } from "@/lib/brands";
@@ -32,6 +32,10 @@ const Shop = () => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const [q, setQ] = useState({ bin: "", base: "all", country: "", zip: "", refund: "all" as "all" | "yes" | "no" });
+
+  // Menu sections: /shop?section=bin | dump — filters by the product's section/kind/category field.
+  const [searchParams] = useSearchParams();
+  const section = (searchParams.get("section") ?? "").toLowerCase();
 
   const lastLoad = useRef(0);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -89,6 +93,10 @@ const Shop = () => {
   const cards = useMemo(() => {
     if (!searched) return [];
     return all.filter((p) => {
+      if (section) {
+        const s = `${(p as any).section ?? ""} ${(p as any).kind ?? ""} ${(p as any).category ?? ""}`.toLowerCase();
+        if (!s.includes(section)) return false;
+      }
       if (q.bin && !(p.bin ?? "").startsWith(q.bin)) return false;
       if (q.base !== "all" && (p.base ?? "") !== q.base) return false;
       if (q.country && resolveCountryCode(p.country) !== q.country) return false;
@@ -97,7 +105,7 @@ const Shop = () => {
       if (q.refund === "no" && p.refundable) return false;
       return true;
     });
-  }, [all, q, searched]);
+  }, [all, q, searched, section]);
 
   const [perPage, setPerPage] = useState(10);
   const [page, setPage] = useState(1);

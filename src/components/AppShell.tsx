@@ -12,6 +12,8 @@ import { cartCount, onCartChange } from "@/lib/cart";
 const buyerNav = [
   { to: "/", en: "HOME", ru: "ГЛАВНАЯ", end: true },
   { to: "/shop", en: "SHOP", ru: "МАГАЗИН" },
+  { to: "/shop?section=bin", en: "BIN", ru: "BIN" },
+  { to: "/shop?section=dump", en: "DUMP", ru: "DUMP" },
   { to: "/cart", en: "CART", ru: "КОРЗИНА" },
   { to: "/orders", en: "ORDERS", ru: "ЗАКАЗЫ" },
   { to: "/recharge", en: "RECHARGE", ru: "ПОПОЛНЕНИЕ" },
