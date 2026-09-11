@@ -30,7 +30,7 @@ if [ -z "$DB_CONTAINER" ]; then
   # alone can hit PostgREST/API containers (e.g. *-rest) which have no psql.
   while read -r name; do
     [ -z "$name" ] && continue
-    if docker exec "$name" sh -c 'command -v psql >/dev/null 2>&1' 2>/dev/null; then
+    if docker exec "$name" sh -c 'command -v psql >/dev/null 2>&1' >/dev/null 2>&1; then
       DB_CONTAINER="$name"
       break
     fi
@@ -42,7 +42,7 @@ if [ -z "$DB_CONTAINER" ]; then
   echo "      Run: docker ps   and re-run with DB_CONTAINER=<name> bash selfhost/bot-install.sh" >&2
   exit 1
 fi
-if ! docker exec "$DB_CONTAINER" sh -c 'command -v psql >/dev/null 2>&1' 2>/dev/null; then
+if ! docker exec "$DB_CONTAINER" sh -c 'command -v psql >/dev/null 2>&1' >/dev/null 2>&1; then
   echo "FAIL: container '$DB_CONTAINER' has no psql inside (not the database container)." >&2
   echo "      Run: docker ps   and re-run with DB_CONTAINER=<real-db-name> bash selfhost/bot-install.sh" >&2
   exit 1
