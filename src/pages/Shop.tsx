@@ -387,7 +387,7 @@ const Shop = () => {
                   className="cursor-pointer accent-[#2196f3]"
                 />
               </th>
-              {["BASE","BIN","BRAND","EXPIRY","CVV","COUNTRY","REGION","INFO","ZIP","REFUND","PRICE","ACTIONS"].map((h) => (
+              {["BASE","BIN","BRAND","TYPE","EXPIRY","CVV","COUNTRY","BANK","LEVEL","REGION","INFO","ZIP","REFUND","PRICE","ACTIONS"].map((h) => (
                 <th key={h} className="px-2.5 py-2 text-left font-bold uppercase tracking-wide border-b border-[#e0e0e0] whitespace-nowrap">{h}</th>
               ))}
             </tr>
