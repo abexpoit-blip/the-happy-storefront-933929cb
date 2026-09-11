@@ -16,6 +16,11 @@ else
 fi
 
 : "${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN not set in $SECRET_FILE}"
+
+export BOT_API_BASE="${BOT_API_BASE:-${API_BASE:-https://zoru.cc}}"
+export TELEGRAM_ADMIN_IDS="${TELEGRAM_ADMIN_IDS:-}"
+# The site reads BOT_ADMIN_SECRET; accept the older Telegram-prefixed name too.
+export BOT_ADMIN_SECRET="${BOT_ADMIN_SECRET:-${TELEGRAM_BOT_ADMIN_SECRET:-}}"
 : "${BOT_ADMIN_SECRET:?BOT_ADMIN_SECRET/TELEGRAM_BOT_ADMIN_SECRET not set in $SECRET_FILE}"
 
 case "$BOT_API_BASE" in
@@ -30,10 +35,6 @@ if ! printf '%s' "$BOT_OK" | grep -q '"ok":true'; then
   exit 1
 fi
 
-export BOT_API_BASE="${BOT_API_BASE:-${API_BASE:-https://zoru.cc}}"
-export TELEGRAM_ADMIN_IDS="${TELEGRAM_ADMIN_IDS:-}"
-# The site reads BOT_ADMIN_SECRET; keep the same value on both sides.
-export BOT_ADMIN_SECRET="${TELEGRAM_BOT_ADMIN_SECRET:-${BOT_ADMIN_SECRET:-}}"
 export BOT_DATA_FILE="${BOT_DATA_FILE:-/var/lib/zoru-bot/users.json}"
 
 mkdir -p "$(dirname "$BOT_DATA_FILE")"
