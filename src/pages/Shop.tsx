@@ -12,6 +12,26 @@ import { publicBase } from "@/lib/baseLabel";
 import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode, countryName } from "@/lib/brands";
 import { sortBasesLatestFirst } from "@/lib/baseLabel";
 import { allCountries, flagEmoji, resolveCountryCode, resolveCountryName } from "@/lib/countries";
+import { lookupBin } from "@/lib/bin";
+
+type CardMeta = { type: string | null; level: string | null; bank: string | null };
+
+const TypeBadge = ({ value }: { value: string | null }) => {
+  const v = (value ?? "").toUpperCase();
+  if (!v) return <span className="text-[#bbb]">—</span>;
+  const credit = v.includes("CREDIT");
+  const prepaid = v.includes("PREPAID");
+  const cls = credit
+    ? "from-[#66bb6a] to-[#2e7d32]"
+    : prepaid
+      ? "from-[#ab47bc] to-[#6a1b9a]"
+      : "from-[#42a5f5] to-[#1565c0]";
+  return (
+    <span className={`inline-block rounded-md bg-gradient-to-b ${cls} px-2 py-1 text-[10.5px] font-extrabold uppercase tracking-wide text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_10px_-7px_rgba(0,0,0,0.9)]`}>
+      {v}
+    </span>
+  );
+};
 
 const PAGE_SIZES = [10, 20, 50, 100];
 
@@ -136,6 +156,37 @@ const Shop = () => {
       return () => clearTimeout(t);
     }
   }, [bin]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // TYPE / BANK / LEVEL: stored on the product when the admin filled it in,
+  // otherwise resolved from the BIN lookup service for the visible rows only.
+  const [binMeta, setBinMeta] = useState<Record<string, CardMeta>>({});
+  useEffect(() => {
+    const missing = [...new Set(pageCards.map((c) => (c.bin ?? "").replace(/\D/g, "").slice(0, 8)))]
+      .filter((b) => b.length >= 6 && !binMeta[b]);
+    if (!missing.length) return;
+    let alive = true;
+    void (async () => {
+      const found: Record<string, CardMeta> = {};
+      await Promise.all(
+        missing.slice(0, 100).map(async (b) => {
+          const info = await lookupBin(b);
+          found[b] = { type: info?.type ?? null, level: info?.level ?? null, bank: info?.bank ?? null };
+        }),
+      );
+      if (alive) setBinMeta((m) => ({ ...m, ...found }));
+    })();
+    return () => { alive = false; };
+  }, [pageCards]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const metaFor = (c: Product): CardMeta => {
+    const p = c as unknown as { card_type?: string | null; card_level?: string | null; bank?: string | null };
+    const fromBin = binMeta[(c.bin ?? "").replace(/\D/g, "").slice(0, 8)] ?? { type: null, level: null, bank: null };
+    return {
+      type: p.card_type || fromBin.type,
+      level: p.card_level || fromBin.level,
+      bank: p.bank || fromBin.bank,
+    };
+  };
 
   const [count, setCount] = useState(0);
   useEffect(() => {
@@ -325,7 +376,7 @@ const Shop = () => {
 
       {/* TABLE */}
       <div className="mt-3 rounded-xl border border-[#e6e6e6] bg-white overflow-x-auto shadow-[0_14px_40px_-26px_rgba(31,45,61,0.6)] -mx-3 sm:mx-0">
-        <table className="w-full min-w-[1080px] text-[13px] border-collapse">
+        <table className="w-full min-w-[1320px] text-[13px] border-collapse">
           <thead>
             <tr className="bg-gradient-to-b from-[#37474f] to-[#1f2d3d] text-white text-[11.5px]">
               <th className="p-2 w-8 border-b border-[#e0e0e0]">
@@ -336,7 +387,7 @@ const Shop = () => {
                   className="cursor-pointer accent-[#2196f3]"
                 />
               </th>
-              {["BASE","BIN","BRAND","EXPIRY","CVV","COUNTRY","REGION","INFO","ZIP","REFUND","PRICE","ACTIONS"].map((h) => (
+              {["BASE","BIN","BRAND","TYPE","EXPIRY","CVV","COUNTRY","BANK","LEVEL","REGION","INFO","ZIP","REFUND","PRICE","ACTIONS"].map((h) => (
                 <th key={h} className="px-2.5 py-2 text-left font-bold uppercase tracking-wide border-b border-[#e0e0e0] whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -344,7 +395,7 @@ const Shop = () => {
           <tbody>
             {loading && Array.from({ length: 6 }).map((_, i) => (
               <tr key={i} className="border-b border-[#f0f0f0]">
-                <td colSpan={13} className="p-3"><div className="h-4 rounded bg-[#f1f4f6] animate-pulse" /></td>
+                <td colSpan={16} className="p-3"><div className="h-4 rounded bg-[#f1f4f6] animate-pulse" /></td>
               </tr>
             ))}
             {!loading && pageCards.map((c) => (
@@ -376,6 +427,9 @@ const Shop = () => {
                 <td className="px-2.5 py-2 align-middle">
                   <BrandLogo brand={c.brand || detectBrandFromBin(c.bin ?? "")} className="h-6 w-9 drop-shadow-[0_3px_6px_rgba(31,45,61,0.35)]" />
                 </td>
+                <td className="px-2.5 py-2 align-middle whitespace-nowrap">
+                  <TypeBadge value={metaFor(c).type} />
+                </td>
                 <td className="px-2.5 py-2 align-middle font-mono text-[12.5px] font-semibold text-[#263238] whitespace-nowrap">
                   {(c.exp_month ?? "--")}/{(c.exp_year ?? "--")}
                 </td>
@@ -390,6 +444,23 @@ const Shop = () => {
                         <span className="text-[12px] font-bold text-[#1f2d3d]">{countryCode(c.country)}</span>
                         <span className="text-[11px] text-[#78909c] max-w-[120px] truncate">{countryName(c.country)}</span>
                       </span>
+                    </span>
+                  ) : <span className="text-[#bbb]">—</span>}
+                </td>
+                <td className="px-2.5 py-2 align-middle max-w-[200px]">
+                  {metaFor(c).bank ? (
+                    <span title={metaFor(c).bank ?? ""} className="block max-w-[190px] truncate text-[12px] font-semibold text-[#1565c0]">
+                      {metaFor(c).bank}
+                    </span>
+                  ) : <span className="text-[#bbb]">—</span>}
+                </td>
+                <td className="px-2.5 py-2 align-middle max-w-[190px]">
+                  {metaFor(c).level ? (
+                    <span
+                      title={metaFor(c).level ?? ""}
+                      className="inline-block max-w-full truncate rounded-md border border-[#ffd54f] bg-gradient-to-b from-[#fff6d6] to-[#ffe082] px-2 py-1 text-[10.5px] font-extrabold uppercase tracking-wide text-[#6d4c00] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
+                    >
+                      {metaFor(c).level}
                     </span>
                   ) : <span className="text-[#bbb]">—</span>}
                 </td>
