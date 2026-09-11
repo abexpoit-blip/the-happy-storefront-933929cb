@@ -20,6 +20,15 @@ for f in "$SECRET_DIR"/*.env; do
   [ -e "$f" ] && . "$f"
 done
 set +a
+
+# telegram.env is authoritative for the bridge secret. A legacy
+# TELEGRAM_BOT_ADMIN_SECRET must override any stale BOT_ADMIN_SECRET in .env.
+if [ -f "$SECRET_DIR/telegram.env" ]; then
+  TELEGRAM_FILE_HAS_CANONICAL=$(grep -c '^BOT_ADMIN_SECRET=' "$SECRET_DIR/telegram.env" || true)
+  if [ "$TELEGRAM_FILE_HAS_CANONICAL" -eq 0 ] && [ -n "${TELEGRAM_BOT_ADMIN_SECRET:-}" ]; then
+    export BOT_ADMIN_SECRET="$TELEGRAM_BOT_ADMIN_SECRET"
+  fi
+fi
 export PORT
 
 for v in PLISIO_API_KEY CHECKERCCV_API_KEY CHECKERCCV_TOKEN; do
@@ -32,6 +41,7 @@ for v in SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY; do
     exit 1
   fi
 done
+: "${BOT_ADMIN_SECRET:?BOT_ADMIN_SECRET is missing in $SECRET_DIR/telegram.env}"
 
 # self-hosted guard: refuse to boot against hosted supabase.co
 bash "$APP_DIR/selfhost/check-env.sh" "$APP_DIR/.env"

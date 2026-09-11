@@ -14,6 +14,7 @@ if [ ! -f "$SECRET_FILE" ]; then
   exit 1
 fi
 
+unset TELEGRAM_BOT_TOKEN TELEGRAM_ADMIN_IDS BOT_API_BASE API_BASE BOT_ADMIN_SECRET TELEGRAM_BOT_ADMIN_SECRET || true
 set -a
 # shellcheck disable=SC1090
 . "$SECRET_FILE"

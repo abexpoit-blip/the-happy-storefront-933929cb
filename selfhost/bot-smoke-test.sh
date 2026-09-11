@@ -4,6 +4,7 @@ set -euo pipefail
 
 SECRET_FILE="${SECRET_FILE:-/etc/zoru/telegram.env}"
 [ -f "$SECRET_FILE" ] || { echo "FAIL: $SECRET_FILE is missing" >&2; exit 1; }
+unset TELEGRAM_BOT_TOKEN TELEGRAM_ADMIN_IDS BOT_API_BASE API_BASE BOT_ADMIN_SECRET TELEGRAM_BOT_ADMIN_SECRET || true
 set -a
 # shellcheck disable=SC1090
 . "$SECRET_FILE"
