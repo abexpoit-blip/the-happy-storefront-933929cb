@@ -9,6 +9,7 @@ import { myApiAccess, requestApiAccess, type MyApiAccess } from "@/lib/apiAccess
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { KeyRound, Terminal, Wallet, ShieldCheck, Copy } from "lucide-react";
+import { BuildBotBanner } from "@/components/BuildBotBanner";
 
 const BASE = typeof window !== "undefined" ? window.location.origin : "https://zoru.cc";
 
@@ -77,6 +78,9 @@ const ApiAccess = () => {
         highlight="API"
         description="Run card checks from your own bot, site or script — straight from our server."
       />
+
+      <BuildBotBanner className="mb-5" />
+
 
       <div className="grid gap-4 sm:grid-cols-3 mb-5">
         <StatCard label="Access fee" value={`$${fee.toFixed(2)}`} icon={KeyRound} hint={`Then $${(info?.pricePerCard ?? 0.02).toFixed(2)} per card checked`} />

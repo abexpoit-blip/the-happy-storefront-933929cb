@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { newsApi, announcementsApi, ordersApi } from "@/lib/api";
 import { AppShell } from "@/components/AppShell";
 import Seo from "@/components/Seo";
+import { BuildBotBanner } from "@/components/BuildBotBanner";
 
 /**
  * Buyer HOME — Scorpion-style layout copy:
@@ -43,6 +44,10 @@ const Index = () => {
   return (
     <AppShell>
       <Seo title="Zoru Shop — Главная" description="Личный кабинет покупателя, живая лента поступлений и объявления." path="/" />
+
+      <BuildBotBanner className="mb-5" />
+
+
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* НОВОСТИ И ОБНОВЛЕНИЯ */}
