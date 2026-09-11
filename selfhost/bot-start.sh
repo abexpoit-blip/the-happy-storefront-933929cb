@@ -90,9 +90,9 @@ chmod 700 "$(dirname "$BOT_DATA_FILE")"
 
 cd "$APP_DIR"
 pm2 delete zoru-bot >/dev/null 2>&1 || true
+pm2 flush >/dev/null 2>&1 || true
 pm2 start bot/checker-bot.mjs --name zoru-bot --update-env --time --restart-delay 3000 --max-restarts 10
 pm2 save
-pm2 flush zoru-bot >/dev/null 2>&1 || true
 
 echo "--- bot logs"
 pm2 logs zoru-bot --lines 20 --nostream
