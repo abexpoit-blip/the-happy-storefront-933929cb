@@ -413,6 +413,7 @@ const OrderDetail = ({
       const msg = e instanceof Error ? e.message : String(e);
       toast.error(
         msg.includes("insufficient_balance") ? "Not enough balance for the check fee"
+        : msg.includes("check_window_expired") ? "Time expired — the 2 minute refund check window is over"
         : msg.includes("already_checked") ? "This card was already checked"
         : msg.includes("no_card_data") ? "Card data unavailable for this check"
         : msg,
