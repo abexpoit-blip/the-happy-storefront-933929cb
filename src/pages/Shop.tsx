@@ -33,6 +33,10 @@ const Shop = () => {
 
   const [q, setQ] = useState({ bin: "", base: "all", country: "", zip: "", refund: "all" as "all" | "yes" | "no" });
 
+  // Menu sections: /shop?section=bin | dump — filters by the product's section/kind/category field.
+  const [searchParams] = useSearchParams();
+  const section = (searchParams.get("section") ?? "").toLowerCase();
+
   const lastLoad = useRef(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const load = async (force = false) => {
