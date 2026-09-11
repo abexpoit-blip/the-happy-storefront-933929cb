@@ -22,16 +22,18 @@ const items: Item[] = [
   { to: "/admin/settings", label: "Credentials", icon: KeyRound },
 ];
 
+const skyFrom = "#38bdf8";
+const skyTo = "#0ea5e9";
 
 const SidebarContent = ({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) => (
   <>
-    <div className="mb-5 flex items-center gap-3 rounded-xl border border-[#e6e9ef] bg-[#f7f9fc] px-3 py-3">
-      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#409eff] to-[#4fc3f7] shadow-[0_10px_22px_-12px_rgba(64,158,255,0.9)]">
-        <Shield className="h-5 w-5 text-white" />
+    <div className="mb-5 flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br shadow-[0_10px_22px_-12px_rgba(56,189,248,0.9)]" style={{ backgroundImage: `linear-gradient(135deg, ${skyFrom}, ${skyTo})` }}>
+        <Shield className="h-5 w-5 text-[#07101f]" />
       </div>
       <div className="leading-tight">
-        <span className="block text-[15px] font-bold uppercase tracking-[0.18em] text-[#1f2d3d]">Admin</span>
-        <span className="block text-[11px] uppercase tracking-wider text-[#909399]">Control center</span>
+        <span className="block text-[15px] font-bold uppercase tracking-[0.18em] text-white">Admin</span>
+        <span className="block text-[11px] uppercase tracking-wider text-[#38bdf8]">Control center</span>
       </div>
     </div>
     <nav className="space-y-1">
@@ -45,16 +47,16 @@ const SidebarContent = ({ pathname, onNavigate }: { pathname: string; onNavigate
             onClick={onNavigate}
             className={`group relative flex items-center gap-3 rounded-xl px-3.5 py-3 text-[14px] font-medium transition-all ${
               active
-                ? "border border-[#cfe4ff] bg-[#ecf5ff] text-[#409eff]"
-                : "border border-transparent text-[#5b6472] hover:border-[#e6e9ef] hover:bg-[#f7f9fc] hover:text-[#1f2d3d]"
+                ? "border border-[#38bdf8]/40 bg-[#38bdf8]/10 text-[#7dd3fc]"
+                : "border border-transparent text-[#8fa0b8] hover:border-white/10 hover:bg-white/5 hover:text-white"
             }`}
           >
             <span
               className={`absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full transition-all ${
-                active ? "bg-gradient-to-b from-[#409eff] to-[#4fc3f7]" : "bg-transparent"
+                active ? "bg-gradient-to-b from-[#38bdf8] to-[#0ea5e9]" : "bg-transparent"
               }`}
             />
-            <Icon className={`h-[18px] w-[18px] shrink-0 ${active ? "text-[#409eff]" : "text-[#9aa3af] group-hover:text-[#1f2d3d]"}`} />
+            <Icon className={`h-[18px] w-[18px] shrink-0 ${active ? "text-[#38bdf8]" : "text-[#5f6d85] group-hover:text-[#38bdf8]"}`} />
             <span className="truncate">{it.label}</span>
           </NavLink>
         );
@@ -74,26 +76,27 @@ export const AdminLayout = ({ children, title }: { children: ReactNode; title: s
         <div className="lg:hidden flex items-center gap-3">
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="inline-flex items-center gap-2 rounded-xl border border-[#e6e9ef] bg-white px-4 py-2.5 text-sm font-medium text-[#1f2d3d] transition-all hover:border-[#409eff]/50 hover:text-[#409eff]"
+            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-[#101b33] px-4 py-2.5 text-sm font-medium text-white transition-all hover:border-[#38bdf8]/50 hover:text-[#7dd3fc]"
           >
             {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-            <Shield className="h-4 w-4 text-[#409eff]" />
+            <Shield className="h-4 w-4 text-[#38bdf8]" />
             <span>Admin Menu</span>
           </button>
-          <h1 className="truncate text-xl font-bold tracking-tight text-[#1f2d3d]">{title}</h1>
+          <h1 className="truncate text-xl font-bold tracking-tight text-white">{title}</h1>
         </div>
 
         {/* Mobile sidebar drawer */}
         {mobileOpen && (
-          <div className="lg:hidden animate-fade-up rounded-2xl border border-[#e6e9ef] bg-white p-4 shadow-[0_18px_40px_-30px_rgba(31,45,61,0.35)]">
+          <div className="lg:hidden animate-fade-up rounded-2xl border border-white/10 bg-[#0c1430] p-4 shadow-[0_18px_40px_-18px_rgba(2,8,26,0.9)]">
             <SidebarContent pathname={pathname} onNavigate={() => setMobileOpen(false)} />
           </div>
         )}
 
         {/* Desktop sidebar */}
         <aside className="hidden lg:block lg:w-[272px] xl:w-[292px] lg:shrink-0">
-          <div className="relative overflow-hidden rounded-2xl border border-[#e6e9ef] bg-white p-4 lg:sticky lg:top-[calc(var(--nav-h)+1.5rem)] shadow-[0_18px_40px_-32px_rgba(31,45,61,0.35)]">
-            <div className="pointer-events-none absolute -top-24 -right-16 h-52 w-52 rounded-full bg-[#409eff]/10 blur-3xl" />
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0c1430] p-4 lg:sticky lg:top-[calc(var(--nav-h)+1.5rem)] shadow-[0_18px_40px_-22px_rgba(2,8,26,0.9)]">
+            <div className="pointer-events-none absolute -top-24 -right-16 h-52 w-52 rounded-full bg-[#38bdf8]/15 blur-3xl" />
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[#38bdf8] via-[#0ea5e9] to-transparent" />
             <div className="relative">
               <SidebarContent pathname={pathname} />
             </div>
@@ -102,17 +105,18 @@ export const AdminLayout = ({ children, title }: { children: ReactNode; title: s
 
         {/* Main content */}
         <div className="flex-1 min-w-0 space-y-6">
-          <div className="relative hidden lg:block overflow-hidden rounded-2xl border border-[#e6e9ef] bg-white px-7 py-6 shadow-[0_18px_40px_-34px_rgba(31,45,61,0.35)]">
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[#409eff] via-[#4fc3f7] to-transparent" />
+          <div className="relative hidden lg:block overflow-hidden rounded-2xl border border-white/10 bg-[#0c1430] px-7 py-6 shadow-[0_18px_40px_-22px_rgba(2,8,26,0.9)]">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[#38bdf8] via-[#0ea5e9] to-transparent" />
+            <div className="pointer-events-none absolute -top-20 right-10 h-44 w-44 rounded-full bg-[#38bdf8]/10 blur-3xl" />
             <div className="relative flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#409eff] to-[#4fc3f7] shadow-[0_16px_30px_-18px_rgba(64,158,255,0.95)]">
-                <Shield className="h-6 w-6 text-white" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl shadow-[0_16px_30px_-16px_rgba(56,189,248,0.9)]" style={{ backgroundImage: `linear-gradient(135deg, ${skyFrom}, ${skyTo})` }}>
+                <Shield className="h-6 w-6 text-[#07101f]" />
               </div>
               <div>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#cfe4ff] bg-[#ecf5ff] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-[#409eff]">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#38bdf8]/40 bg-[#38bdf8]/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-[#7dd3fc]">
                   Admin panel
                 </span>
-                <h1 className="mt-2 text-2xl sm:text-3xl font-semibold tracking-tight text-[#1f2d3d]">{title}</h1>
+                <h1 className="mt-2 text-2xl sm:text-3xl font-semibold tracking-tight text-white">{title}</h1>
               </div>
             </div>
           </div>
