@@ -12,6 +12,26 @@ import { publicBase } from "@/lib/baseLabel";
 import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode, countryName } from "@/lib/brands";
 import { sortBasesLatestFirst } from "@/lib/baseLabel";
 import { allCountries, flagEmoji, resolveCountryCode, resolveCountryName } from "@/lib/countries";
+import { lookupBin } from "@/lib/bin";
+
+type CardMeta = { type: string | null; level: string | null; bank: string | null };
+
+const TypeBadge = ({ value }: { value: string | null }) => {
+  const v = (value ?? "").toUpperCase();
+  if (!v) return <span className="text-[#bbb]">—</span>;
+  const credit = v.includes("CREDIT");
+  const prepaid = v.includes("PREPAID");
+  const cls = credit
+    ? "from-[#66bb6a] to-[#2e7d32]"
+    : prepaid
+      ? "from-[#ab47bc] to-[#6a1b9a]"
+      : "from-[#42a5f5] to-[#1565c0]";
+  return (
+    <span className={`inline-block rounded-md bg-gradient-to-b ${cls} px-2 py-1 text-[10.5px] font-extrabold uppercase tracking-wide text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_10px_-7px_rgba(0,0,0,0.9)]`}>
+      {v}
+    </span>
+  );
+};
 
 const PAGE_SIZES = [10, 20, 50, 100];
 
