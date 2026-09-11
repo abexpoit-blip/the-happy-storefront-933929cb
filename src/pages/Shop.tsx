@@ -6,7 +6,7 @@ import { Search, RotateCcw, Loader2, Copy, CheckCircle2, X, ShoppingCart, Chevro
 import { Button } from "@/components/ui/button";
 import { listProducts, type Product } from "@/lib/store";
 import { addToCart, cartCount, onCartChange } from "@/lib/cart";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { publicBase } from "@/lib/baseLabel";
 import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode, countryName } from "@/lib/brands";
