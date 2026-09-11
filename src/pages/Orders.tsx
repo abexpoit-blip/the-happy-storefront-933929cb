@@ -3,7 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { listMyOrders, listChecksForOrders, type CardCheck } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
 import { useServerFn } from "@tanstack/react-start";
-import { startOrderCardCheck, pollOrderCardCheck } from "@/lib/orderCheck.functions";
+import { startOrderCardCheck, pollOrderCardCheck, CHECK_WINDOW_MS } from "@/lib/orderCheck.functions";
 import { lookupBin, type BinInfo } from "@/lib/bin";
 import {
   Search, RotateCcw, ChevronLeft, ChevronRight, Package, Receipt, CreditCard,
