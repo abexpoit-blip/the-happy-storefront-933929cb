@@ -752,13 +752,44 @@ export interface Announcement {
   created_at: string;
 }
 
+export function sanitizeBrandText(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/🐲\s*/g, "⚡ ")
+    .replace(/Cruzer\s*CC/gi, "Zoru Shop")
+    .replace(/CruzerCC/gi, "Zoru Shop")
+    .replace(/Cruzer/gi, "Zoru Shop")
+    .replace(/Scorpion\s*Shop/gi, "Zoru Shop")
+    .replace(/Scorpion/gi, "Zoru Shop")
+    .replace(/dragon-fire delivery/gi, "instant automated delivery");
+}
+
 export const listAnnouncements = async (): Promise<Announcement[]> => {
   const { data, error } = await supabase
     .from("announcements")
     .select("id, title, body, kind, created_at")
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return (data ?? []).map((a) => ({ ...a, body: a.body ?? "" }));
+  
+  // Deduplicate identical announcements and sanitize brand references
+  const seen = new Set<string>();
+  const list: Announcement[] = [];
+  for (const a of data ?? []) {
+    const cleanTitle = sanitizeBrandText(a.title ?? "");
+    const cleanBody = sanitizeBrandText(a.body ?? "");
+    const key = `${cleanTitle}:::${cleanBody}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      list.push({
+        id: a.id,
+        title: cleanTitle,
+        body: cleanBody,
+        kind: a.kind || "info",
+        created_at: a.created_at,
+      });
+    }
+  }
+  return list;
 };
 
 export const adminCreateAnnouncement = async (input: { title: string; body: string; kind: string }) => {

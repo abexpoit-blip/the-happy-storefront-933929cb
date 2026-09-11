@@ -208,7 +208,7 @@ CREATE INDEX announcements_active_idx ON public.announcements (active, pinned DE
 
 -- Seed a welcome announcement so ticker isn't empty
 INSERT INTO public.announcements (title, body, kind, pinned, sort_order)
-VALUES ('🐲 Welcome to CruzerCC — Premium CC shop with dragon-fire delivery', 'New stock loaded daily. BIN filter, country filter, refund guarantee within 10 min.', 'promo', true, 0);-- ============ BALANCE ON PROFILES ============
+VALUES ('⚡ Welcome to Zoru Shop — Premium CC Marketplace', 'New stock loaded daily. BIN filter, country filter, refund guarantee within 10 min.', 'promo', true, 0);-- ============ BALANCE ON PROFILES ============
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS balance numeric(12,2) NOT NULL DEFAULT 0;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS blocked boolean NOT NULL DEFAULT false;
 
