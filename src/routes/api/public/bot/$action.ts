@@ -7,6 +7,7 @@ import {
   adminDb,
   botAccountSnapshot,
   botSecretOk,
+  botSecretTag,
   getOrCreateBotAccount,
   siteOrigin,
 } from "@/lib/botApi.server";
@@ -61,7 +62,7 @@ export const Route = createFileRoute("/api/public/bot/$action")({
           if (failed?.error) {
             return json({ status: "error", message: `bot_setup_incomplete: ${failed.error.message}` }, 503);
           }
-          return json({ status: "success", service: "zoru-bot-bridge" });
+          return json({ status: "success", service: "zoru-bot-bridge", auth_tag: botSecretTag() });
         }
 
         let account;
@@ -79,7 +80,15 @@ export const Route = createFileRoute("/api/public/bot/$action")({
           );
         }
 
-        const snapshot = await botAccountSnapshot(account);
+        let snapshot;
+        try {
+          snapshot = await botAccountSnapshot(account);
+        } catch (e) {
+          return json(
+            { status: "error", message: e instanceof Error ? e.message : "account_snapshot_failed" },
+            503,
+          );
+        }
         if (snapshot.blocked && action !== "session") {
           return json({ status: "error", message: "account_banned" }, 403);
         }
@@ -109,7 +118,20 @@ export const Route = createFileRoute("/api/public/bot/$action")({
             case "setgate": {
               const gate = String(body["gate"] ?? "").trim().slice(0, 80);
               if (!gate) return json({ status: "error", message: "gate_required" }, 400);
-              await db.from("telegram_accounts").update({ gate }).eq("telegram_id", account.telegramId);
+              const { listGates, GATE_CATALOG } = await import("@/lib/checkerccv.server");
+              let allowed = GATE_CATALOG.map((item) => item.id);
+              try {
+                const remote = await listGates(true);
+                if (remote.length) allowed = remote.map((item) => String(item.id));
+              } catch {
+                // Fall back to the local catalog when the provider is unavailable.
+              }
+              if (!allowed.includes(gate)) return json({ status: "error", message: "invalid_gate" }, 400);
+              const { error } = await db
+                .from("telegram_accounts")
+                .update({ gate })
+                .eq("telegram_id", account.telegramId);
+              if (error) return json({ status: "error", message: "gate_save_failed" }, 500);
               return json({ status: "success", gate });
             }
 
@@ -123,7 +145,22 @@ export const Route = createFileRoute("/api/public/bot/$action")({
               const { credit, fee, charged } = withFee(amount);
               const origin = siteOrigin(request);
 
-              await db.rpc("expire_stale_deposits");
+              const { error: expireError } = await db.rpc("expire_stale_deposits");
+              if (expireError) return json({ status: "error", message: "deposit_cleanup_failed" }, 500);
+              const { data: openDeposit, error: openDepositError } = await db
+                .from("deposits")
+                .select("id")
+                .eq("user_id", account.userId)
+                .eq("status", "pending")
+                .gte("created_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
+                .limit(1)
+                .maybeSingle();
+              if (openDepositError) {
+                return json({ status: "error", message: "deposit_lookup_failed" }, 500);
+              }
+              if (openDeposit) {
+                return json({ status: "error", message: "deposit_already_pending" }, 409);
+              }
               const { data: dep, error } = await db
                 .from("deposits")
                 .insert({
@@ -142,12 +179,19 @@ export const Route = createFileRoute("/api/public/bot/$action")({
 
               let inv;
               try {
+                const { data: payer, error: payerError } = await db
+                  .from("profiles")
+                  .select("email")
+                  .eq("id", account.userId)
+                  .single();
+                if (payerError || !payer?.email) throw new Error("deposit_account_email_missing");
                 inv = await createLtcInvoice({
                   usdAmount: charged,
                   orderNumber: dep.id,
                   callbackUrl: `${origin}/api/public/deposit-callback`,
                   successUrl: `${origin}/recharge?payment=success&deposit=${dep.id}`,
                   failUrl: `${origin}/recharge?payment=failed&deposit=${dep.id}`,
+                  email: String(payer.email),
                 });
               } catch (e) {
                 const detail = e instanceof Error ? e.message : String(e);
@@ -159,7 +203,7 @@ export const Route = createFileRoute("/api/public/bot/$action")({
               }
 
               const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-              await db
+              const { error: invoiceSaveError } = await db
                 .from("deposits")
                 .update({
                   invoice_id: inv.txn_id,
@@ -170,6 +214,9 @@ export const Route = createFileRoute("/api/public/bot/$action")({
                   expires_at: expiresAt,
                 })
                 .eq("id", dep.id);
+              if (invoiceSaveError) {
+                return json({ status: "error", message: "deposit_invoice_save_failed" }, 500);
+              }
 
               return json({
                 status: "success",
@@ -186,12 +233,13 @@ export const Route = createFileRoute("/api/public/bot/$action")({
             }
 
             case "deposits": {
-              const { data } = await db
+              const { data, error } = await db
                 .from("deposits")
                 .select("id, amount, status, crypto_amount, invoice_url, created_at")
                 .eq("user_id", account.userId)
                 .order("created_at", { ascending: false })
                 .limit(10);
+              if (error) return json({ status: "error", message: "deposit_history_failed" }, 500);
               return json({ status: "success", deposits: data ?? [] });
             }
 
@@ -226,7 +274,7 @@ export const Route = createFileRoute("/api/public/bot/$action")({
                 );
               }
 
-              await db.from("self_checks").insert({
+              const { error: saveError } = await db.from("self_checks").insert({
                 user_id: account.userId,
                 task_id: taskId,
                 gate,
@@ -240,6 +288,13 @@ export const Route = createFileRoute("/api/public/bot/$action")({
                   c: line,
                 })),
               });
+              if (saveError) {
+                await db.rpc("bot_refund_check", {
+                  _user_id: account.userId,
+                  _amount: Number(cost ?? 0),
+                });
+                return json({ status: "error", message: "task_save_failed" }, 500);
+              }
 
               return json({
                 status: "success",
@@ -254,15 +309,15 @@ export const Route = createFileRoute("/api/public/bot/$action")({
               const taskId = String(body["task_id"] ?? "").trim();
               if (!taskId) return json({ status: "error", message: "task_id_required" }, 400);
 
-              const { data: task } = await db
+              const { data: task, error: taskError } = await db
                 .from("self_checks")
                 .select("*")
                 .eq("task_id", taskId)
                 .eq("user_id", account.userId)
                 .maybeSingle();
+              if (taskError) return json({ status: "error", message: "task_lookup_failed" }, 500);
               if (!task) return json({ status: "error", message: "task_not_found" }, 404);
 
-              const { getResults, verdict } = await import("@/lib/checkerccv.server");
               const stored = Array.isArray(task.results) ? task.results : [];
               const rows = [...stored] as {
                 card: string;
@@ -273,28 +328,31 @@ export const Route = createFileRoute("/api/public/bot/$action")({
               let cursor = rows.length;
               let state = String(task.status ?? "running");
 
-              for (let page = 0; page < 4; page++) {
-                const res = await getResults(taskId, cursor, 500);
-                state = res.status;
-                const mapped = res.results.map((r) => {
-                  const pan = digits(String(r.card ?? "").split("|")[0] ?? "");
-                  const v = verdict(r.category);
-                  const cat = String(r.category ?? "").toLowerCase();
-                  return {
-                    card: maskPan(pan),
-                    status: v ?? (cat.includes("skip") ? "skipped" : "error"),
-                    category: String(r.category ?? ""),
-                    msg: String(r.result?.msg ?? ""),
-                  };
-                });
-                for (const row of mapped) {
-                  const i = rows.findIndex((c) => c.card === row.card);
-                  if (i >= 0) rows[i] = row;
-                  else rows.push(row);
+              if (state !== "completed" && state !== "cancelled") {
+                const { getResults, verdict } = await import("@/lib/checkerccv.server");
+                for (let page = 0; page < 4; page++) {
+                  const res = await getResults(taskId, cursor, 500);
+                  state = res.status;
+                  const mapped = res.results.map((r) => {
+                    const pan = digits(String(r.card ?? "").split("|")[0] ?? "");
+                    const v = verdict(r.category);
+                    const cat = String(r.category ?? "").toLowerCase();
+                    return {
+                      card: maskPan(pan),
+                      status: v ?? (cat.includes("skip") ? "skipped" : "error"),
+                      category: String(r.category ?? ""),
+                      msg: String(r.result?.msg ?? ""),
+                    };
+                  });
+                  for (const row of mapped) {
+                    const i = rows.findIndex((c) => c.card === row.card);
+                    if (i >= 0) rows[i] = row;
+                    else rows.push(row);
+                  }
+                  const next = res.nextCursor > cursor ? res.nextCursor : cursor + mapped.length;
+                  if (mapped.length === 0 || next <= cursor) break;
+                  cursor = next;
                 }
-                const next = res.nextCursor > cursor ? res.nextCursor : cursor + mapped.length;
-                if (mapped.length === 0 || next <= cursor) break;
-                cursor = next;
               }
 
               const done = state === "completed" || state === "cancelled";
@@ -302,23 +360,24 @@ export const Route = createFileRoute("/api/public/bot/$action")({
               const answered = rows.filter((r) => r.status === "live" || r.status === "dead").length;
               let refunded = Number(task.refunded_usd ?? 0);
 
-              if (done) {
-                const perCard = total > 0 ? Number(task.cost ?? 0) / total : 0;
-                const owed = Math.round((Math.max(0, total - answered) * perCard - refunded) * 100) / 100;
-                if (owed > 0) {
-                  await db.rpc("bot_refund_check", { _user_id: account.userId, _amount: owed });
-                  refunded += owed;
-                }
+              if (done && total > 0) {
+                const { data: settled, error: settleError } = await db.rpc("settle_bot_check_refund", {
+                  _check_id: task.id,
+                  _user_id: account.userId,
+                  _answered: answered,
+                });
+                if (settleError) return json({ status: "error", message: "refund_settlement_failed" }, 500);
+                refunded = Number(settled ?? refunded);
               }
 
-              await db
+              const { error: resultSaveError } = await db
                 .from("self_checks")
                 .update({
                   results: rows,
                   status: done ? "completed" : "running",
-                  refunded_usd: refunded,
                 })
                 .eq("id", task.id);
+              if (resultSaveError) return json({ status: "error", message: "result_save_failed" }, 500);
 
               return json({
                 status: "success",
@@ -333,12 +392,13 @@ export const Route = createFileRoute("/api/public/bot/$action")({
             }
 
             case "tasks": {
-              const { data } = await db
+              const { data, error } = await db
                 .from("self_checks")
                 .select("task_id, gate, total, cost, status, created_at")
                 .eq("user_id", account.userId)
                 .order("created_at", { ascending: false })
                 .limit(10);
+              if (error) return json({ status: "error", message: "task_history_failed" }, 500);
               return json({ status: "success", tasks: data ?? [] });
             }
 

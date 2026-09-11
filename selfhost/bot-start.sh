@@ -22,6 +22,7 @@ export TELEGRAM_ADMIN_IDS="${TELEGRAM_ADMIN_IDS:-}"
 # The site reads BOT_ADMIN_SECRET; accept the older Telegram-prefixed name too.
 export BOT_ADMIN_SECRET="${BOT_ADMIN_SECRET:-${TELEGRAM_BOT_ADMIN_SECRET:-}}"
 : "${BOT_ADMIN_SECRET:?BOT_ADMIN_SECRET/TELEGRAM_BOT_ADMIN_SECRET not set in $SECRET_FILE}"
+: "${TELEGRAM_ADMIN_IDS:?TELEGRAM_ADMIN_IDS not set in $SECRET_FILE}"
 
 case "$BOT_API_BASE" in
   https://*) ;;
@@ -35,29 +36,46 @@ if ! printf '%s' "$BOT_OK" | grep -q '"ok":true'; then
   exit 1
 fi
 
+EXPECTED_TAG=$(printf 'zoru-bot:%s' "$BOT_ADMIN_SECRET" | sha256sum | cut -c1-12)
 BRIDGE_BODY='{"telegram_id":1}'
-BRIDGE_OK=$(curl -fsS --max-time 20 -X POST "${BOT_API_BASE}/api/public/bot/health" \
+BRIDGE_FILE=$(mktemp)
+trap 'rm -f "$BRIDGE_FILE" "${SESSION_FILE:-}"' EXIT
+BRIDGE_STATUS=$(curl -sS --max-time 20 -o "$BRIDGE_FILE" -w '%{http_code}' -X POST "${BOT_API_BASE}/api/public/bot/health" \
   -H 'Content-Type: application/json' \
   -H "x-bot-secret: ${BOT_ADMIN_SECRET}" \
   -d "$BRIDGE_BODY" 2>/dev/null || true)
-if ! printf '%s' "$BRIDGE_OK" | grep -q '"status":"success"'; then
-  echo "Website bot bridge is not ready at ${BOT_API_BASE}." >&2
-  echo "Check BOT_ADMIN_SECRET, deploy the latest website build, and apply selfhost/bot-accounts.sql." >&2
+BRIDGE_OK=$(cat "$BRIDGE_FILE")
+if [ "$BRIDGE_STATUS" = "401" ]; then
+  echo "Website rejected BOT_ADMIN_SECRET (HTTP 401). The website and bot loaded different values." >&2
+  echo "Run selfhost/bot-install.sh after saving one matching BOT_ADMIN_SECRET." >&2
+  exit 1
+fi
+if [ "$BRIDGE_STATUS" != "200" ] || ! printf '%s' "$BRIDGE_OK" | grep -q '"status":"success"'; then
+  SAFE_MESSAGE=$(printf '%s' "$BRIDGE_OK" | sed -n 's/.*"message":"\([^"]*\)".*/\1/p')
+  echo "Website bot bridge failed (HTTP ${BRIDGE_STATUS:-000}): ${SAFE_MESSAGE:-no JSON response}" >&2
+  echo "Deploy the latest website build and apply all migrations with selfhost/bot-install.sh." >&2
+  exit 1
+fi
+if ! printf '%s' "$BRIDGE_OK" | grep -q "\"auth_tag\":\"$EXPECTED_TAG\""; then
+  echo "Website bridge loaded a different BOT_ADMIN_SECRET fingerprint." >&2
   exit 1
 fi
 
-ADMIN_ID="${TELEGRAM_ADMIN_IDS%%,*}"
+ADMIN_ID=$(printf '%s' "${TELEGRAM_ADMIN_IDS%%,*}" | tr -d '[:space:]')
+case "$ADMIN_ID" in
+  ''|*[!0-9]*) echo "TELEGRAM_ADMIN_IDS must start with a numeric Telegram ID" >&2; exit 1 ;;
+esac
 if [ -n "$ADMIN_ID" ]; then
-  case "$ADMIN_ID" in
-    *[!0-9]*) echo "TELEGRAM_ADMIN_IDS must contain numeric Telegram IDs" >&2; exit 1 ;;
-  esac
   SESSION_BODY=$(printf '{"telegram_id":%s,"username":"zoru_admin"}' "$ADMIN_ID")
-  SESSION_OK=$(curl -fsS --max-time 30 -X POST "${BOT_API_BASE}/api/public/bot/session" \
+  SESSION_FILE=$(mktemp)
+  SESSION_STATUS=$(curl -sS --max-time 30 -o "$SESSION_FILE" -w '%{http_code}' -X POST "${BOT_API_BASE}/api/public/bot/session" \
     -H 'Content-Type: application/json' \
     -H "x-bot-secret: ${BOT_ADMIN_SECRET}" \
     -d "$SESSION_BODY" 2>/dev/null || true)
-  if ! printf '%s' "$SESSION_OK" | grep -q '"status":"success"'; then
-    echo "Bot account creation test failed for the configured Telegram admin." >&2
+  SESSION_OK=$(cat "$SESSION_FILE")
+  if [ "$SESSION_STATUS" != "200" ] || ! printf '%s' "$SESSION_OK" | grep -q '"status":"success"'; then
+    SAFE_MESSAGE=$(printf '%s' "$SESSION_OK" | sed -n 's/.*"message":"\([^"]*\)".*/\1/p')
+    echo "Bot account creation test failed (HTTP ${SESSION_STATUS:-000}): ${SAFE_MESSAGE:-no JSON response}" >&2
     echo "Check website logs and confirm the bot database migration was applied." >&2
     exit 1
   fi

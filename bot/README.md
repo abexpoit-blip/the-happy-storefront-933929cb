@@ -27,6 +27,7 @@ add/remove, ban/unban, deposits and check counts.
 
 ```
 TELEGRAM_BOT_TOKEN=...        # from @BotFather
+TELEGRAM_ADMIN_IDS=123456789  # numeric Telegram user ID; comma-separated if needed
 BOT_API_BASE=https://zoru.cc
 BOT_ADMIN_SECRET=...          # must match BOT_ADMIN_SECRET in the site .env
 ```
@@ -52,6 +53,8 @@ rejected before PM2 starts the process.
 Startup also verifies the protected website bridge and creates or confirms the
 first account in `TELEGRAM_ADMIN_IDS`. A mismatched shared secret, missing
 database migration, or broken account trigger therefore fails before polling.
+The health response includes only a one-way secret fingerprint; the secret
+itself is never returned or printed.
 
 `bot-install.sh` applies every bot prerequisite migration in the required
 order, rebuilds the website, reloads its secrets, verifies the configured
