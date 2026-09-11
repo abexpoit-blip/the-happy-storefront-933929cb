@@ -273,7 +273,6 @@ const DICT: Record<string, string> = {
   "Проверьте": "Check",
 
   // recharge page
-  "Пополнение баланса": "Balance recharge",
   "Пополняй счёт в": "Top up your balance in",
   "Оплата · Litecoin (LTC)": "Payment · Litecoin (LTC)",
   "Приём только в Litecoin (LTC)": "Litecoin (LTC) only",
