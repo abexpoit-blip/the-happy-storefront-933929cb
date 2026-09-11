@@ -13,6 +13,7 @@ set +a
 BOT_API_BASE="${BOT_API_BASE:-${API_BASE:-https://zoru.cc}}"
 BOT_ADMIN_SECRET="${BOT_ADMIN_SECRET:-${TELEGRAM_BOT_ADMIN_SECRET:-}}"
 ADMIN_ID=$(printf '%s' "${TELEGRAM_ADMIN_IDS%%,*}" | tr -d '[:space:]')
+: "${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is missing}"
 : "${BOT_ADMIN_SECRET:?BOT_ADMIN_SECRET is missing}"
 case "$ADMIN_ID" in ''|*[!0-9]*) echo "FAIL: TELEGRAM_ADMIN_IDS must start with a numeric ID" >&2; exit 1;; esac
 
@@ -40,6 +41,17 @@ BAD_STATUS=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' \
   -d '{"telegram_id":1}' 2>/dev/null || true)
 [ "$BAD_STATUS" = "401" ] || { echo "FAIL: wrong secret was not rejected (HTTP $BAD_STATUS)" >&2; exit 1; }
 echo "OK: wrong secret rejected"
+
+TG_FILE=$(mktemp)
+TG_STATUS=$(curl -sS --max-time 20 -o "$TG_FILE" -w '%{http_code}' \
+  "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe" 2>/dev/null || true)
+if [ "$TG_STATUS" != "200" ] || ! grep -q '"ok":true' "$TG_FILE"; then
+  rm -f "$TG_FILE"
+  echo "FAIL: Telegram token check failed (HTTP ${TG_STATUS:-000})" >&2
+  exit 1
+fi
+rm -f "$TG_FILE"
+echo "OK: Telegram bot token"
 
 call_bridge health '{"telegram_id":1}'
 call_bridge session "{\"telegram_id\":$ADMIN_ID,\"username\":\"zoru_admin\"}"

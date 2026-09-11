@@ -90,7 +90,10 @@ chmod 700 "$(dirname "$BOT_DATA_FILE")"
 
 cd "$APP_DIR"
 pm2 delete zoru-bot >/dev/null 2>&1 || true
-pm2 flush >/dev/null 2>&1 || true
+# Clear only this bot's historical output. Old token/secret errors must not be
+# mistaken for failures from the process that is about to start.
+: > "${PM2_HOME:-$HOME/.pm2}/logs/zoru-bot-out.log"
+: > "${PM2_HOME:-$HOME/.pm2}/logs/zoru-bot-error.log"
 pm2 start bot/checker-bot.mjs --name zoru-bot --update-env --time --restart-delay 3000 --max-restarts 10
 pm2 save
 
