@@ -72,29 +72,20 @@ const Dumps = () => {
     <AppShell>
       <Seo title="DUMP — bulk card files" description="Bulk remaining / expiring card files sold as ready-to-download packs." path="/dumps" />
 
-      <div className="rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent p-6 mb-6">
-        <div className="flex items-center gap-3">
-          <span className="h-11 w-11 rounded-xl bg-primary/20 border border-primary/40 flex items-center justify-center">
-            <FileArchive className="h-5 w-5 text-primary-glow" />
-          </span>
-          <div>
-            <h1 className="font-display text-2xl font-black neon-text">DUMP · Bulk files</h1>
-            <p className="text-sm text-muted-foreground">
-              Remaining / soon-expiring cards packed as files. Buy the pack, download the whole file from Orders.
-            </p>
-          </div>
-        </div>
-        <div className="mt-4 flex gap-3">
-          <div className="rounded-xl border border-border/50 bg-secondary/30 px-4 py-2">
-            <div className="text-lg font-black">{rows.length}</div>
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Files</div>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-secondary/30 px-4 py-2">
-            <div className="text-lg font-black">{rows.reduce((s, p) => s + (p.file_lines ?? 0), 0)}</div>
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Cards inside</div>
-          </div>
-        </div>
+      <PageHero
+        eyebrow="Bulk files"
+        eyebrowIcon={FileArchive}
+        title="DUMP"
+        highlight="card packs"
+        description="Remaining / soon-expiring cards packed as files. Buy the pack and download the whole file from Orders."
+      />
+
+      <div className="grid gap-3 sm:grid-cols-3 mb-5">
+        <StatCard label="Files" icon={FileArchive} tone="blue" value={rows.length} />
+        <StatCard label="Cards inside" icon={Download} tone="amber" value={rows.reduce((s, p) => s + (p.file_lines ?? 0), 0)} />
+        <StatCard label="Matching" icon={Download} tone="green" value={filtered.length} />
       </div>
+
 
       <div className="rounded-2xl border border-border/50 bg-card/60 p-4 mb-5 grid gap-3 md:grid-cols-4">
         <label className="text-xs uppercase tracking-wider text-muted-foreground md:col-span-2">
