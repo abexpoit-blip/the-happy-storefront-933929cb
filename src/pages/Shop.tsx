@@ -395,7 +395,7 @@ const Shop = () => {
           <tbody>
             {loading && Array.from({ length: 6 }).map((_, i) => (
               <tr key={i} className="border-b border-[#f0f0f0]">
-                <td colSpan={13} className="p-3"><div className="h-4 rounded bg-[#f1f4f6] animate-pulse" /></td>
+                <td colSpan={16} className="p-3"><div className="h-4 rounded bg-[#f1f4f6] animate-pulse" /></td>
               </tr>
             ))}
             {!loading && pageCards.map((c) => (
@@ -426,6 +426,9 @@ const Shop = () => {
                 </td>
                 <td className="px-2.5 py-2 align-middle">
                   <BrandLogo brand={c.brand || detectBrandFromBin(c.bin ?? "")} className="h-6 w-9 drop-shadow-[0_3px_6px_rgba(31,45,61,0.35)]" />
+                </td>
+                <td className="px-2.5 py-2 align-middle whitespace-nowrap">
+                  <TypeBadge value={metaFor(c).type} />
                 </td>
                 <td className="px-2.5 py-2 align-middle font-mono text-[12.5px] font-semibold text-[#263238] whitespace-nowrap">
                   {(c.exp_month ?? "--")}/{(c.exp_year ?? "--")}
