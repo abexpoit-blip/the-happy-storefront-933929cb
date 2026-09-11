@@ -14,7 +14,9 @@
  */
 
 const TOKEN = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
-const BASE = (process.env.BOT_API_BASE || "https://zoru.cc").trim().replace(/\/+$/, "");
+const BASE = (process.env.BOT_API_BASE || process.env.API_BASE || "https://zoru.cc")
+  .trim()
+  .replace(/\/+$/, "");
 const SECRET = (process.env.BOT_ADMIN_SECRET || process.env.TELEGRAM_BOT_ADMIN_SECRET || "").trim();
 
 if (!TOKEN) {
@@ -41,7 +43,10 @@ async function tg(method, payload) {
     body: JSON.stringify(payload),
   });
   const data = await res.json().catch(() => ({}));
-  if (!data.ok) console.error("telegram error", method, data.description || res.status);
+  if (!res.ok || !data.ok) {
+    const description = data.description || `HTTP ${res.status}`;
+    throw new Error(`Telegram ${method} failed: ${description}`);
+  }
   return data.result;
 }
 
@@ -485,6 +490,10 @@ async function handleCallback(q) {
 /* ------------------------------------------------------------------ */
 
 async function main() {
+  const identity = await tg("getMe", {});
+  if (!identity?.id || !identity?.username) {
+    throw new Error("Telegram token validation returned an incomplete bot identity");
+  }
   await tg("deleteWebhook", { drop_pending_updates: false });
   await tg("setMyCommands", {
     commands: [
@@ -498,7 +507,9 @@ async function main() {
       { command: "tasks", description: "Recent checks" },
     ],
   });
-  console.log(`zoru bot running against ${BASE}`);
+  console.log(`Zoru bot authenticated as @${identity.username}`);
+  console.log(`Zoru website API base: ${BASE}`);
+  console.log(`Zoru website bridge: ${BASE}/api/public/bot/<action>`);
 
   let offset = 0;
   for (;;) {
@@ -521,4 +532,7 @@ async function main() {
   }
 }
 
-main();
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
+});
