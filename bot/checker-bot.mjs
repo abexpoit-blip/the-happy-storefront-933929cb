@@ -29,6 +29,10 @@ if (!SECRET) {
 }
 
 const API = `https://api.telegram.org/bot${TOKEN}`;
+const TELEGRAM_REQUEST_TIMEOUT_MS = 20_000;
+const TELEGRAM_POLL_TIMEOUT_SECONDS = 30;
+const TELEGRAM_POLL_REQUEST_TIMEOUT_MS = (TELEGRAM_POLL_TIMEOUT_SECONDS + 15) * 1000;
+const WEBSITE_REQUEST_TIMEOUT_MS = 45_000;
 const money = (n) => `$${Number(n || 0).toFixed(2)}`;
 const esc = (s) => String(s).replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]);
 
@@ -36,11 +40,12 @@ const esc = (s) => String(s).replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;
 /* Telegram helpers                                                    */
 /* ------------------------------------------------------------------ */
 
-async function tg(method, payload) {
+async function tg(method, payload, timeoutMs = TELEGRAM_REQUEST_TIMEOUT_MS) {
   const res = await fetch(`${API}/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
@@ -87,6 +92,7 @@ async function api(action, from, body = {}) {
       first_name: from.first_name ?? null,
       ...body,
     }),
+    signal: AbortSignal.timeout(WEBSITE_REQUEST_TIMEOUT_MS),
   });
   let data;
   try {
@@ -548,9 +554,20 @@ async function main() {
   console.log(`Zoru website bridge: ${BASE}/api/public/bot/<action>`);
 
   let offset = 0;
+  let consecutivePollFailures = 0;
   for (;;) {
     try {
-      const updates = await tg("getUpdates", { offset, timeout: 30, allowed_updates: ["message", "callback_query"] });
+      const updates = await tg(
+        "getUpdates",
+        {
+          offset,
+          timeout: TELEGRAM_POLL_TIMEOUT_SECONDS,
+          allowed_updates: ["message", "callback_query"],
+        },
+        TELEGRAM_POLL_REQUEST_TIMEOUT_MS,
+      );
+      if (consecutivePollFailures > 0) console.log("Telegram polling connection restored");
+      consecutivePollFailures = 0;
       for (const u of updates ?? []) {
         offset = u.update_id + 1;
         const chat = u.message?.chat?.id ?? u.callback_query?.message?.chat?.id;
@@ -562,8 +579,24 @@ async function main() {
         }
       }
     } catch (e) {
-      console.error("poll error", e);
-      await new Promise((r) => setTimeout(r, 3000));
+      consecutivePollFailures += 1;
+      const detail = String(e instanceof Error ? e.message : e || "unknown error");
+      const cause = e instanceof Error && e.cause && typeof e.cause === "object" ? e.cause : null;
+      const code = cause && "code" in cause ? String(cause.code) : "";
+      const transient =
+        detail.includes("fetch failed") ||
+        detail.includes("timed out") ||
+        detail.includes("aborted") ||
+        ["ETIMEDOUT", "ECONNRESET", "EAI_AGAIN", "ENETUNREACH"].includes(code);
+      if (consecutivePollFailures === 1 || consecutivePollFailures % 10 === 0) {
+        console.warn(
+          transient
+            ? `Telegram polling temporarily unavailable (${code || detail}); retrying`
+            : `Telegram polling failed: ${detail}`,
+        );
+      }
+      const delay = Math.min(30_000, 2_000 * consecutivePollFailures);
+      await new Promise((r) => setTimeout(r, delay));
     }
   }
 }
