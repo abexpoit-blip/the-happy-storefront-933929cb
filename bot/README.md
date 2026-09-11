@@ -49,6 +49,10 @@ Successful startup logs show the authenticated Telegram username, the website
 API base, and the complete bridge pattern. An invalid or revoked token is
 rejected before PM2 starts the process.
 
+Startup also verifies the protected website bridge and creates or confirms the
+first account in `TELEGRAM_ADMIN_IDS`. A mismatched shared secret, missing
+database migration, or broken account trigger therefore fails before polling.
+
 ## Database
 
 Apply `selfhost/bot-accounts.sql` once before starting the bot.
