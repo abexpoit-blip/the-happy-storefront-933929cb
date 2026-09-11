@@ -7,6 +7,7 @@ import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { LanguageToggle, useLanguage } from "@/lib/i18n";
 import { useSessionTimeout } from "@/hooks/useSessionTimeout";
 import { cartCount, onCartChange } from "@/lib/cart";
+import { UserAvatar } from "@/components/UserAvatar";
 
 
 const buyerNav = [
@@ -51,10 +52,6 @@ export const AppShell = ({ children, wide }: { children: ReactNode; wide?: boole
 
   const balance = Number(profile?.balance ?? 0).toFixed(2);
   const uname = profile?.username ?? "пользователь";
-  // Male character avatar generated from the username
-  const avatarUrl =
-    profile?.avatar_url ||
-    `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(uname)}&top=shortHair,shortHairShortFlat,shortHairShortRound,shortHairShortWaved,shortHairSides,shortHairTheCaesar,shortHairDreads&facialHair=beardLight,beardMedium,moustacheFancy,moustacheMagnum&facialHairProbability=85&clothing=collarAndSweater,graphicShirt,hoodie,shirtCrewNeck&radius=50`;
 
   return (
     <div
@@ -153,12 +150,7 @@ export const AppShell = ({ children, wide }: { children: ReactNode; wide?: boole
               className="group flex items-center gap-2 rounded-full border border-[#e6e6e6] bg-gradient-to-b from-white to-[#f4f6f8] pl-1 pr-2 py-1 hover:border-[#2196f3]/60 hover:shadow-[0_6px_16px_-10px_rgba(33,150,243,0.9)] transition"
             >
               <span className="relative h-11 w-11 rounded-full p-[2px] bg-[conic-gradient(from_180deg,#42a5f5,#7e57c2,#f9a825,#42a5f5)] shadow-[0_6px_14px_-8px_rgba(31,45,61,0.9)]">
-                <img
-                  src={avatarUrl}
-                  alt={uname}
-                  className="h-full w-full rounded-full bg-white object-cover"
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                />
+                <UserAvatar username={uname} avatarUrl={profile?.avatar_url} className="h-full w-full rounded-full object-cover" />
                 <span className="absolute -bottom-0 -right-0 h-2.5 w-2.5 rounded-full bg-[#2fb344] ring-2 ring-white" />
               </span>
               <span className="hidden sm:flex flex-col items-start leading-tight">
@@ -173,7 +165,7 @@ export const AppShell = ({ children, wide }: { children: ReactNode; wide?: boole
               <div className="absolute right-0 top-full mt-2 w-60 rounded-xl bg-white border border-[#e6e6e6] shadow-[0_20px_50px_-24px_rgba(31,45,61,0.85)] z-20 text-sm overflow-hidden">
                 <div className="flex items-center gap-3 px-3 py-3 bg-gradient-to-r from-[#304156] to-[#3d5570] text-white">
                   <span className="h-11 w-11 rounded-full p-[2px] bg-[conic-gradient(from_180deg,#42a5f5,#7e57c2,#f9a825,#42a5f5)]">
-                    <img src={avatarUrl} alt={uname} className="h-full w-full rounded-full bg-white object-cover" />
+                    <UserAvatar username={uname} avatarUrl={profile?.avatar_url} className="h-full w-full rounded-full object-cover" />
                   </span>
                   <div className="min-w-0">
                     <div className="text-[13px] font-semibold truncate">{uname}</div>

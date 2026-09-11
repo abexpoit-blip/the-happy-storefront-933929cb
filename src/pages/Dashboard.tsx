@@ -1,35 +1,65 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/hooks/useAuth";
-import { walletApi, ordersApi, VpsOrder } from "@/lib/api";
+import { listMyOrders } from "@/lib/store";
+import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import {
   Wallet, ShoppingBag, User, ArrowRight, CreditCard,
   TrendingDown, Clock, CheckCircle, XCircle, Eye, PackageX
 } from "lucide-react";
 import { RoleBadge, countryFlag, BrandLogo } from "@/lib/brands";
+import { UserAvatar } from "@/components/UserAvatar";
 
 const Dashboard = () => {
   const { profile, user } = useAuth();
   const [balance, setBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [orders, setOrders] = useState<VpsOrder[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const [w, t, o] = await Promise.allSettled([
-        walletApi.balance(),
-        walletApi.transactions(),
-        ordersApi.mine(),
-      ]);
-      if (w.status === "fulfilled") setBalance(Number(w.value.balance ?? 0));
-      if (t.status === "fulfilled") setTransactions(t.value.transactions ?? []);
-      if (o.status === "fulfilled") setOrders(o.value.orders ?? []);
-      setLoading(false);
+      try {
+        setBalance(Number(profile?.balance ?? 0));
+        const [oRes, dRes] = await Promise.allSettled([
+          listMyOrders(),
+          supabase.from("deposits").select("id, amount, status, created_at").order("created_at", { ascending: false }).limit(15),
+        ]);
+        if (oRes.status === "fulfilled" && oRes.value) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          setOrders(oRes.value.map((ord: any) => ({
+            id: ord.id,
+            total: ord.total,
+            status: ord.status,
+            created_at: ord.created_at,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            items: (ord.order_items ?? []).map((i: any) => ({
+              card_id: i.product_id,
+              price: i.price,
+              brand: i.title,
+            })),
+          })));
+        }
+        if (dRes.status === "fulfilled" && dRes.value.data) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          setTransactions(dRes.value.data.map((dep: any) => ({
+            id: dep.id,
+            type: "deposit",
+            amount: dep.amount,
+            status: dep.status,
+            created_at: dep.created_at,
+          })));
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        setLoading(false);
+      }
     })();
-  }, []);
+  }, [profile?.balance]);
 
   const statusIcon = (s: string) => {
     if (s === "paid" || s === "completed") return <CheckCircle className="h-4 w-4 text-success" />;
@@ -61,12 +91,8 @@ const Dashboard = () => {
           {/* Profile Card */}
           <div className="glass rounded-2xl p-6 space-y-4">
             <div className="flex items-center gap-3">
-              <div className="h-14 w-14 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-neon">
-                {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt="" className="h-14 w-14 rounded-2xl object-cover" />
-                ) : (
-                  <User className="h-7 w-7 text-primary-foreground" />
-                )}
+              <div className="h-14 w-14 rounded-2xl flex items-center justify-center overflow-hidden">
+                <UserAvatar username={profile?.username} avatarUrl={profile?.avatar_url} className="h-14 w-14 rounded-2xl object-cover" />
               </div>
               <div className="min-w-0">
                 <p className="font-display font-bold text-lg truncate">{profile?.display_name || profile?.username}</p>
@@ -220,7 +246,7 @@ const Dashboard = () => {
                   </div>
                   {expandedOrder === order.id && order.items && order.items.length > 0 && (
                     <div className="p-3 border-t border-border/30 bg-secondary/10 space-y-1.5">
-                    {order.items.map((item, i) => (
+                    {order.items.map((item: any, i: number) => (
                         <div key={i} className="flex items-center justify-between text-xs px-2 py-1.5 rounded-lg bg-secondary/30">
                           <div className="flex items-center gap-2 font-mono min-w-0">
                             {item.digital_product_id ? (

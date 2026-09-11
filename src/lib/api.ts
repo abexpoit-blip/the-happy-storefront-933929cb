@@ -10,17 +10,7 @@ export function resolveApiBase(): string {
   if (envBase && envBase.length > 0) return envBase.replace(/\/+$/, "");
 
   if (typeof window !== "undefined") {
-    const { hostname, origin } = window.location;
-    const host = hostname.toLowerCase();
-
-    if (host === "cruzercc.shop" || host === "www.cruzercc.shop") {
-      return `${origin.replace(/\/+$/, "")}/api`;
-    }
-
-    if (host.endsWith("lovable.app") || host.endsWith("lovableproject.com")) {
-      return "https://cruzercc.shop/api";
-    }
-
+    const { origin } = window.location;
     return `${origin.replace(/\/+$/, "")}/api`;
   }
 
@@ -233,11 +223,23 @@ export const authApi = {
   },
 
   login: async (data: { identifier: string; password: string }): Promise<AuthResult> => {
-    const email = toAuthEmail(data.identifier);
-    const { data: res, error } = await supabase.auth.signInWithPassword({
+    const rawId = data.identifier.trim();
+    const email = toAuthEmail(rawId);
+    let { data: res, error } = await supabase.auth.signInWithPassword({
       email,
       password: data.password,
     });
+    // Fallback: if username was registered with alternate domain or raw email
+    if (error && !rawId.includes("@")) {
+      const altRes = await supabase.auth.signInWithPassword({
+        email: `${rawId.toLowerCase()}@zoru.cc`,
+        password: data.password,
+      });
+      if (!altRes.error && altRes.data?.user) {
+        res = altRes.data;
+        error = null;
+      }
+    }
     if (error) throw new ApiError(401, authMessage(error.message));
     if (!res.user) throw new ApiError(401, "Не удалось войти");
     const user = await loadRolesAndProfile(res.user.id);

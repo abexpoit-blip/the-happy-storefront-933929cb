@@ -55,7 +55,7 @@ async function tg(method, payload, timeoutMs = TELEGRAM_REQUEST_TIMEOUT_MS) {
   return data.result;
 }
 
-/* ── Premium MENU (Modern 2-Column Grid) ── */
+/* ── Premium MENU (Modern Color-Coded Grid Matching UI Spec) ── */
 function buildMenuKeyboard(settings = settingsCache) {
   const adminContactUrl = settings.bot_admin_contact || "https://t.me/samexpoit";
   const websiteUrl = settings.bot_website_url || BASE;
@@ -63,25 +63,53 @@ function buildMenuKeyboard(settings = settingsCache) {
   return {
     inline_keyboard: [
       [
-        { text: "💳 Check Card", callback_data: "check" },
-        { text: "💰 Earn Credit", callback_data: "refer" },
+        { text: "💳 Check Card", callback_data: "check", style: "success" },
+        { text: "💰 Earn Credit", callback_data: "refer", style: "primary" },
       ],
       [
-        { text: "💰 Balance", callback_data: "balance" },
-        { text: "⚡ Gate", callback_data: "gates" },
+        { text: "💰 Balance", callback_data: "balance", style: "success" },
+        { text: "⚡ Gate", callback_data: "gates", style: "primary" },
       ],
       [
-        { text: "💎 Recharge", callback_data: "deposit" },
-        { text: "📊 Statistics", callback_data: "tasks" },
+        { text: "💎 Recharge", callback_data: "deposit", style: "success" },
+        { text: "📊 Statistics", callback_data: "tasks", style: "danger" },
       ],
       [
-        { text: "🔑 API Info", callback_data: "api" },
-        { text: "🌐 Website", url: websiteUrl },
+        { text: "🔑 API Info", callback_data: "api", style: "primary" },
+        { text: "🌐 Website", url: websiteUrl, style: "primary" },
       ],
       [
-        { text: "📩 Contact Admin", url: adminContactUrl },
+        { text: "📩 Contact Admin", url: adminContactUrl, style: "danger" },
       ],
     ],
+  };
+}
+
+function buildReplyKeyboard() {
+  return {
+    keyboard: [
+      [
+        { text: "💳 Check Card", style: "success" },
+        { text: "💰 Earn Credit", style: "primary" },
+      ],
+      [
+        { text: "💰 Balance", style: "success" },
+        { text: "⚡ Gate", style: "primary" },
+      ],
+      [
+        { text: "💎 Recharge", style: "success" },
+        { text: "📊 Statistics", style: "danger" },
+      ],
+      [
+        { text: "🔑 API Info", style: "primary" },
+        { text: "🌐 Website", style: "primary" },
+      ],
+      [
+        { text: "📩 Contact Admin", style: "danger" },
+      ],
+    ],
+    resize_keyboard: true,
+    is_persistent: true,
   };
 }
 
@@ -696,6 +724,11 @@ async function handleMessage(msg) {
         const ref = args[0] ? { ref: args[0] } : {};
         await api("session", from, ref);
         const name = esc(from.first_name || from.username || "Member");
+        await send(
+          chat,
+          `👋 Welcome to <b>Zoru Checker</b>, ${name}!\nUse the keyboard or buttons below:`,
+          { reply_markup: buildReplyKeyboard() },
+        );
         await menu(
           chat,
           [
@@ -779,6 +812,24 @@ async function handleMessage(msg) {
         );
         return;
     }
+  // Reply keyboard button clicks
+  const clean = text.toLowerCase();
+  if (clean.includes("check card")) { pendingAction.delete(chat); await startCheck(chat); return; }
+  if (clean.includes("earn credit")) { pendingAction.delete(chat); await showReferrals(chat, from); return; }
+  if (clean.includes("balance") || clean.includes("profile")) { pendingAction.delete(chat); await showAccount(chat, from); return; }
+  if (clean.includes("gate")) { pendingAction.delete(chat); await showGates(chat, from); return; }
+  if (clean.includes("recharge") || clean.includes("deposit")) { pendingAction.delete(chat); await startDeposit(chat); return; }
+  if (clean.includes("statistics") || clean.includes("tasks")) { pendingAction.delete(chat); await showTasks(chat, from); return; }
+  if (clean.includes("api info") || clean === "api") { pendingAction.delete(chat); await showApi(chat, from); return; }
+  if (clean.includes("website")) {
+    const s = await getSettings();
+    await send(chat, `🌐 <b>Zoru Website:</b>\n<a href="${esc(s.bot_website_url || BASE)}">${esc(s.bot_website_url || BASE)}</a>`);
+    return;
+  }
+  if (clean.includes("contact admin") || clean.includes("support")) {
+    const s = await getSettings();
+    await send(chat, `📩 <b>Contact Admin Support:</b>\n<a href="${esc(s.bot_admin_contact)}">${esc(s.bot_admin_contact)}</a>`);
+    return;
   }
 
   const waiting = pendingAction.get(chat);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { newsApi } from "@/lib/api";
+import { listAnnouncements } from "@/lib/store";
 import { Newspaper, Calendar, AlertTriangle, Sparkles, Wrench, Bell, ChevronRight } from "lucide-react";
 import Seo from "@/components/Seo";
 
@@ -52,7 +52,20 @@ const News = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    newsApi.list().then((r) => setUpdates((r.updates ?? []) as unknown as NewsItem[])).finally(() => setLoading(false));
+    listAnnouncements()
+      .then((items) => {
+        setUpdates(
+          items.map((i) => ({
+            id: i.id,
+            title: i.title,
+            body: i.body,
+            type: i.kind || "update",
+            created_at: i.created_at,
+          }))
+        );
+      })
+      .catch(() => setUpdates([]))
+      .finally(() => setLoading(false));
   }, []);
 
   return (

@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/lib/i18n";
 import { toast } from "sonner";
 import { CreditCard, Lock, ShoppingBag, User, Wallet } from "lucide-react";
+import { UserAvatar } from "@/components/UserAvatar";
 
 interface Stats {
   deposited: number;
@@ -62,9 +63,6 @@ const Profile = () => {
   };
 
   const uname = profile?.username ?? "user";
-  const avatarUrl =
-    profile?.avatar_url ||
-    `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(uname)}&backgroundType=gradientLinear&radius=50`;
 
   return (
     <AppShell>
@@ -79,7 +77,7 @@ const Profile = () => {
 
       <div className="rounded-2xl border border-[#e6e6e6] bg-white p-5 flex items-center gap-4 mb-5">
         <span className="h-16 w-16 rounded-full p-[3px] bg-[conic-gradient(from_180deg,#42a5f5,#7e57c2,#f9a825,#42a5f5)] shadow-[0_10px_24px_-14px_rgba(31,45,61,0.9)]">
-          <img src={avatarUrl} alt={uname} className="h-full w-full rounded-full bg-white object-cover" />
+          <UserAvatar username={uname} avatarUrl={profile?.avatar_url} className="h-full w-full rounded-full object-cover" />
         </span>
         <div className="min-w-0">
           <div className="text-lg font-semibold text-[#1f2d3d] truncate">{uname}</div>

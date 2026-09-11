@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { newsApi, announcementsApi, ordersApi } from "@/lib/api";
 import { AppShell } from "@/components/AppShell";
 import Seo from "@/components/Seo";
 import { BuildBotBanner } from "@/components/BuildBotBanner";
+import { listAnnouncements, type Announcement } from "@/lib/store";
+import { supabase } from "@/integrations/supabase/client";
 
 /**
  * Buyer HOME — Scorpion-style layout copy:
@@ -12,34 +13,49 @@ import { BuildBotBanner } from "@/components/BuildBotBanner";
 
 const Index = () => {
   const [news, setNews] = useState<{ id: string; label: string; count: number }[]>([]);
-  const [anns, setAnns] = useState<{ id: string; title: string; body: string }[]>([]);
+  const [anns, setAnns] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const loadNews = useCallback(async () => {
+  const loadData = useCallback(async () => {
     try {
-      const res = await newsApi.list();
-      setNews((res.updates ?? []) as typeof news);
-    } catch { /* ignore */ }
+      const [annRes, prodRes] = await Promise.allSettled([
+        listAnnouncements(),
+        supabase
+          .from("products")
+          .select("id, title, stock, created_at")
+          .eq("active", true)
+          .order("created_at", { ascending: false })
+          .limit(15),
+      ]);
+      if (annRes.status === "fulfilled" && annRes.value) {
+        setAnns(annRes.value);
+      }
+      if (prodRes.status === "fulfilled" && prodRes.value.data) {
+        setNews(
+          prodRes.value.data.map((p) => ({
+            id: p.id,
+            label: p.title,
+            count: Number(p.stock || 1),
+          }))
+        );
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    (async () => {
-      const [, a] = await Promise.allSettled([
-        loadNews(),
-        announcementsApi.list(),
-        ordersApi.mine().catch(() => null),
-      ]);
-      if (a.status === "fulfilled" && a.value)
-        setAnns((a.value.announcements ?? []) as typeof anns);
-      setLoading(false);
-    })();
-  }, [loadNews]);
+    const timer = setTimeout(() => setLoading(false), 2500);
+    void loadData().finally(() => clearTimeout(timer));
+  }, [loadData]);
 
   useEffect(() => {
-    intervalRef.current = setInterval(loadNews, 30000);
+    intervalRef.current = setInterval(loadData, 30000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [loadNews]);
+  }, [loadData]);
 
   return (
     <AppShell>
