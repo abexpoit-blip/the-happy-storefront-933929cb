@@ -1,6 +1,7 @@
 # Roadmap
 
-- [x] Make buyer navigation follow the selected English/Russian language.
-- [x] Prevent multi-card checkout from silently falling back to separate orders.
-- [x] Validate that one cart order contains every selected card.
-- [x] Verify TypeScript and production build.
+- [ ] Audit and fix Telegram bot authentication/startup failures.
+- [ ] Harden bot database migrations and account creation.
+- [ ] Verify balance, deposit, checker, task, referral, and API-key flows.
+- [ ] Run syntax, type, build, and integration checks.
+- [ ] Provide exact VPS deploy and log-check commands.
