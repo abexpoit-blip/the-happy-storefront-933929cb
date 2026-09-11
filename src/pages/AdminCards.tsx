@@ -212,7 +212,7 @@ const AdminCards = () => {
               <datalist id="admin-base-list">
                 {knownBases.map((b) => <option key={b} value={b} />)}
               </datalist>
-              <Button size="sm" onClick={bulkSetBase} className="bg-gradient-to-r from-amber-500 to-orange-600 text-white">Set base</Button>
+              <Button size="sm" onClick={bulkSetBase} className="bg-gradient-to-r from-[#409eff] to-[#4fc3f7] text-white">Set base</Button>
             </div>
             <button onClick={() => setSelected(new Set())} className="ml-auto text-xs text-muted-foreground">Clear</button>
           </div>
