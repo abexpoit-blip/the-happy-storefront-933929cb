@@ -46,7 +46,7 @@ CREATE TRIGGER trg_api_requests_updated BEFORE UPDATE ON public.api_access_reque
 
 -- default price of API access
 INSERT INTO public.site_settings (key, value)
-VALUES ('api_access_fee', '50')
+VALUES ('api_access_fee', '100')
 ON CONFLICT (key) DO NOTHING;
 
 -- ---------- user requests API access; the fee is taken from the balance ----------
@@ -71,7 +71,7 @@ BEGIN
     RAISE EXCEPTION 'api_already_active';
   END IF;
 
-  SELECT COALESCE(NULLIF(value,'')::numeric, 50) INTO _fee FROM site_settings WHERE key = 'api_access_fee';
+  SELECT COALESCE(NULLIF(value,'')::numeric, 100) INTO _fee FROM site_settings WHERE key = 'api_access_fee';
   _fee := GREATEST(COALESCE(_fee, 50), 0);
 
   SELECT balance INTO _bal FROM profiles WHERE id = _uid FOR UPDATE;
