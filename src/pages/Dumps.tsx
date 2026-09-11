@@ -8,6 +8,7 @@ import { Loader2, FileArchive, Download, RotateCcw } from "lucide-react";
 import { listSection, type SectionProduct } from "@/lib/sections";
 import { purchaseProduct, translatePurchaseError } from "@/lib/store";
 import { CountryFlagImg } from "@/lib/brands";
+import { PageHero, StatCard } from "@/components/PageHero";
 
 const PAGE_SIZES = [10, 25, 50, 100];
 

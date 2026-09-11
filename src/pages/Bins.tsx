@@ -4,10 +4,11 @@ import Seo from "@/components/Seo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Search, Loader2, CreditCard, RotateCcw } from "lucide-react";
+import { Search, Loader2, CreditCard, RotateCcw, Globe } from "lucide-react";
 import { listSection, type SectionProduct } from "@/lib/sections";
 import { purchaseProduct, translatePurchaseError } from "@/lib/store";
 import { CountryFlagImg } from "@/lib/brands";
+import { PageHero, StatCard } from "@/components/PageHero";
 import { resolveCountryName as resolveLabel } from "@/lib/countries";
 
 const PAGE_SIZES = [10, 25, 50, 100];
