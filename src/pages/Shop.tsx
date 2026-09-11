@@ -448,6 +448,23 @@ const Shop = () => {
                   ) : <span className="text-[#bbb]">—</span>}
                 </td>
                 <td className="px-2.5 py-2 align-middle max-w-[200px]">
+                  {metaFor(c).bank ? (
+                    <span title={metaFor(c).bank ?? ""} className="block max-w-[190px] truncate text-[12px] font-semibold text-[#1565c0]">
+                      {metaFor(c).bank}
+                    </span>
+                  ) : <span className="text-[#bbb]">—</span>}
+                </td>
+                <td className="px-2.5 py-2 align-middle max-w-[190px]">
+                  {metaFor(c).level ? (
+                    <span
+                      title={metaFor(c).level ?? ""}
+                      className="inline-block max-w-full truncate rounded-md border border-[#ffd54f] bg-gradient-to-b from-[#fff6d6] to-[#ffe082] px-2 py-1 text-[10.5px] font-extrabold uppercase tracking-wide text-[#6d4c00] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
+                    >
+                      {metaFor(c).level}
+                    </span>
+                  ) : <span className="text-[#bbb]">—</span>}
+                </td>
+                <td className="px-2.5 py-2 align-middle max-w-[200px]">
                   {c.city || c.state ? (
                     <span
                       title={[c.city, c.state, c.zip].filter(Boolean).join(", ")}
