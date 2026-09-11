@@ -199,11 +199,15 @@ export const adminCheckerExport = createServerFn({ method: "POST" })
                 .join(","),
             ),
           ].join("\n")
+        : data.liveOnly
+        ? flat
+            .map((f) => `${f.card} | ${f.status.toUpperCase()} | ${clean(f.category || "LIVE")} | ${clean(f.msg || "")}`)
+            .join("\n")
         : [
             header.join(" | "),
             ...flat.map((f) =>
               [f.time, f.user, f.source, f.gate, f.card, f.status, f.category, f.msg, f.taskId]
-                .map((v) => clean(v).replace(/\|/g, "/"))
+                .map((v) => clean(v))
                 .join(" | "),
             ),
           ].join("\n");

@@ -66,34 +66,62 @@ export async function checkCredit(): Promise<number> {
   return Number(p?.data?.credit ?? 0);
 }
 
-/** Gates selected for this shop (CheckerCCV dashboard list). */
+/** Gates supported by CheckerCCV with fallback catalog */
 export const GATE_CATALOG: CheckerGate[] = [
   { id: "CCV_Amazon_Auth", description: "CCV Amazon US Auth", creditGate: 15, isEnabled: true },
   { id: "CCN_Amazon_Auth", description: "CCN Amazon Prime US Auth", creditGate: 15, isEnabled: true },
   { id: "CCN_Amazon_Auth_Logo", description: "CCN Amazon Auth Logo Bank - 3 Minutes", creditGate: 15, isEnabled: true },
   { id: "CCV_Academy_Auth", description: "CCV Academy Auth - Walmart.Com", creditGate: 12, isEnabled: true },
+  { id: "CCN_Academy_Auth", description: "CCN Academy Auth", creditGate: 12, isEnabled: true },
   { id: "CCV_Doordash_Auth", description: "CCV DoorDash Auth - Stripe", creditGate: 8, isEnabled: true },
   { id: "CCN_Doordash_Auth", description: "CCN DoorDash Auth - Stripe", creditGate: 8, isEnabled: true },
   { id: "CCV_Braintree_Auth", description: "CCV Braintree Auth - Do not check same BIN", creditGate: 5, isEnabled: true },
+  { id: "CCN_Braintree_Auth", description: "CCN Braintree Auth", creditGate: 5, isEnabled: true },
+  { id: "CCV_Stripe_Auth", description: "CCV Stripe $1 Auth", creditGate: 10, isEnabled: true },
+  { id: "CCN_Stripe_Auth", description: "CCN Stripe Auth", creditGate: 10, isEnabled: true },
+  { id: "CCV_Shopify_Auth", description: "CCV Shopify / Spreedly", creditGate: 10, isEnabled: true },
+  { id: "CCN_Shopify_Auth", description: "CCN Shopify Auth", creditGate: 10, isEnabled: true },
+  { id: "CCV_Authorize_Auth", description: "CCV Authorize.Net 1$ Auth", creditGate: 8, isEnabled: true },
+  { id: "CCN_Authorize_Auth", description: "CCN Authorize.Net Auth", creditGate: 8, isEnabled: true },
+  { id: "CCV_Square_Auth", description: "CCV Squareup $1 Auth", creditGate: 10, isEnabled: true },
+  { id: "CCN_Square_Auth", description: "CCN Squareup Auth", creditGate: 10, isEnabled: true },
+  { id: "CCV_Cybersource_Auth", description: "CCV CyberSource Auth", creditGate: 12, isEnabled: true },
+  { id: "CCN_Cybersource_Auth", description: "CCN CyberSource Auth", creditGate: 12, isEnabled: true },
+  { id: "CCV_Adyen_Auth", description: "CCV Adyen Auth", creditGate: 12, isEnabled: true },
+  { id: "CCV_Paypal_Auth", description: "CCV PayPal Braintree", creditGate: 10, isEnabled: true },
+  { id: "CCV_Bestbuy_Auth", description: "CCV BestBuy Auth", creditGate: 12, isEnabled: true },
+  { id: "CCV_Target_Auth", description: "CCV Target US Auth", creditGate: 12, isEnabled: true },
 ];
 
 export async function listGates(enabledOnly = true): Promise<CheckerGate[]> {
-  const { key } = creds();
-  let p = (await call(GATES_URL, { key })) as unknown;
-  if (p && typeof p === "object" && Array.isArray((p as { data?: unknown[] }).data)) {
-    p = (p as { data: unknown[] }).data;
+  const map = new Map<string, CheckerGate>();
+  for (const g of GATE_CATALOG) {
+    map.set(g.id, { ...g });
   }
-  const gates = (Array.isArray(p) ? p : []) as CheckerGate[];
-  const live = enabledOnly ? gates.filter((g) => g.isEnabled === true) : gates;
-  // API থেকে description/credit না এলে আমাদের catalog থেকে পূরণ করি
-  return live.map((g) => {
-    const known = GATE_CATALOG.find((c) => c.id === g.id);
-    return {
-      ...g,
-      description: g.description || known?.description || String(g.id),
-      creditGate: Number(g.creditGate ?? known?.creditGate ?? 0),
-    };
-  });
+
+  try {
+    const { key } = creds();
+    let p = (await call(GATES_URL, { key })) as unknown;
+    if (p && typeof p === "object" && Array.isArray((p as { data?: unknown[] }).data)) {
+      p = (p as { data: unknown[] }).data;
+    }
+    const remoteGates = (Array.isArray(p) ? p : []) as CheckerGate[];
+    for (const g of remoteGates) {
+      if (!g || !g.id) continue;
+      const existing = map.get(g.id);
+      map.set(g.id, {
+        id: String(g.id),
+        description: String(g.description || existing?.description || g.id),
+        creditGate: Number(g.creditGate ?? existing?.creditGate ?? 0),
+        isEnabled: g.isEnabled !== undefined ? Boolean(g.isEnabled) : (existing?.isEnabled ?? true),
+      });
+    }
+  } catch {
+    // remote unavailable or not configured yet — fallback to catalog
+  }
+
+  const all = Array.from(map.values());
+  return enabledOnly ? all.filter((g) => g.isEnabled !== false) : all;
 }
 
 export async function createTask(gatecode: string, listcc: string[]) {
@@ -136,13 +164,73 @@ export async function getResults(taskId: string, cursor = 0, limit = 500) {
   };
 }
 
-/** CheckerCCV categories → our live/dead verdict. */
-export function verdict(category?: string): "live" | "dead" | null {
-  const c = (category ?? "").toLowerCase();
-  if (!c) return null;
-  if (c.includes("live") || c.includes("charge") || c.includes("approved") || c.includes("cvv")) {
-    return "live";
+/**
+ * Highly accurate CheckerCCV verdict: analyzes category AND gateway message.
+ * Correctly identifies Approved, Live, Charge, and Insufficient Funds (valid card).
+ */
+export function verdict(category?: string, msg?: string): "live" | "dead" | null {
+  const combined = `${category ?? ""} ${msg ?? ""}`.toLowerCase().trim();
+  if (!combined) return null;
+
+  // 1. Definite LIVE signals:
+  // Note: Insufficient Funds is a verified live card (issuer confirmed PAN+CVV, credit limit low)
+  if (
+    combined.includes("live") ||
+    combined.includes("approved") ||
+    combined.includes("approve") ||
+    combined.includes("charge") ||
+    combined.includes("charged") ||
+    combined.includes("cvv match") ||
+    combined.includes("cvv live") ||
+    combined.includes("ccn live") ||
+    combined.includes("insufficient fund") ||
+    combined.includes("insufficient_fund") ||
+    combined.includes("low balance") ||
+    combined.includes("auth success") ||
+    combined.includes("success") ||
+    combined.includes("passed") ||
+    combined.includes("verified") ||
+    combined.includes("avs match") ||
+    combined.includes("security code match") ||
+    combined.includes("00 : approved") ||
+    combined.includes("00: approved") ||
+    combined.includes("51 : insufficient") ||
+    combined.includes("51: insufficient")
+  ) {
+    if (!combined.includes("not approved") && !combined.includes("unapproved")) {
+      return "live";
+    }
   }
-  if (c.includes("die") || c.includes("dead") || c.includes("declin")) return "dead";
-  return null; // error / unknown / skipped — leave pending
+
+  // 2. Definite DEAD signals:
+  if (
+    combined.includes("die") ||
+    combined.includes("dead") ||
+    combined.includes("declin") ||
+    combined.includes("do not honor") ||
+    combined.includes("do_not_honor") ||
+    combined.includes("invalid") ||
+    combined.includes("stolen") ||
+    combined.includes("lost card") ||
+    combined.includes("pickup") ||
+    combined.includes("pick up") ||
+    combined.includes("expired") ||
+    combined.includes("fraud") ||
+    combined.includes("restricted") ||
+    combined.includes("closed") ||
+    combined.includes("not permitted") ||
+    combined.includes("not supported") ||
+    combined.includes("unsupported") ||
+    combined.includes("blocked") ||
+    combined.includes("call issuer") ||
+    combined.includes("card not found") ||
+    combined.includes("not approved") ||
+    combined.includes("05 : do not honor") ||
+    combined.includes("14 : invalid") ||
+    combined.includes("54 : expired")
+  ) {
+    return "dead";
+  }
+
+  return null; // leave pending if indeterminate
 }

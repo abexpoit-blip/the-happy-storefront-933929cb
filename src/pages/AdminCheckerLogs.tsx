@@ -106,6 +106,27 @@ const AdminCheckerLogs = () => {
   const copyRun = (r: AdminCheckRun) =>
     copy(r.rows.map((c) => `${c.full ?? c.card} | ${c.status.toUpperCase()} | ${c.msg}`).join("\n"));
 
+  const downloadRunLiveTxt = (r: AdminCheckRun) => {
+    const liveCards = r.rows.filter((c) => c.status === "live");
+    if (!liveCards.length) {
+      toast.error("No live cards found in this check run");
+      return;
+    }
+    const text = liveCards.map((c) => `${c.full ?? c.card} | LIVE | ${c.category || ""} | ${c.msg || ""}`).join("\n");
+    save(`live-${r.taskId}.txt`, text);
+    toast.success(`${liveCards.length} live card(s) saved as .txt`);
+  };
+
+  const copyRunLive = (r: AdminCheckRun) => {
+    const liveCards = r.rows.filter((c) => c.status === "live");
+    if (!liveCards.length) {
+      toast.error("No live cards found in this check run");
+      return;
+    }
+    const text = liveCards.map((c) => `${c.full ?? c.card} | LIVE | ${c.category || ""} | ${c.msg || ""}`).join("\n");
+    copy(text);
+  };
+
   const toggle = (id: string) =>
     setOpen((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
@@ -140,16 +161,24 @@ const AdminCheckerLogs = () => {
       </div>
 
       <div className="rounded-2xl border border-border/60 bg-card/60 p-4 space-y-3">
-        <div className="text-[13px] font-semibold">Daily files — full card details, kept for 30 days</div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[13px] font-semibold">Daily files & LIVE cards (.txt / .csv) — Full card details saved</div>
+          <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono font-medium">
+            {totals.live} LIVE card(s) on {day}
+          </span>
+        </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-sm"
+            onClick={() => download({ liveOnly: true, format: "txt", from: day })}
+          >
+            <Download className="h-4 w-4 mr-2" />Download LIVE cards (.txt)
+          </Button>
           <Button variant="outline" onClick={() => download({ liveOnly: false, format: "txt", from: day })}>
             <Download className="h-4 w-4 mr-2" />All checks (.txt)
           </Button>
           <Button variant="outline" onClick={() => download({ liveOnly: false, format: "csv", from: day })}>
             <Download className="h-4 w-4 mr-2" />All checks (.csv)
-          </Button>
-          <Button onClick={() => download({ liveOnly: true, format: "txt", from: day })}>
-            <Download className="h-4 w-4 mr-2" />LIVE only — this day
           </Button>
           <Button variant="secondary" onClick={() => download({ liveOnly: true, format: "csv", from: daysAgo(29), to: day })}>
             <Download className="h-4 w-4 mr-2" />LIVE — last 30 days (.csv)
@@ -188,11 +217,33 @@ const AdminCheckerLogs = () => {
                   </div>
                   <div className="text-[12px] text-muted-foreground min-w-[150px]">{r.gate}</div>
                   <div className="text-sm">{r.total} cards</div>
-                  <div className="text-sm text-emerald-600">{r.live} live</div>
+                  <div className="text-sm font-semibold text-emerald-600">{r.live} live</div>
                   <div className="text-sm text-rose-600">{r.dead} dead</div>
                   <div className="text-sm text-amber-600">{r.other} other</div>
                   <div className="ml-auto flex items-center gap-2">
                     <span className="text-[12px] text-muted-foreground">{r.status}</span>
+                    {r.live > 0 && (
+                      <>
+                        <Button
+                          size="sm"
+                          className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-600/30 font-medium text-xs h-8"
+                          title="Download LIVE cards (.txt)"
+                          onClick={() => downloadRunLiveTxt(r)}
+                        >
+                          <Download className="h-3.5 w-3.5 mr-1" />
+                          LIVE ({r.live}) .txt
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Copy LIVE cards only"
+                          className="text-emerald-400 hover:text-emerald-300"
+                          onClick={() => copyRunLive(r)}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
                     <Button size="sm" variant="ghost" title="Copy full list" onClick={() => copyRun(r)}>
                       <Copy className="h-4 w-4" />
                     </Button>

@@ -131,7 +131,7 @@ export const pollOrderCardCheck = createServerFn({ method: "POST" })
     for (const row of res.results) {
       const pan = String(row.card ?? "").split("|")[0]?.replace(/\D/g, "") ?? "";
       const checkId = mapping[pan];
-      const v = verdict(row.category);
+      const v = verdict(row.category, row.result?.msg ?? "");
       if (!checkId || !v) continue;
       await db.rpc("settle_card_check", { _check_id: checkId, _status: v });
     }

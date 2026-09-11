@@ -181,13 +181,14 @@ export const pollSelfCheck = createServerFn({ method: "POST" })
       status = res.status;
       const mapped: SelfCheckRow[] = res.results.map((r) => {
         const pan = digits(String(r.card ?? "").split("|")[0] ?? "");
-        const v = verdict(r.category);
+        const msg = String(r.result?.msg ?? "");
+        const v = verdict(r.category, msg);
         const cat = String(r.category ?? "").toLowerCase();
         return {
           card: mask(pan),
           status: v ?? (cat.includes("skip") ? "skipped" : "error"),
           category: String(r.category ?? ""),
-          msg: String(r.result?.msg ?? ""),
+          msg,
         };
       });
       for (const row of mapped) {

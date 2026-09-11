@@ -122,7 +122,7 @@ export const Route = createFileRoute("/api/public/bot/$action")({
               let allowed = GATE_CATALOG.map((item) => item.id);
               try {
                 const remote = await listGates(true);
-                if (remote.length) allowed = remote.map((item) => String(item.id));
+                if (remote.length) allowed = Array.from(new Set([...allowed, ...remote.map((item) => String(item.id))]));
               } catch {
                 // Fall back to the local catalog when the provider is unavailable.
               }
@@ -335,13 +335,14 @@ export const Route = createFileRoute("/api/public/bot/$action")({
                   state = res.status;
                   const mapped = res.results.map((r) => {
                     const pan = digits(String(r.card ?? "").split("|")[0] ?? "");
-                    const v = verdict(r.category);
+                    const msg = String(r.result?.msg ?? "");
+                    const v = verdict(r.category, msg);
                     const cat = String(r.category ?? "").toLowerCase();
                     return {
                       card: maskPan(pan),
                       status: v ?? (cat.includes("skip") ? "skipped" : "error"),
                       category: String(r.category ?? ""),
-                      msg: String(r.result?.msg ?? ""),
+                      msg,
                     };
                   });
                   for (const row of mapped) {
