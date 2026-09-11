@@ -27,6 +27,7 @@ const Orders = lazy(() => import("./pages/Orders"));
 const Recharge = lazy(() => import("./pages/Recharge"));
 const Referrals = lazy(() => import("./pages/Referrals"));
 const ApiAccess = lazy(() => import("./pages/ApiAccess"));
+const Profile = lazy(() => import("./pages/Profile"));
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminCards = lazy(() => import("./pages/AdminCards"));
 const AdminPaymentGateway = lazy(() => import("./pages/AdminPaymentGateway"));
@@ -101,6 +102,7 @@ const App = () => (
             <Route path="/checker" element={<ProtectedRoute><Checker /></ProtectedRoute>} />
             <Route path="/referrals" element={<ProtectedRoute><Referrals /></ProtectedRoute>} />
             <Route path="/api-access" element={<ProtectedRoute><ApiAccess /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
             <Route path="/tickets" element={<ProtectedRoute><Support /></ProtectedRoute>} />
 

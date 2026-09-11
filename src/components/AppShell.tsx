@@ -125,16 +125,16 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
 
       {/* SUB BAR */}
       <div className="bg-white border-b border-[#e6e6e6]">
-        <div className="mx-auto max-w-[1400px] px-3 sm:px-6 min-h-12 py-1.5 flex flex-wrap items-center justify-end gap-2 sm:gap-3 text-[12px] sm:text-[13px]">
+        <div className="mx-auto max-w-[1400px] px-3 sm:px-6 min-h-16 py-2.5 flex flex-wrap items-center justify-end gap-2.5 sm:gap-3.5 text-[13px] sm:text-[14px]">
           <LanguageToggle />
-          <span className="px-2 sm:px-3 py-1.5 border border-[#e6e6e6] text-[#2196f3] max-w-[120px] sm:max-w-none truncate">
+          <span className="px-3 sm:px-3.5 py-2 border border-[#e6e6e6] text-[#2196f3] max-w-[140px] sm:max-w-none truncate">
 
 
             {uname}
           </span>
           <Link
             to="/recharge"
-            className="px-2 sm:px-3 py-1.5 border border-[#e6e6e6] text-[#2fb344] hover:bg-[#f4fbf5] transition font-medium whitespace-nowrap"
+            className="px-3 sm:px-3.5 py-2 border border-[#e6e6e6] text-[#2fb344] hover:bg-[#f4fbf5] transition font-medium whitespace-nowrap"
           >
             $ {balance}
           </Link>
@@ -144,7 +144,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
               onClick={() => setMenuOpen((v) => !v)}
               className="group flex items-center gap-2 rounded-full border border-[#e6e6e6] bg-gradient-to-b from-white to-[#f4f6f8] pl-1 pr-2 py-1 hover:border-[#2196f3]/60 hover:shadow-[0_6px_16px_-10px_rgba(33,150,243,0.9)] transition"
             >
-              <span className="relative h-9 w-9 rounded-full p-[2px] bg-[conic-gradient(from_180deg,#42a5f5,#7e57c2,#f9a825,#42a5f5)] shadow-[0_6px_14px_-8px_rgba(31,45,61,0.9)]">
+              <span className="relative h-11 w-11 rounded-full p-[2px] bg-[conic-gradient(from_180deg,#42a5f5,#7e57c2,#f9a825,#42a5f5)] shadow-[0_6px_14px_-8px_rgba(31,45,61,0.9)]">
                 <img
                   src={avatarUrl}
                   alt={uname}
@@ -154,8 +154,8 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                 <span className="absolute -bottom-0 -right-0 h-2.5 w-2.5 rounded-full bg-[#2fb344] ring-2 ring-white" />
               </span>
               <span className="hidden sm:flex flex-col items-start leading-tight">
-                <span className="text-[12px] font-semibold text-[#1f2d3d] max-w-[110px] truncate">{uname}</span>
-                <span className="text-[10px] text-[#8a97a5]">
+                <span className="text-[13px] font-semibold text-[#1f2d3d] max-w-[130px] truncate">{uname}</span>
+                <span className="text-[11px] text-[#8a97a5]">
                   {profile?.role === "admin" ? "ADMIN" : "PREMIUM"}
                 </span>
               </span>
@@ -172,6 +172,13 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                     <div className="text-[11px] text-white/70">$ {balance}</div>
                   </div>
                 </div>
+                <Link
+                  to="/profile"
+                  onClick={() => setMenuOpen(false)}
+                  className="block px-3 py-2 hover:bg-[#f7f7f7] text-[#333]"
+                >
+                  {lang === "en" ? "Profile" : "Профиль"}
+                </Link>
                 <Link
                   to="/orders"
                   onClick={() => setMenuOpen(false)}
