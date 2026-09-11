@@ -4,10 +4,11 @@ import Seo from "@/components/Seo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Search, Loader2, CreditCard, RotateCcw } from "lucide-react";
+import { Search, Loader2, CreditCard, RotateCcw, Globe } from "lucide-react";
 import { listSection, type SectionProduct } from "@/lib/sections";
 import { purchaseProduct, translatePurchaseError } from "@/lib/store";
 import { CountryFlagImg } from "@/lib/brands";
+import { PageHero, StatCard } from "@/components/PageHero";
 import { resolveCountryName as resolveLabel } from "@/lib/countries";
 
 const PAGE_SIZES = [10, 25, 50, 100];
@@ -75,27 +76,20 @@ const Bins = () => {
     <AppShell>
       <Seo title="BIN Shop — Zoru" description="Verified BIN list with card type, level, brand and category." path="/bins" />
 
-      <div className="rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent p-6 mb-6">
-        <div className="flex items-center gap-3">
-          <span className="h-11 w-11 rounded-xl bg-primary/20 border border-primary/40 flex items-center justify-center">
-            <CreditCard className="h-5 w-5 text-primary-glow" />
-          </span>
-          <div>
-            <h1 className="font-display text-2xl font-black neon-text">BIN Shop</h1>
-            <p className="text-sm text-muted-foreground">Verified BIN numbers — buy instantly from your balance.</p>
-          </div>
-        </div>
-        <div className="mt-4 flex gap-3">
-          <div className="rounded-xl border border-border/50 bg-secondary/30 px-4 py-2">
-            <div className="text-lg font-black">{rows.length}</div>
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Total BINs</div>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-secondary/30 px-4 py-2">
-            <div className="text-lg font-black">{filtered.length}</div>
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Matching</div>
-          </div>
-        </div>
+      <PageHero
+        eyebrow="BIN Market"
+        eyebrowIcon={CreditCard}
+        title="Verified"
+        highlight="BIN list"
+        description="Country, card type, level, brand and category — buy instantly from your balance."
+      />
+
+      <div className="grid gap-3 sm:grid-cols-3 mb-5">
+        <StatCard label="Total BINs" icon={CreditCard} tone="blue" value={rows.length} />
+        <StatCard label="Matching" icon={Search} tone="amber" value={filtered.length} />
+        <StatCard label="Countries" icon={Globe} tone="green" value={countries.length} />
       </div>
+
 
       <div className="rounded-2xl border border-border/50 bg-card/60 p-4 mb-5 grid gap-3 md:grid-cols-5">
         <label className="text-xs uppercase tracking-wider text-muted-foreground md:col-span-1">
