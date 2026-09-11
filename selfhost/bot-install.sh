@@ -36,6 +36,7 @@ fi
 
 echo "Using database container: $DB_CONTAINER"
 for migration in \
+  selfhost/bonus-and-check-fee.sql \
   selfhost/referrals.sql \
   selfhost/self-checker.sql \
   selfhost/credits.sql \

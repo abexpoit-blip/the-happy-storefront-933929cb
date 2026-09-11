@@ -38,7 +38,7 @@ export const Route = createFileRoute("/api/public/deposit-callback")({
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-        await supabaseAdmin
+        const { error: metadataError } = await supabaseAdmin
           .from("deposits")
           .update({
             last_checked_at: new Date().toISOString(),
@@ -49,13 +49,15 @@ export const Route = createFileRoute("/api/public/deposit-callback")({
               : {}),
           })
           .eq("invoice_id", invoiceId);
+        if (metadataError) return new Response("Database error", { status: 500 });
 
-        await supabaseAdmin.rpc("settle_crypto_deposit", {
+        const { error: settlementError } = await supabaseAdmin.rpc("settle_crypto_deposit", {
           _invoice_id: invoiceId,
           _status: status,
           _confirmations: confirmations,
           _txid: fields.tx_url || undefined,
         });
+        if (settlementError) return new Response("Settlement error", { status: 500 });
 
         return new Response("ok");
       },

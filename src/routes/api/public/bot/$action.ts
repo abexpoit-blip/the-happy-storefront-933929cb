@@ -80,7 +80,15 @@ export const Route = createFileRoute("/api/public/bot/$action")({
           );
         }
 
-        const snapshot = await botAccountSnapshot(account);
+        let snapshot;
+        try {
+          snapshot = await botAccountSnapshot(account);
+        } catch (e) {
+          return json(
+            { status: "error", message: e instanceof Error ? e.message : "account_snapshot_failed" },
+            503,
+          );
+        }
         if (snapshot.blocked && action !== "session") {
           return json({ status: "error", message: "account_banned" }, 403);
         }
@@ -137,8 +145,9 @@ export const Route = createFileRoute("/api/public/bot/$action")({
               const { credit, fee, charged } = withFee(amount);
               const origin = siteOrigin(request);
 
-              await db.rpc("expire_stale_deposits");
-              const { data: openDeposit } = await db
+              const { error: expireError } = await db.rpc("expire_stale_deposits");
+              if (expireError) return json({ status: "error", message: "deposit_cleanup_failed" }, 500);
+              const { data: openDeposit, error: openDepositError } = await db
                 .from("deposits")
                 .select("id")
                 .eq("user_id", account.userId)
@@ -146,6 +155,9 @@ export const Route = createFileRoute("/api/public/bot/$action")({
                 .gte("created_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
                 .limit(1)
                 .maybeSingle();
+              if (openDepositError) {
+                return json({ status: "error", message: "deposit_lookup_failed" }, 500);
+              }
               if (openDeposit) {
                 return json({ status: "error", message: "deposit_already_pending" }, 409);
               }
@@ -167,12 +179,19 @@ export const Route = createFileRoute("/api/public/bot/$action")({
 
               let inv;
               try {
+                const { data: payer, error: payerError } = await db
+                  .from("profiles")
+                  .select("email")
+                  .eq("id", account.userId)
+                  .single();
+                if (payerError || !payer?.email) throw new Error("deposit_account_email_missing");
                 inv = await createLtcInvoice({
                   usdAmount: charged,
                   orderNumber: dep.id,
                   callbackUrl: `${origin}/api/public/deposit-callback`,
                   successUrl: `${origin}/recharge?payment=success&deposit=${dep.id}`,
                   failUrl: `${origin}/recharge?payment=failed&deposit=${dep.id}`,
+                  email: String(payer.email),
                 });
               } catch (e) {
                 const detail = e instanceof Error ? e.message : String(e);
@@ -184,7 +203,7 @@ export const Route = createFileRoute("/api/public/bot/$action")({
               }
 
               const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-              await db
+              const { error: invoiceSaveError } = await db
                 .from("deposits")
                 .update({
                   invoice_id: inv.txn_id,
@@ -195,6 +214,9 @@ export const Route = createFileRoute("/api/public/bot/$action")({
                   expires_at: expiresAt,
                 })
                 .eq("id", dep.id);
+              if (invoiceSaveError) {
+                return json({ status: "error", message: "deposit_invoice_save_failed" }, 500);
+              }
 
               return json({
                 status: "success",
@@ -211,12 +233,13 @@ export const Route = createFileRoute("/api/public/bot/$action")({
             }
 
             case "deposits": {
-              const { data } = await db
+              const { data, error } = await db
                 .from("deposits")
                 .select("id, amount, status, crypto_amount, invoice_url, created_at")
                 .eq("user_id", account.userId)
                 .order("created_at", { ascending: false })
                 .limit(10);
+              if (error) return json({ status: "error", message: "deposit_history_failed" }, 500);
               return json({ status: "success", deposits: data ?? [] });
             }
 
@@ -286,12 +309,13 @@ export const Route = createFileRoute("/api/public/bot/$action")({
               const taskId = String(body["task_id"] ?? "").trim();
               if (!taskId) return json({ status: "error", message: "task_id_required" }, 400);
 
-              const { data: task } = await db
+              const { data: task, error: taskError } = await db
                 .from("self_checks")
                 .select("*")
                 .eq("task_id", taskId)
                 .eq("user_id", account.userId)
                 .maybeSingle();
+              if (taskError) return json({ status: "error", message: "task_lookup_failed" }, 500);
               if (!task) return json({ status: "error", message: "task_not_found" }, 404);
 
               const stored = Array.isArray(task.results) ? task.results : [];
@@ -346,13 +370,14 @@ export const Route = createFileRoute("/api/public/bot/$action")({
                 refunded = Number(settled ?? refunded);
               }
 
-              await db
+              const { error: resultSaveError } = await db
                 .from("self_checks")
                 .update({
                   results: rows,
                   status: done ? "completed" : "running",
                 })
                 .eq("id", task.id);
+              if (resultSaveError) return json({ status: "error", message: "result_save_failed" }, 500);
 
               return json({
                 status: "success",
@@ -367,12 +392,13 @@ export const Route = createFileRoute("/api/public/bot/$action")({
             }
 
             case "tasks": {
-              const { data } = await db
+              const { data, error } = await db
                 .from("self_checks")
                 .select("task_id, gate, total, cost, status, created_at")
                 .eq("user_id", account.userId)
                 .order("created_at", { ascending: false })
                 .limit(10);
+              if (error) return json({ status: "error", message: "task_history_failed" }, 500);
               return json({ status: "success", tasks: data ?? [] });
             }
 

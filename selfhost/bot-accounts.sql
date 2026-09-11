@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS public.telegram_accounts (
 DO $$ BEGIN
   ALTER TABLE public.telegram_accounts
     ADD CONSTRAINT telegram_accounts_user_id_fkey
-    FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+    FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE NOT VALID;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
