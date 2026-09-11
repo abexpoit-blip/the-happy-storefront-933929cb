@@ -55,7 +55,7 @@ async function tg(method, payload, timeoutMs = TELEGRAM_REQUEST_TIMEOUT_MS) {
   return data.result;
 }
 
-/* ── Premium MENU (Modern Color-Coded Grid Matching UI Spec) ── */
+/* ── Premium MENU (Sleek Silver-Grey & Clean Elegant Layout) ── */
 function buildMenuKeyboard(settings = settingsCache) {
   const adminContactUrl = settings.bot_admin_contact || "https://t.me/samexpoit";
   const websiteUrl = settings.bot_website_url || BASE;
@@ -63,23 +63,23 @@ function buildMenuKeyboard(settings = settingsCache) {
   return {
     inline_keyboard: [
       [
-        { text: "💳 Check Card", callback_data: "check", style: "success" },
-        { text: "💰 Earn Credit", callback_data: "refer", style: "primary" },
+        { text: "💳 Check Card", callback_data: "check" },
+        { text: "💰 Earn Credit", callback_data: "refer" },
       ],
       [
-        { text: "💰 Balance", callback_data: "balance", style: "success" },
-        { text: "⚡ Gate", callback_data: "gates", style: "primary" },
+        { text: "👤 Balance & Profile", callback_data: "balance" },
+        { text: "⚡ Gate Selection", callback_data: "gates" },
       ],
       [
-        { text: "💎 Recharge", callback_data: "deposit", style: "success" },
-        { text: "📊 Statistics", callback_data: "tasks", style: "danger" },
+        { text: "💎 Recharge Funds", callback_data: "deposit" },
+        { text: "📊 Statistics & Logs", callback_data: "tasks" },
       ],
       [
-        { text: "🔑 API Info", callback_data: "api", style: "primary" },
-        { text: "🌐 Website", url: websiteUrl, style: "primary" },
+        { text: "🔑 API Info", callback_data: "api" },
+        { text: "🌐 Website", url: websiteUrl },
       ],
       [
-        { text: "📩 Contact Admin", url: adminContactUrl, style: "danger" },
+        { text: "📩 Contact Admin", url: adminContactUrl },
       ],
     ],
   };
@@ -89,29 +89,30 @@ function buildReplyKeyboard() {
   return {
     keyboard: [
       [
-        { text: "💳 Check Card", style: "success" },
-        { text: "💰 Earn Credit", style: "primary" },
+        { text: "💳 Check Card" },
+        { text: "💰 Earn Credit" },
       ],
       [
-        { text: "💰 Balance", style: "success" },
-        { text: "⚡ Gate", style: "primary" },
+        { text: "👤 Balance & Profile" },
+        { text: "⚡ Gate Selection" },
       ],
       [
-        { text: "💎 Recharge", style: "success" },
-        { text: "📊 Statistics", style: "danger" },
+        { text: "💎 Recharge Funds" },
+        { text: "📊 Statistics & Logs" },
       ],
       [
-        { text: "🔑 API Info", style: "primary" },
-        { text: "🌐 Website", style: "primary" },
+        { text: "🔑 API Info" },
+        { text: "🌐 Website" },
       ],
       [
-        { text: "📩 Contact Admin", style: "danger" },
+        { text: "📩 Contact Admin" },
       ],
     ],
     resize_keyboard: true,
     is_persistent: true,
   };
 }
+
 
 const send = (chat, text, extra = {}) =>
   tg("sendMessage", { chat_id: chat, text, parse_mode: "HTML", disable_web_page_preview: true, ...extra });
