@@ -9,6 +9,8 @@ APP_DIR="${APP_DIR:-/var/www/zoru-cc}"
 SECRET_FILE="${SECRET_FILE:-/etc/zoru/telegram.env}"
 
 if [ -f "$SECRET_FILE" ]; then
+  # This file is authoritative. Do not let a stale parent/PM2 environment win.
+  unset TELEGRAM_BOT_TOKEN TELEGRAM_ADMIN_IDS BOT_API_BASE API_BASE BOT_ADMIN_SECRET TELEGRAM_BOT_ADMIN_SECRET || true
   set -a; . "$SECRET_FILE"; set +a
 else
   echo "missing $SECRET_FILE — run selfhost/set-secrets.sh telegram TELEGRAM_BOT_TOKEN=..." >&2
@@ -90,6 +92,7 @@ cd "$APP_DIR"
 pm2 delete zoru-bot >/dev/null 2>&1 || true
 pm2 start bot/checker-bot.mjs --name zoru-bot --update-env --time --restart-delay 3000 --max-restarts 10
 pm2 save
+pm2 flush zoru-bot >/dev/null 2>&1 || true
 
 echo "--- bot logs"
 pm2 logs zoru-bot --lines 20 --nostream
