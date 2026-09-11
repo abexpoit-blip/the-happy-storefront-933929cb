@@ -44,6 +44,10 @@ const Index = () => {
     <AppShell>
       <Seo title="Zoru Shop — Главная" description="Личный кабинет покупателя, живая лента поступлений и объявления." path="/" />
 
+      <BuildBotBanner className="mb-5" />
+
+
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* НОВОСТИ И ОБНОВЛЕНИЯ */}
         <Panel title="Новости и обновления">
