@@ -103,7 +103,7 @@ const App = () => (
             <Route path="/admin/bot-users" element={<AdminRoute><AdminBotUsers /></AdminRoute>} />
             <Route path="/admin/bot" element={<AdminRoute><AdminBotControl /></AdminRoute>} />
 
-            {/* Buyer routes — Scorpion-style: only 5 nav pages */}
+            {/* Buyer routes — Zoru Shop */ }
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/shop" element={<ProtectedRoute><Shop /></ProtectedRoute>} />
             <Route path="/bins" element={<ProtectedRoute><Bins /></ProtectedRoute>} />

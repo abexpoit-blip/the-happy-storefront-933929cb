@@ -11,11 +11,15 @@ export interface SavedAccount {
   savedAt: number;
 }
 
-const KEY = "cruzercc.accounts";
+const KEY = "zorushop.accounts";
 
 export function getSavedAccounts(): SavedAccount[] {
-  try { return JSON.parse(localStorage.getItem(KEY) ?? "[]"); }
-  catch { return []; }
+  try {
+    const raw = localStorage.getItem(KEY) || localStorage.getItem("cruzercc.accounts");
+    return JSON.parse(raw ?? "[]");
+  } catch {
+    return [];
+  }
 }
 
 export function saveAccount(acc: SavedAccount) {
@@ -31,6 +35,7 @@ export function removeSavedAccount(email: string) {
 /** Sign out current session and redirect to /auth with email prefilled */
 export async function switchAccount(email: string) {
   clearToken();
+  sessionStorage.setItem("zorushop.prefillEmail", email);
   sessionStorage.setItem("cruzercc.prefillEmail", email);
   window.location.href = "/auth";
 }

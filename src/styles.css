@@ -95,7 +95,7 @@
   100% { background-position: 200% 0; }
 }
 
-/* Scorpion-Shop palette
+/* Zoru Shop palette
    - App bg: light (#f5f5f5)
    - Content panels: white
    - Nav: dark navy #1f2d3d
@@ -127,7 +127,7 @@
 
   --success: 145 63% 42%;                 /* #2fb344 */
   --warning: 38 92% 50%;
-  --destructive: 6 78% 46%;               /* #c0392b scorpion red */
+  --destructive: 6 78% 46%;               /* #c0392b brand red */
   --destructive-foreground: 0 0% 100%;
 
   --border: 210 14% 88%;
@@ -156,16 +156,13 @@
 }
 
 @layer base {
-  * { border-color: hsl(var(--border)); }
-  html { scroll-behavior: smooth; }
-  html, body, #root {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
-    min-height: 100%;
-    overflow-x: hidden;
+  * {
+    @apply border-border;
   }
   body {
-    font-family: "DM Sans", "Segoe UI", system-ui, sans-serif;
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
@@ -175,7 +172,7 @@
   ::selection { background: hsl(207 90% 54% / 0.30); color: hsl(210 29% 18%); }
 }
 
-/* --- Scorpion overrides: neutralize any leftover "gold/neon" vendor classes --- */
+/* --- Zoru Shop overrides: neutralize any leftover "gold/neon" vendor classes --- */
 .gold-text,
 .gold-text-strong,
 .neon-text,

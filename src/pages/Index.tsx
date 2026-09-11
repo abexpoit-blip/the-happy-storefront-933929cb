@@ -6,9 +6,9 @@ import { listAnnouncements, type Announcement } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Buyer HOME — Scorpion-style layout copy:
+ * Buyer HOME — Zoru Shop:
  *   - News & Updates (left) + Announcement (right)
- *   - Scorpion Shop Rules + Contact Information
+ *   - Zoru Shop Rules + Contact Information
  */
 
 const Index = () => {
@@ -144,10 +144,10 @@ const Index = () => {
 
         <Panel title="Контактная информация">
           <div className="px-6 py-5 space-y-3 text-[13px] text-[#333] border-l-2 border-[#e6e6e6] ml-3 leading-[1.7]">
-            <p>Остерегайтесь поддельной поддержки Zoru Shop. У нас нет Telegram и Discord — любые контакты в мессенджерах от имени магазина являются мошенниками.</p>
+            <p>Остерегайтесь поддельной поддержки. Официальная поддержка Zoru Shop доступна только через тикеты на сайте или через наш официальный Telegram-бот.</p>
             <div>
               <div className="text-[#333] mb-1">Поддержка:</div>
-              <p className="block">Только через систему тикетов на сайте — раздел «Поддержка» в личном кабинете.</p>
+              <p className="block">Через систему тикетов на сайте — раздел «Поддержка» в личном кабинете или через Telegram-бот.</p>
             </div>
             <p>Ответы на вопросы, предложения и жалобы принимаются исключительно через тикеты на этом сайте.</p>
             <p className="text-[#d32f2f] font-semibold pt-2">Приглашаем продавцов присоединиться к нашей платформе</p>

@@ -6,7 +6,7 @@ import { ShieldAlert, Lock, KeyRound, Loader2, ArrowLeft, ArrowRight, AlertCircl
 import { useAuth } from "@/hooks/useAuth";
 import { ScorpionAuthShell } from "@/components/ScorpionAuthShell";
 
-const API_BASE_URL = "https://cruzercc.shop/api";
+const API_BASE_URL = typeof window !== "undefined" ? `${window.location.origin}/api` : "https://zoru.cc/api";
 
 const AdminLogin = () => {
   const nav = useNavigate();
@@ -29,8 +29,12 @@ const AdminLogin = () => {
   useEffect(() => { document.title = "Zoru Shop · Админ-консоль"; }, []);
 
   useEffect(() => {
-    const saved = sessionStorage.getItem("cruzercc.prefillAdminEmail");
-    if (saved) { setEmail(saved); sessionStorage.removeItem("cruzercc.prefillAdminEmail"); }
+    const saved = sessionStorage.getItem("zorushop.prefillAdminEmail") || sessionStorage.getItem("cruzercc.prefillAdminEmail");
+    if (saved) {
+      setEmail(saved);
+      sessionStorage.removeItem("zorushop.prefillAdminEmail");
+      sessionStorage.removeItem("cruzercc.prefillAdminEmail");
+    }
   }, []);
 
   const submit = async (e: React.FormEvent) => {

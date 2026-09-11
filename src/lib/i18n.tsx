@@ -542,7 +542,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
 
 export const useLanguage = () => useContext(Ctx);
 
-/** Small inline switcher — matches the flat Scorpion sub-bar style. */
+/** Small inline switcher — matches the flat sub-bar style. */
 export const LanguageToggle = ({ className = "" }: { className?: string }) => {
   const { lang, setLang } = useLanguage();
   return (

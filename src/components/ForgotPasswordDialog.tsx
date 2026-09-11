@@ -23,13 +23,20 @@ export const ForgotPasswordDialog = ({ open, onOpenChange, defaultEmail = "", re
     setLoading(true);
     try {
       // Accept either a real email or a username; convert username -> synthetic email.
-      const target = email.includes("@") ? email.trim().toLowerCase() : `${email.trim().toLowerCase()}@cruzercc.shop`;
-      const { error } = await supabase.auth.resetPasswordForEmail(target, {
+      const clean = email.trim().toLowerCase();
+      let target = clean.includes("@") ? clean : `${clean}@zoru.cc`;
+      let res = await supabase.auth.resetPasswordForEmail(target, {
         redirectTo: `${window.location.origin}${redirectPath}`,
       });
-      if (error) throw error;
+      if (res.error && !clean.includes("@")) {
+        const alt = await supabase.auth.resetPasswordForEmail(`${clean}@cruzercc.shop`, {
+          redirectTo: `${window.location.origin}${redirectPath}`,
+        });
+        if (!alt.error) res = alt;
+      }
+      if (res.error) throw res.error;
       setSent(true);
-      toast.success("Reset link sent — check your email");
+      toast.success("Ссылка для сброса пароля отправлена");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to submit reset request");
     } finally {

@@ -3,7 +3,7 @@
  * No Supabase, no Lovable Cloud. Pure VPS.
  */
 
-export const AUTH_CHANGED_EVENT = "cruzercc-auth-changed";
+export const AUTH_CHANGED_EVENT = "zorushop-auth-changed";
 
 export function resolveApiBase(): string {
   const envBase = import.meta.env.VITE_API_BASE as string | undefined;
@@ -24,18 +24,22 @@ export function buildApiUrl(path: string): string {
 }
 
 // ── Token helpers ──
-const TOKEN_KEY = "cruzercc.token";
+const TOKEN_KEY = "zorushop.token";
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return localStorage.getItem(TOKEN_KEY) || localStorage.getItem("cruzercc.token");
 }
 export function setToken(t: string) {
   localStorage.setItem(TOKEN_KEY, t);
+  localStorage.setItem("cruzercc.token", t);
   window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT));
+  window.dispatchEvent(new CustomEvent("cruzercc-auth-changed"));
 }
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem("cruzercc.token");
   window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT));
+  window.dispatchEvent(new CustomEvent("cruzercc-auth-changed"));
 }
 
 export function decodeToken(t: string): Record<string, unknown> | null {
@@ -146,7 +150,7 @@ export interface AuthResult {
   user: { id: string; email: string; username: string; role: string; roles?: string[] };
 }
 
-const SYNTH_DOMAIN = "cruzercc.shop";
+const SYNTH_DOMAIN = "zoru.cc";
 
 function toAuthEmail(identifier: string): string {
   const id = identifier.trim();
@@ -229,10 +233,10 @@ export const authApi = {
       email,
       password: data.password,
     });
-    // Fallback: if username was registered with alternate domain or raw email
+    // Fallback: if username was registered with legacy domain or raw email
     if (error && !rawId.includes("@")) {
       const altRes = await supabase.auth.signInWithPassword({
-        email: `${rawId.toLowerCase()}@zoru.cc`,
+        email: `${rawId.toLowerCase()}@cruzercc.shop`,
         password: data.password,
       });
       if (!altRes.error && altRes.data?.user) {

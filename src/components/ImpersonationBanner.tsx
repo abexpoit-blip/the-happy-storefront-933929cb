@@ -3,7 +3,7 @@ import { LogOut } from "lucide-react";
 import { setToken, AUTH_CHANGED_EVENT } from "@/lib/api";
 import { toast } from "sonner";
 
-const ADMIN_TOKEN_KEY = "cruzercc.admin_token";
+const ADMIN_TOKEN_KEY = "zorushop.admin_token";
 
 export function startImpersonation(currentAdminToken: string, newToken: string) {
   localStorage.setItem(ADMIN_TOKEN_KEY, currentAdminToken);
