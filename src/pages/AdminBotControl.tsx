@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AdminLayout } from "@/components/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -135,16 +135,19 @@ const AdminBotControl = () => {
               { label: "Total checks", value: String(stats.totalChecks), icon: Activity },
               { label: "Total deposited", value: money(stats.totalDeposited), icon: DollarSign },
             ].map((s) => (
-              <div key={s.label} className="rounded-xl border border-white/10 bg-white/5 p-4">
-                <div className="text-[11px] uppercase tracking-wider text-[#38bdf8]">{s.label}</div>
-                <div className="mt-1 text-2xl font-bold text-white">{s.value}</div>
+              <div key={s.label} className="rounded-xl border border-slate-700/80 bg-[#0c1430] p-4 shadow-md">
+                <div className="text-[11px] uppercase font-bold tracking-wider text-[#38bdf8] flex items-center justify-between">
+                  <span>{s.label}</span>
+                  <s.icon className="h-4 w-4 text-[#38bdf8]/70" />
+                </div>
+                <div className="mt-1.5 text-2xl font-black text-white font-mono">{s.value}</div>
               </div>
             ))}
           </div>
         )}
 
         {/* Tabs */}
-        <div className="flex gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
+        <div className="flex gap-1.5 rounded-xl border border-slate-700/80 bg-[#0c1430] p-1.5 shadow-md">
           {tabs.map((t) => {
             const Icon = t.icon;
             return (
@@ -153,8 +156,8 @@ const AdminBotControl = () => {
                 onClick={() => setTab(t.id)}
                 className={`flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-[13px] font-medium transition-all ${
                   tab === t.id
-                    ? "bg-[#38bdf8]/15 text-[#7dd3fc] border border-[#38bdf8]/30"
-                    : "text-white/50 hover:text-white hover:bg-white/5"
+                    ? "bg-[#38bdf8]/20 text-[#38bdf8] border border-[#38bdf8]/50 font-bold"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800/50"
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -166,10 +169,10 @@ const AdminBotControl = () => {
 
         {/* ── Overview ────────────────────────────── */}
         {tab === TAB_OVERVIEW && (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-6 space-y-4">
+          <div className="rounded-2xl border border-slate-700/80 bg-[#0c1430] p-6 space-y-4 shadow-xl">
             <h2 className="font-bold text-white text-[15px]">Bot status</h2>
             {loading ? (
-              <div className="flex items-center gap-2 text-white/50"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+              <div className="flex items-center gap-2 text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
             ) : settings ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 <StatusCard
@@ -188,14 +191,14 @@ const AdminBotControl = () => {
                   invertColor
                 />
                 {settings.bot_notice && (
-                  <div className="sm:col-span-2 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
-                    <div className="text-[11px] uppercase tracking-wider text-yellow-400 mb-1">Active bot notice</div>
-                    <p className="text-sm text-white/80">{settings.bot_notice}</p>
+                  <div className="sm:col-span-2 rounded-xl border border-yellow-500/40 bg-yellow-500/10 p-4">
+                    <div className="text-[11px] uppercase tracking-wider text-yellow-400 font-bold mb-1">Active bot notice</div>
+                    <p className="text-sm text-white/90">{settings.bot_notice}</p>
                   </div>
                 )}
               </div>
             ) : (
-              <p className="text-white/40 text-sm">Could not load settings. Run bot-admin.sql migration first.</p>
+              <p className="text-slate-400 text-sm">Could not load settings. Run bot-admin.sql migration first.</p>
             )}
           </div>
         )}
@@ -205,55 +208,55 @@ const AdminBotControl = () => {
           <div className="space-y-4">
             {/* Maintenance toggle */}
             {settings && (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+              <div className="rounded-2xl border border-slate-700/80 bg-[#0c1430] p-6 shadow-xl">
                 <h2 className="font-bold text-white text-[15px] mb-4">Maintenance mode</h2>
-                <div className="flex items-start gap-4">
+                <div className="flex items-start gap-4 flex-wrap">
                   <button
                     onClick={() => {
                       setS("bot_maintenance", !settings.bot_maintenance);
                     }}
-                    className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium border transition-all ${
+                    className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold border transition-all ${
                       settings.bot_maintenance
-                        ? "border-red-500/50 bg-red-500/15 text-red-300 hover:bg-red-500/25"
-                        : "border-white/20 bg-white/5 text-white/70 hover:text-white"
+                        ? "border-red-500/50 bg-red-500/20 text-red-300 hover:bg-red-500/30"
+                        : "border-slate-600 bg-[#142247] text-white hover:bg-[#1a2c5e]"
                     }`}
                   >
                     {settings.bot_maintenance
-                      ? <><ToggleRight className="h-4 w-4" /> Turn OFF maintenance</>
-                      : <><ToggleLeft className="h-4 w-4" /> Turn ON maintenance</>
+                      ? <><ToggleRight className="h-4 w-4 text-red-400" /> Turn OFF maintenance</>
+                      : <><ToggleLeft className="h-4 w-4 text-emerald-400" /> Turn ON maintenance</>
                     }
                   </button>
-                  <div className="flex-1">
-                    <Label className="text-[10px] uppercase tracking-widest text-white/50">Maintenance message</Label>
+                  <div className="flex-1 min-w-[280px]">
+                    <Label className="text-[10px] uppercase font-bold tracking-widest text-[#38bdf8]">Maintenance message</Label>
                     <Input
                       value={settings.bot_maintenance_msg}
                       onChange={(e) => setS("bot_maintenance_msg", e.target.value)}
                       placeholder="🔧 Under maintenance. Back soon."
-                      className="mt-1.5"
+                      className="mt-1.5 bg-[#131f40] border-slate-600 text-white placeholder:text-slate-500 font-medium"
                     />
                   </div>
                 </div>
-                <div className="mt-3">
-                  <Label className="text-[10px] uppercase tracking-widest text-white/50">Persistent bot notice (shown at bottom of every bot message)</Label>
+                <div className="mt-4">
+                  <Label className="text-[10px] uppercase font-bold tracking-widest text-[#38bdf8]">Persistent bot notice (shown at bottom of every bot message)</Label>
                   <div className="flex gap-2 mt-1.5">
                     <Input
                       value={settings.bot_notice}
                       onChange={(e) => setS("bot_notice", e.target.value)}
                       placeholder="e.g. ⚠️ New gate available — use /gate to switch"
-                      className="flex-1"
+                      className="flex-1 bg-[#131f40] border-slate-600 text-white placeholder:text-slate-500 font-medium"
                     />
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setS("bot_notice", "")}
-                      className="shrink-0"
+                      className="shrink-0 bg-slate-800 text-slate-200 border-slate-600 hover:bg-slate-700"
                     >
                       Clear
                     </Button>
                   </div>
-                  <p className="text-[10px] text-white/40 mt-1">Leave blank to hide. Max 500 chars.</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Leave blank to hide. Max 500 chars.</p>
                 </div>
-                <Button onClick={handleSaveSettings} disabled={saving} className="mt-4">
+                <Button onClick={handleSaveSettings} disabled={saving} className="mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold">
                   {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                   Save
                 </Button>
@@ -261,24 +264,24 @@ const AdminBotControl = () => {
             )}
 
             {/* Broadcast message */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+            <div className="rounded-2xl border border-slate-700/80 bg-[#0c1430] p-6 shadow-xl">
               <h2 className="font-bold text-white text-[15px] mb-1">Broadcast message</h2>
-              <p className="text-[12px] text-white/50 mb-4">Sends a message to ALL non-banned bot users via Telegram. HTML allowed.</p>
+              <p className="text-[12px] text-slate-400 mb-4">Sends a message to ALL non-banned bot users via Telegram. HTML allowed.</p>
               <Textarea
                 value={broadcastText}
                 onChange={(e) => setBroadcastText(e.target.value)}
                 placeholder="<b>📢 Announcement</b>&#10;&#10;New gates are now available! Use /gate to switch."
                 rows={6}
-                className="font-mono text-[13px]"
+                className="font-mono text-[13px] bg-[#131f40] border-slate-600 text-white placeholder:text-slate-500"
               />
               <div className="flex items-center gap-3 mt-3">
-                <Button onClick={handleBroadcast} disabled={broadcasting || !broadcastText.trim()}>
+                <Button onClick={handleBroadcast} disabled={broadcasting || !broadcastText.trim()} className="bg-blue-600 hover:bg-blue-500 text-white font-bold">
                   {broadcasting
                     ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Sending…</>
                     : <><Send className="h-4 w-4 mr-2" /> Send broadcast</>
                   }
                 </Button>
-                <p className="text-[11px] text-white/40">This cannot be undone. Telegram rate-limits at 30 msg/s.</p>
+                <p className="text-[11px] text-slate-400">This cannot be undone. Telegram rate-limits at 30 msg/s.</p>
               </div>
             </div>
           </div>
@@ -286,30 +289,30 @@ const AdminBotControl = () => {
 
         {/* ── Settings ────────────────────────────── */}
         {tab === TAB_SETTINGS && settings && (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-6 space-y-5">
+          <div className="rounded-2xl border border-slate-700/80 bg-[#0c1430] p-6 space-y-5 shadow-xl">
             <h2 className="font-bold text-white text-[15px]">Bot settings</h2>
 
             <div className="grid gap-4 sm:grid-cols-2">
               {/* Checker toggle */}
               <div>
-                <Label className="text-[10px] uppercase tracking-widest text-white/50">Checker</Label>
+                <Label className="text-[10px] uppercase font-bold tracking-widest text-[#38bdf8]">Checker</Label>
                 <div className="mt-2 flex gap-2">
                   <button
                     onClick={() => setS("checker_enabled", true)}
-                    className={`rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
+                    className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-all ${
                       settings.checker_enabled
-                        ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
-                        : "border-white/20 text-white/50 hover:text-white"
+                        ? "border-emerald-500/60 bg-emerald-500/20 text-emerald-300"
+                        : "border-slate-700 bg-[#131f40] text-slate-400 hover:text-white"
                     }`}
                   >
                     <ShieldCheck className="h-4 w-4 inline mr-1.5" />Enabled
                   </button>
                   <button
                     onClick={() => setS("checker_enabled", false)}
-                    className={`rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
+                    className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-all ${
                       !settings.checker_enabled
-                        ? "border-red-500/50 bg-red-500/15 text-red-300"
-                        : "border-white/20 text-white/50 hover:text-white"
+                        ? "border-red-500/60 bg-red-500/20 text-red-300"
+                        : "border-slate-700 bg-[#131f40] text-slate-400 hover:text-white"
                     }`}
                   >
                     <ShieldAlert className="h-4 w-4 inline mr-1.5" />Disabled
@@ -319,42 +322,42 @@ const AdminBotControl = () => {
 
               {/* Min deposit */}
               <div>
-                <Label className="text-[10px] uppercase tracking-widest text-white/50">Minimum deposit ($)</Label>
+                <Label className="text-[10px] uppercase font-bold tracking-widest text-[#38bdf8]">Minimum deposit ($)</Label>
                 <Input
                   type="number" step="0.01" min="0"
                   value={settings.min_deposit}
                   onChange={(e) => setS("min_deposit", Number(e.target.value))}
-                  className="mt-1.5"
+                  className="mt-1.5 bg-[#131f40] border-slate-600 text-white font-medium"
                 />
               </div>
 
               {/* Check credit cost */}
               <div>
-                <Label className="text-[10px] uppercase tracking-widest text-white/50">Credits per check</Label>
+                <Label className="text-[10px] uppercase font-bold tracking-widest text-[#38bdf8]">Credits per check</Label>
                 <Input
                   type="number" step="1" min="0"
                   value={settings.check_credit_cost}
                   onChange={(e) => setS("check_credit_cost", Number(e.target.value))}
-                  className="mt-1.5"
+                  className="mt-1.5 bg-[#131f40] border-slate-600 text-white font-medium"
                 />
               </div>
 
               {/* Credits per USD */}
               <div>
-                <Label className="text-[10px] uppercase tracking-widest text-white/50">Credits per $1</Label>
+                <Label className="text-[10px] uppercase font-bold tracking-widest text-[#38bdf8]">Credits per $1</Label>
                 <Input
                   type="number" step="1" min="1"
                   value={settings.credits_per_usd}
                   onChange={(e) => setS("credits_per_usd", Number(e.target.value))}
-                  className="mt-1.5"
+                  className="mt-1.5 bg-[#131f40] border-slate-600 text-white font-medium"
                 />
-                <p className="text-[10px] text-white/40 mt-1">
+                <p className="text-[10px] text-slate-400 mt-1">
                   Effective cost: ${((settings.check_credit_cost || 0) / (settings.credits_per_usd || 1000)).toFixed(4)} per check
                 </p>
               </div>
             </div>
 
-            <Button onClick={handleSaveSettings} disabled={saving}>
+            <Button onClick={handleSaveSettings} disabled={saving} className="bg-blue-600 hover:bg-blue-500 text-white font-bold">
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Save bot settings
             </Button>
@@ -363,32 +366,32 @@ const AdminBotControl = () => {
 
         {/* ── History ─────────────────────────────── */}
         {tab === TAB_HISTORY && (
-          <div className="overflow-x-auto rounded-xl border border-white/10">
+          <div className="overflow-x-auto rounded-2xl border border-slate-700/80 bg-[#0c1430] shadow-xl text-white">
             <table className="w-full min-w-[640px] text-sm">
-              <thead className="bg-white/5 text-[11px] uppercase tracking-wider text-white/60">
+              <thead className="bg-[#111f42] text-[11px] uppercase tracking-wider text-[#94a3b8] border-b border-slate-700/80">
                 <tr>
-                  <th className="px-3 py-3 text-left">Message (truncated)</th>
-                  <th className="px-3 py-3 text-center">Sent</th>
-                  <th className="px-3 py-3 text-center">Failed</th>
-                  <th className="px-3 py-3 text-right">Date</th>
+                  <th className="px-4 py-3.5 text-left font-semibold">Message (truncated)</th>
+                  <th className="px-4 py-3.5 text-center font-semibold">Sent</th>
+                  <th className="px-4 py-3.5 text-center font-semibold">Failed</th>
+                  <th className="px-4 py-3.5 text-right font-semibold">Date</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-800">
                 {history.map((row) => (
-                  <tr key={row.id} className="border-t border-white/5">
-                    <td className="px-3 py-3 text-white/80 max-w-[380px] truncate" title={row.text}>
+                  <tr key={row.id} className="hover:bg-white/[0.04] transition-colors">
+                    <td className="px-4 py-3.5 text-white max-w-[380px] truncate" title={row.text}>
                       {row.text.slice(0, 80)}{row.text.length > 80 ? "…" : ""}
                     </td>
-                    <td className="px-3 py-3 text-center text-emerald-400">{row.sent_count}</td>
-                    <td className="px-3 py-3 text-center text-red-400">{row.failed_count}</td>
-                    <td className="px-3 py-3 text-right text-white/50 text-[11px]">
+                    <td className="px-4 py-3.5 text-center font-bold text-emerald-400">{row.sent_count}</td>
+                    <td className="px-4 py-3.5 text-center font-bold text-red-400">{row.failed_count}</td>
+                    <td className="px-4 py-3.5 text-right text-slate-400 text-[11px] font-mono">
                       {new Date(row.created_at).toLocaleString()}
                     </td>
                   </tr>
                 ))}
                 {!history.length && (
                   <tr>
-                    <td colSpan={4} className="px-3 py-10 text-center text-white/40">
+                    <td colSpan={4} className="px-4 py-12 text-center text-slate-400 text-sm">
                       No broadcasts sent yet.
                     </td>
                   </tr>

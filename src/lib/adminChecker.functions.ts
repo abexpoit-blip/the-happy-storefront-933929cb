@@ -87,9 +87,25 @@ async function labelMaps(db: any, tasks: any[]) {
 
   const names = new Map<string, string>();
   if (userIds.length) {
-    const { data: profiles } = await db.from("profiles").select("id, username, email").in("id", userIds);
+    const [{ data: profiles }, { data: tgAccts }] = await Promise.all([
+      db.from("profiles").select("id, username, email").in("id", userIds),
+      db.from("telegram_accounts").select("user_id, telegram_id, username, first_name").in("user_id", userIds),
+    ]);
+    const tgMap = new Map<string, string>();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const p of (profiles ?? []) as any[]) names.set(p.id, p.username || p.email || p.id);
+    for (const tg of (tgAccts ?? []) as any[]) {
+      const handle = tg.username ? `@${tg.username}` : (tg.first_name || `TG:${tg.telegram_id}`);
+      tgMap.set(tg.user_id, `${handle} (${tg.telegram_id})`);
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const p of (profiles ?? []) as any[]) {
+      const tg = tgMap.get(p.id);
+      names.set(p.id, tg ? `Bot · ${tg}` : (p.username || p.email || p.id));
+    }
+    // Any user in tgMap not in profiles
+    for (const [uid, tg] of tgMap.entries()) {
+      if (!names.has(uid)) names.set(uid, `Bot · ${tg}`);
+    }
   }
   const keys = new Map<string, string>();
   if (keyIds.length) {

@@ -11,27 +11,11 @@ import { DEFAULT_SETTINGS, refreshSiteSettings, SiteSettings } from "@/hooks/use
 export const ALL_GATES = [
   { id: "CCV_Amazon_Auth", name: "CCV Amazon US Auth", credit: 15 },
   { id: "CCN_Amazon_Auth", name: "CCN Amazon Prime US Auth", credit: 15 },
-  { id: "CCN_Amazon_Auth_Logo", name: "CCN Amazon Auth Logo Bank", credit: 15 },
+  { id: "CCN_Amazon_Auth_Logo", name: "CCN Amazon Auth Logo Bank - 3 Min", credit: 15 },
   { id: "CCV_Academy_Auth", name: "CCV Academy Auth - Walmart.Com", credit: 12 },
-  { id: "CCN_Academy_Auth", name: "CCN Academy Auth", credit: 12 },
   { id: "CCV_Doordash_Auth", name: "CCV DoorDash Auth - Stripe", credit: 8 },
   { id: "CCN_Doordash_Auth", name: "CCN DoorDash Auth - Stripe", credit: 8 },
   { id: "CCV_Braintree_Auth", name: "CCV Braintree Auth - Multi BIN", credit: 5 },
-  { id: "CCN_Braintree_Auth", name: "CCN Braintree Auth", credit: 5 },
-  { id: "CCV_Stripe_Auth", name: "CCV Stripe $1 Auth", credit: 10 },
-  { id: "CCN_Stripe_Auth", name: "CCN Stripe Auth", credit: 10 },
-  { id: "CCV_Shopify_Auth", name: "CCV Shopify / Spreedly", credit: 10 },
-  { id: "CCN_Shopify_Auth", name: "CCN Shopify Auth", credit: 10 },
-  { id: "CCV_Authorize_Auth", name: "CCV Authorize.Net 1$ Auth", credit: 8 },
-  { id: "CCN_Authorize_Auth", name: "CCN Authorize.Net Auth", credit: 8 },
-  { id: "CCV_Square_Auth", name: "CCV Squareup $1 Auth", credit: 10 },
-  { id: "CCN_Square_Auth", name: "CCN Squareup Auth", credit: 10 },
-  { id: "CCV_Cybersource_Auth", name: "CCV CyberSource Auth", credit: 12 },
-  { id: "CCN_Cybersource_Auth", name: "CCN CyberSource Auth", credit: 12 },
-  { id: "CCV_Adyen_Auth", name: "CCV Adyen Auth", credit: 12 },
-  { id: "CCV_Paypal_Auth", name: "CCV PayPal Braintree", credit: 10 },
-  { id: "CCV_Bestbuy_Auth", name: "CCV BestBuy Auth", credit: 12 },
-  { id: "CCV_Target_Auth", name: "CCV Target US Auth", credit: 12 },
 ];
 
 const AdminSiteSettings = () => {

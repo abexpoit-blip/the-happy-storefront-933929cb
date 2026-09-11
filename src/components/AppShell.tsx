@@ -51,10 +51,10 @@ export const AppShell = ({ children, wide }: { children: ReactNode; wide?: boole
 
   const balance = Number(profile?.balance ?? 0).toFixed(2);
   const uname = profile?.username ?? "пользователь";
-  // Cartoon avatar generated from the username — premium look without stored uploads.
+  // Male character avatar generated from the username
   const avatarUrl =
     profile?.avatar_url ||
-    `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(uname)}&backgroundType=gradientLinear&radius=50`;
+    `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(uname)}&top=shortHair,shortHairShortFlat,shortHairShortRound,shortHairShortWaved,shortHairSides,shortHairTheCaesar,shortHairDreads&facialHair=beardLight,beardMedium,moustacheFancy,moustacheMagnum&facialHairProbability=85&clothing=collarAndSweater,graphicShirt,hoodie,shirtCrewNeck&radius=50`;
 
   return (
     <div

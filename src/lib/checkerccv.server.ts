@@ -66,31 +66,15 @@ export async function checkCredit(): Promise<number> {
   return Number(p?.data?.credit ?? 0);
 }
 
-/** Gates supported by CheckerCCV with fallback catalog */
+/** Gates supported by CheckerCCV for this shop */
 export const GATE_CATALOG: CheckerGate[] = [
   { id: "CCV_Amazon_Auth", description: "CCV Amazon US Auth", creditGate: 15, isEnabled: true },
   { id: "CCN_Amazon_Auth", description: "CCN Amazon Prime US Auth", creditGate: 15, isEnabled: true },
   { id: "CCN_Amazon_Auth_Logo", description: "CCN Amazon Auth Logo Bank - 3 Minutes", creditGate: 15, isEnabled: true },
   { id: "CCV_Academy_Auth", description: "CCV Academy Auth - Walmart.Com", creditGate: 12, isEnabled: true },
-  { id: "CCN_Academy_Auth", description: "CCN Academy Auth", creditGate: 12, isEnabled: true },
   { id: "CCV_Doordash_Auth", description: "CCV DoorDash Auth - Stripe", creditGate: 8, isEnabled: true },
   { id: "CCN_Doordash_Auth", description: "CCN DoorDash Auth - Stripe", creditGate: 8, isEnabled: true },
   { id: "CCV_Braintree_Auth", description: "CCV Braintree Auth - Do not check same BIN", creditGate: 5, isEnabled: true },
-  { id: "CCN_Braintree_Auth", description: "CCN Braintree Auth", creditGate: 5, isEnabled: true },
-  { id: "CCV_Stripe_Auth", description: "CCV Stripe $1 Auth", creditGate: 10, isEnabled: true },
-  { id: "CCN_Stripe_Auth", description: "CCN Stripe Auth", creditGate: 10, isEnabled: true },
-  { id: "CCV_Shopify_Auth", description: "CCV Shopify / Spreedly", creditGate: 10, isEnabled: true },
-  { id: "CCN_Shopify_Auth", description: "CCN Shopify Auth", creditGate: 10, isEnabled: true },
-  { id: "CCV_Authorize_Auth", description: "CCV Authorize.Net 1$ Auth", creditGate: 8, isEnabled: true },
-  { id: "CCN_Authorize_Auth", description: "CCN Authorize.Net Auth", creditGate: 8, isEnabled: true },
-  { id: "CCV_Square_Auth", description: "CCV Squareup $1 Auth", creditGate: 10, isEnabled: true },
-  { id: "CCN_Square_Auth", description: "CCN Squareup Auth", creditGate: 10, isEnabled: true },
-  { id: "CCV_Cybersource_Auth", description: "CCV CyberSource Auth", creditGate: 12, isEnabled: true },
-  { id: "CCN_Cybersource_Auth", description: "CCN CyberSource Auth", creditGate: 12, isEnabled: true },
-  { id: "CCV_Adyen_Auth", description: "CCV Adyen Auth", creditGate: 12, isEnabled: true },
-  { id: "CCV_Paypal_Auth", description: "CCV PayPal Braintree", creditGate: 10, isEnabled: true },
-  { id: "CCV_Bestbuy_Auth", description: "CCV BestBuy Auth", creditGate: 12, isEnabled: true },
-  { id: "CCV_Target_Auth", description: "CCV Target US Auth", creditGate: 12, isEnabled: true },
 ];
 
 export async function listGates(enabledOnly = true): Promise<CheckerGate[]> {
