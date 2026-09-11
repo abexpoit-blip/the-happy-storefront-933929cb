@@ -91,11 +91,17 @@ export const AdminLayout = ({ children, title }: { children: ReactNode; title: s
 
         {/* Main content */}
         <div className="flex-1 min-w-0 space-y-6">
-          <div className="hidden lg:flex items-center gap-3 rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent px-5 py-4">
-            <span className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary/40 to-primary/10 border border-primary/40 flex items-center justify-center">
-              <Shield className="h-4.5 w-4.5 text-primary-glow" />
-            </span>
-            <h1 className="font-display text-3xl font-black neon-text tracking-tight">{title}</h1>
+          <div className="relative hidden lg:block overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#101a33] via-[#132145] to-[#0a1122] px-6 py-6 shadow-[0_18px_50px_rgba(10,17,34,0.35)]">
+            <div className="pointer-events-none absolute -top-20 -right-16 h-56 w-56 rounded-full bg-[#2196f3]/25 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-24 -left-10 h-56 w-56 rounded-full bg-[#f9a825]/20 blur-3xl" />
+            <div className="relative">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] uppercase tracking-wider text-white/80">
+                <Shield className="h-3 w-3" /> Admin panel
+              </span>
+              <h1 className="mt-3 text-2xl sm:text-3xl font-semibold text-white">
+                <span className="bg-gradient-to-r from-[#f9a825] to-[#ffd54f] bg-clip-text text-transparent">{title}</span>
+              </h1>
+            </div>
           </div>
           {children}
         </div>
