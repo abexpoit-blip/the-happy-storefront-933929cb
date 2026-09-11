@@ -411,6 +411,109 @@ export const Route = createFileRoute("/api/public/bot/$action")({
               return json({ status: "success", key, fee: snapshot.api_fee });
             }
 
+            /* ---------------- deposit_status ---------------- */
+            case "deposit_status": {
+              const invoiceId = String(body["invoice_id"] ?? "").trim();
+              const depositId = String(body["deposit_id"] ?? "").trim();
+              if (!invoiceId && !depositId) return json({ status: "error", message: "invoice_id_or_deposit_id_required" }, 400);
+
+              let query = db
+                .from("deposits")
+                .select("id, amount, status, crypto_amount, invoice_url, created_at, expires_at, charged_amount")
+                .eq("user_id", account.userId);
+              if (depositId) query = query.eq("id", depositId);
+              else query = query.eq("invoice_id", invoiceId);
+              const { data: dep, error: depErr } = await query.maybeSingle();
+              if (depErr) return json({ status: "error", message: "deposit_lookup_failed" }, 500);
+              if (!dep) return json({ status: "error", message: "deposit_not_found" }, 404);
+              return json({
+                status: "success",
+                deposit_status: dep.status,
+                amount: dep.amount,
+                charged_amount: dep.charged_amount,
+                crypto_amount: dep.crypto_amount,
+                invoice_url: dep.invoice_url,
+                created_at: dep.created_at,
+                expires_at: dep.expires_at,
+              });
+            }
+
+            /* ---------------- bot_settings (public read for bot) -------- */
+            case "bot_settings": {
+              const { data: rows, error: settErr } = await db
+                .from("site_settings")
+                .select("key, value")
+                .in("key", ["bot_maintenance", "bot_maintenance_msg", "bot_notice", "checker_enabled"]);
+              if (settErr) return json({ status: "error", message: "settings_fetch_failed" }, 500);
+              const map: Record<string, string> = {};
+              for (const r of rows ?? []) map[(r as { key: string; value: string }).key] = (r as { key: string; value: string }).value;
+              return json({
+                status: "success",
+                bot_maintenance: map["bot_maintenance"] === "true",
+                bot_maintenance_msg: map["bot_maintenance_msg"] ?? "🔧 Under maintenance.",
+                bot_notice: map["bot_notice"] ?? "",
+                checker_enabled: map["checker_enabled"] !== "false",
+              });
+            }
+
+            /* ---------------- broadcast (admin-only via extra header) --- */
+            case "broadcast": {
+              // Extra admin guard: requires x-broadcast-key header matching BOT_ADMIN_SECRET
+              const broadcastKey = request.headers.get("x-broadcast-key") ?? "";
+              const adminSecret = (process.env.BOT_ADMIN_SECRET ?? "").trim();
+              if (!broadcastKey || broadcastKey !== adminSecret) {
+                return json({ status: "error", message: "broadcast_unauthorized" }, 403);
+              }
+              const broadcastText = String(body["text"] ?? "").trim();
+              if (!broadcastText) return json({ status: "error", message: "text_required" }, 400);
+
+              // Get all non-banned telegram accounts with their telegram_id
+              const { data: tgAccounts, error: acctErr } = await db
+                .from("telegram_accounts")
+                .select("telegram_id")
+                .eq("banned", false)
+                .limit(5000);
+              if (acctErr) return json({ status: "error", message: "accounts_fetch_failed" }, 500);
+
+              const TOKEN = (process.env.TELEGRAM_BOT_TOKEN ?? "").trim();
+              if (!TOKEN) return json({ status: "error", message: "bot_token_not_configured" }, 503);
+
+              let sent = 0;
+              let failed = 0;
+              const TGAPI = `https://api.telegram.org/bot${TOKEN}`;
+              for (const acct of tgAccounts ?? []) {
+                try {
+                  const r = await fetch(`${TGAPI}/sendMessage`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      chat_id: (acct as { telegram_id: number | string }).telegram_id,
+                      text: broadcastText,
+                      parse_mode: "HTML",
+                      disable_web_page_preview: true,
+                    }),
+                    signal: AbortSignal.timeout(8000),
+                  });
+                  if (r.ok) sent++;
+                  else failed++;
+                } catch {
+                  failed++;
+                }
+                // Throttle: Telegram allows 30 msg/s to different chats
+                await new Promise((r) => setTimeout(r, 40));
+              }
+
+              // Log the broadcast
+              await db.from("bot_broadcasts").insert({
+                text: broadcastText,
+                sent_count: sent,
+                failed_count: failed,
+                target: "all",
+              }).catch(() => {});
+
+              return json({ status: "success", sent, failed });
+            }
+
             default:
               return json({ status: "error", message: "unknown_action" }, 404);
           }

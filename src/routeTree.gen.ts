@@ -9,24 +9,24 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SplatRouteImport } from './routes/$'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SplatRouteImport } from './routes/$'
 import { Route as ApiPublicDepositCallbackRouteImport } from './routes/api/public/deposit-callback'
-import { Route as ApiPublicCheckerResultRouteImport } from './routes/api/public/checker.result'
-import { Route as ApiPublicCheckerKeyRouteImport } from './routes/api/public/checker.key'
-import { Route as ApiPublicCheckerCheckRouteImport } from './routes/api/public/checker.check'
-import { Route as ApiPublicCheckerBalanceRouteImport } from './routes/api/public/checker.balance'
-import { Route as ApiPublicBotActionRouteImport } from './routes/api/public/bot/$action'
 import { Route as ApiPublicBinBinRouteImport } from './routes/api/public/bin.$bin'
+import { Route as ApiPublicBotActionRouteImport } from './routes/api/public/bot/$action'
+import { Route as ApiPublicCheckerBalanceRouteImport } from './routes/api/public/checker.balance'
+import { Route as ApiPublicCheckerCheckRouteImport } from './routes/api/public/checker.check'
+import { Route as ApiPublicCheckerKeyRouteImport } from './routes/api/public/checker.key'
+import { Route as ApiPublicCheckerResultRouteImport } from './routes/api/public/checker.result'
 
-const SplatRoute = SplatRouteImport.update({
-  id: '/$',
-  path: '/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SplatRoute = SplatRouteImport.update({
+  id: '/$',
+  path: '/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicDepositCallbackRoute =
@@ -35,24 +35,9 @@ const ApiPublicDepositCallbackRoute =
     path: '/api/public/deposit-callback',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicCheckerResultRoute = ApiPublicCheckerResultRouteImport.update({
-  id: '/api/public/checker/result',
-  path: '/api/public/checker/result',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicCheckerKeyRoute = ApiPublicCheckerKeyRouteImport.update({
-  id: '/api/public/checker/key',
-  path: '/api/public/checker/key',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicCheckerCheckRoute = ApiPublicCheckerCheckRouteImport.update({
-  id: '/api/public/checker/check',
-  path: '/api/public/checker/check',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicCheckerBalanceRoute = ApiPublicCheckerBalanceRouteImport.update({
-  id: '/api/public/checker/balance',
-  path: '/api/public/checker/balance',
+const ApiPublicBinBinRoute = ApiPublicBinBinRouteImport.update({
+  id: '/api/public/bin/$bin',
+  path: '/api/public/bin/$bin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicBotActionRoute = ApiPublicBotActionRouteImport.update({
@@ -60,9 +45,24 @@ const ApiPublicBotActionRoute = ApiPublicBotActionRouteImport.update({
   path: '/api/public/bot/$action',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicBinBinRoute = ApiPublicBinBinRouteImport.update({
-  id: '/api/public/bin/$bin',
-  path: '/api/public/bin/$bin',
+const ApiPublicCheckerBalanceRoute = ApiPublicCheckerBalanceRouteImport.update({
+  id: '/api/public/checker/balance',
+  path: '/api/public/checker/balance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicCheckerCheckRoute = ApiPublicCheckerCheckRouteImport.update({
+  id: '/api/public/checker/check',
+  path: '/api/public/checker/check',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicCheckerKeyRoute = ApiPublicCheckerKeyRouteImport.update({
+  id: '/api/public/checker/key',
+  path: '/api/public/checker/key',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicCheckerResultRoute = ApiPublicCheckerResultRouteImport.update({
+  id: '/api/public/checker/result',
+  path: '/api/public/checker/result',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -150,18 +150,18 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/$': {
-      id: '/$'
-      path: '/$'
-      fullPath: '/$'
-      preLoaderRoute: typeof SplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$': {
+      id: '/$'
+      path: '/$'
+      fullPath: '/$'
+      preLoaderRoute: typeof SplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/deposit-callback': {
@@ -171,32 +171,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicDepositCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/checker/result': {
-      id: '/api/public/checker/result'
-      path: '/api/public/checker/result'
-      fullPath: '/api/public/checker/result'
-      preLoaderRoute: typeof ApiPublicCheckerResultRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/checker/key': {
-      id: '/api/public/checker/key'
-      path: '/api/public/checker/key'
-      fullPath: '/api/public/checker/key'
-      preLoaderRoute: typeof ApiPublicCheckerKeyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/checker/check': {
-      id: '/api/public/checker/check'
-      path: '/api/public/checker/check'
-      fullPath: '/api/public/checker/check'
-      preLoaderRoute: typeof ApiPublicCheckerCheckRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/checker/balance': {
-      id: '/api/public/checker/balance'
-      path: '/api/public/checker/balance'
-      fullPath: '/api/public/checker/balance'
-      preLoaderRoute: typeof ApiPublicCheckerBalanceRouteImport
+    '/api/public/bin/$bin': {
+      id: '/api/public/bin/$bin'
+      path: '/api/public/bin/$bin'
+      fullPath: '/api/public/bin/$bin'
+      preLoaderRoute: typeof ApiPublicBinBinRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/bot/$action': {
@@ -206,11 +185,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicBotActionRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/bin/$bin': {
-      id: '/api/public/bin/$bin'
-      path: '/api/public/bin/$bin'
-      fullPath: '/api/public/bin/$bin'
-      preLoaderRoute: typeof ApiPublicBinBinRouteImport
+    '/api/public/checker/balance': {
+      id: '/api/public/checker/balance'
+      path: '/api/public/checker/balance'
+      fullPath: '/api/public/checker/balance'
+      preLoaderRoute: typeof ApiPublicCheckerBalanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/checker/check': {
+      id: '/api/public/checker/check'
+      path: '/api/public/checker/check'
+      fullPath: '/api/public/checker/check'
+      preLoaderRoute: typeof ApiPublicCheckerCheckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/checker/key': {
+      id: '/api/public/checker/key'
+      path: '/api/public/checker/key'
+      fullPath: '/api/public/checker/key'
+      preLoaderRoute: typeof ApiPublicCheckerKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/checker/result': {
+      id: '/api/public/checker/result'
+      path: '/api/public/checker/result'
+      fullPath: '/api/public/checker/result'
+      preLoaderRoute: typeof ApiPublicCheckerResultRouteImport
       parentRoute: typeof rootRouteImport
     }
   }

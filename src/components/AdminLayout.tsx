@@ -1,7 +1,7 @@
 import { ReactNode, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { NavLink, useLocation } from "react-router-dom";
-import { Shield, LayoutDashboard, CreditCard, KeyRound, Settings as SettingsIcon, Menu, X, Banknote, DollarSign, LayoutGrid, LifeBuoy, Activity, Hash, FileArchive, Bot } from "lucide-react";
+import { Shield, LayoutDashboard, CreditCard, KeyRound, Settings as SettingsIcon, Menu, X, Banknote, DollarSign, LayoutGrid, LifeBuoy, Activity, Hash, FileArchive, Bot, BotMessageSquare } from "lucide-react";
 
 interface Item { to: string; label: string; icon: React.ComponentType<{ className?: string }>; }
 
@@ -17,6 +17,7 @@ const items: Item[] = [
   { to: "/admin/payment-gateway", label: "Plisio Payment Gateway", icon: Banknote },
   { to: "/admin/checker", label: "Checker logs", icon: Activity },
   { to: "/admin/api-keys", label: "API keys", icon: KeyRound },
+  { to: "/admin/bot", label: "Bot control", icon: BotMessageSquare },
   { to: "/admin/bot-users", label: "Telegram bot users", icon: Bot },
   { to: "/admin/support", label: "Support tickets", icon: LifeBuoy },
   { to: "/admin/site", label: "Site settings", icon: SettingsIcon },
