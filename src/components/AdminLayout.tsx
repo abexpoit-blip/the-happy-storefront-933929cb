@@ -74,41 +74,50 @@ export const AdminLayout = ({ children, title }: { children: ReactNode; title: s
         <div className="lg:hidden flex items-center gap-3">
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-secondary/40 border border-border/50 text-sm font-medium text-foreground hover:bg-secondary/60 hover:border-primary/40 transition-all"
+            className="inline-flex items-center gap-2 rounded-xl border border-white/12 bg-gradient-to-b from-[#16224a] to-[#0c1430] px-4 py-2.5 text-sm font-medium text-white/85 transition-all hover:border-[#f9a825]/45 hover:text-white"
           >
             {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-            <Shield className="h-4 w-4 text-primary-glow" />
+            <Shield className="h-4 w-4 text-[#ffd54f]" />
             <span>Admin Menu</span>
           </button>
-          <h1 className="font-display text-xl font-black neon-text tracking-tight truncate">{title}</h1>
+          <h1 className="truncate text-xl font-bold tracking-tight text-white">{title}</h1>
         </div>
 
         {/* Mobile sidebar drawer */}
         {mobileOpen && (
-          <div className="lg:hidden glass-neon rounded-2xl p-5 animate-fade-up">
+          <div className="lg:hidden animate-fade-up rounded-2xl border border-white/10 bg-gradient-to-b from-[#111c3d] to-[#0a1226] p-4 shadow-[0_30px_70px_-45px_rgba(0,0,0,0.95)]">
             <SidebarContent pathname={pathname} onNavigate={() => setMobileOpen(false)} />
           </div>
         )}
 
         {/* Desktop sidebar */}
-        <aside className="hidden lg:block lg:w-[280px] xl:w-[300px] lg:shrink-0">
-          <div className="glass-neon rounded-2xl p-6 lg:sticky lg:top-[calc(var(--nav-h)+1.5rem)] border border-primary/25 bg-gradient-to-b from-primary/10 via-transparent to-primary/5 shadow-[0_30px_70px_-45px_rgba(0,0,0,0.95)]">
-            <SidebarContent pathname={pathname} />
+        <aside className="hidden lg:block lg:w-[272px] xl:w-[292px] lg:shrink-0">
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#111c3d] via-[#0d1730] to-[#0a1226] p-4 lg:sticky lg:top-[calc(var(--nav-h)+1.5rem)] shadow-[0_30px_70px_-45px_rgba(0,0,0,0.95)]">
+            <div className="pointer-events-none absolute -top-24 -right-16 h-52 w-52 rounded-full bg-[#f9a825]/12 blur-3xl" />
+            <div className="relative">
+              <SidebarContent pathname={pathname} />
+            </div>
           </div>
         </aside>
 
         {/* Main content */}
         <div className="flex-1 min-w-0 space-y-6">
-          <div className="relative hidden lg:block overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#101a33] via-[#132145] to-[#0a1122] px-6 py-6 shadow-[0_18px_50px_rgba(10,17,34,0.35)]">
-            <div className="pointer-events-none absolute -top-20 -right-16 h-56 w-56 rounded-full bg-[#2196f3]/25 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-24 -left-10 h-56 w-56 rounded-full bg-[#f9a825]/20 blur-3xl" />
-            <div className="relative">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] uppercase tracking-wider text-white/80">
-                <Shield className="h-3 w-3" /> Admin panel
-              </span>
-              <h1 className="mt-3 text-2xl sm:text-3xl font-semibold text-white">
-                <span className="bg-gradient-to-r from-[#f9a825] to-[#ffd54f] bg-clip-text text-transparent">{title}</span>
-              </h1>
+          <div className="relative hidden lg:block overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#132145] via-[#101a33] to-[#080f21] px-7 py-7 shadow-[0_28px_70px_-40px_rgba(0,0,0,0.95)]">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#f9a825]/60 to-transparent" />
+            <div className="pointer-events-none absolute -top-24 -right-14 h-64 w-64 rounded-full bg-[#2196f3]/22 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-28 -left-12 h-64 w-64 rounded-full bg-[#f9a825]/18 blur-3xl" />
+            <div className="relative flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#f9a825] to-[#ff7043] shadow-[0_16px_34px_-16px_rgba(249,168,37,0.95)]">
+                <Shield className="h-6 w-6 text-[#101a33]" />
+              </div>
+              <div>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-white/75">
+                  Admin panel
+                </span>
+                <h1 className="mt-2 text-2xl sm:text-3xl font-semibold tracking-tight">
+                  <span className="bg-gradient-to-r from-[#f9a825] via-[#ffd54f] to-[#ffab91] bg-clip-text text-transparent">{title}</span>
+                </h1>
+              </div>
             </div>
           </div>
           {children}
