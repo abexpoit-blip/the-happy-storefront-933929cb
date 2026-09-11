@@ -812,6 +812,8 @@ async function handleMessage(msg) {
         );
         return;
     }
+  }
+
   // Reply keyboard button clicks
   const clean = text.toLowerCase();
   if (clean.includes("check card")) { pendingAction.delete(chat); await startCheck(chat); return; }
