@@ -31,12 +31,23 @@ BOT_API_BASE=https://zoru.cc
 BOT_ADMIN_SECRET=...          # must match BOT_ADMIN_SECRET in the site .env
 ```
 
+`BOT_API_BASE` is the website origin, not a separate host. The bot appends
+`/api/public/bot/<action>` itself, so production should use:
+
+```
+BOT_API_BASE=https://zoru.cc
+```
+
 ## Run
 
 ```bash
 bash selfhost/bot-start.sh
 pm2 logs zoru-bot --lines 40 --nostream
 ```
+
+Successful startup logs show the authenticated Telegram username, the website
+API base, and the complete bridge pattern. An invalid or revoked token is
+rejected before PM2 starts the process.
 
 ## Database
 

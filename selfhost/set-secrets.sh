@@ -38,8 +38,9 @@ chmod 600 "$FILE"
 
 for kv in "$@"; do
   key="${kv%%=*}"; val="${kv#*=}"
-  case "$key" in
-    "$PREFIX"*) : ;;
+  case "$service:$key" in
+    telegram:BOT_ADMIN_SECRET|telegram:BOT_API_BASE) : ;;
+    *:"$PREFIX"*) : ;;
     *) echo "skip $key (must start with $PREFIX)" >&2; continue ;;
   esac
   tmp=$(mktemp)
