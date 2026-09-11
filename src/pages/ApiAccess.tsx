@@ -34,6 +34,7 @@ const ApiAccess = () => {
   const [info, setInfo] = useState<MyApiAccess | null>(null);
   const [purpose, setPurpose] = useState("");
   const [busy, setBusy] = useState(false);
+  const [freshKey, setFreshKey] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try { setInfo(await load({})); }
@@ -45,14 +46,15 @@ const ApiAccess = () => {
   const submit = async () => {
     setBusy(true);
     try {
-      await request({ data: { purpose: purpose.trim() || undefined } });
-      toast.success("Request sent — the fee was taken from your balance");
+      const res = await request({ data: { purpose: purpose.trim() || undefined } });
+      setFreshKey(res.key);
+      toast.success("Payment accepted — your API key is ready");
       setPurpose("");
       refresh();
     } catch (e) {
       const m = e instanceof Error ? e.message : "Failed";
       if (m.startsWith("insufficient_balance")) {
-        toast.error(`You need $${m.split(":")[1] ?? "50"} in your balance. Please deposit first.`);
+        toast.error(`You need $${m.split(":")[1] ?? "100"} in your balance. Please deposit first.`);
       } else if (m === "request_already_pending") toast.error("You already have a pending request");
       else if (m === "api_already_active") toast.error("You already have an active API key");
       else toast.error(m);
@@ -60,7 +62,7 @@ const ApiAccess = () => {
     setBusy(false);
   };
 
-  const fee = info?.fee ?? 50;
+  const fee = info?.fee ?? 100;
   const price = info?.pricePerCard ?? 0.02;
   const balance = info?.balance ?? 0;
   const enough = balance >= fee;
@@ -86,6 +88,21 @@ const ApiAccess = () => {
         />
       </div>
 
+      {freshKey && (
+        <div className="rounded-2xl border border-[#c8e6c9] bg-[#f3fbf4] p-5 space-y-2 mt-5">
+          <div className="font-semibold text-[#1b5e20]">Your API key — copy it now, it is shown only once</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="font-mono text-[13px] bg-white border border-[#c8e6c9] rounded px-3 py-2 break-all">{freshKey}</code>
+            <Button
+              variant="outline"
+              onClick={() => { navigator.clipboard.writeText(freshKey); toast.success("Copied"); }}
+            >
+              <Copy className="h-4 w-4 mr-2" />Copy
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="rounded-2xl border border-[#e6e6e6] bg-white p-5 space-y-4 mt-5">
         {info?.key ? (
           <>
@@ -106,8 +123,8 @@ const ApiAccess = () => {
           <>
             <div className="font-semibold">Request API access</div>
             <div className="text-[13px] text-[#555]">
-              API access costs <b>${fee.toFixed(2)}</b>, taken from your balance once. After approval you receive one
-              private key bound to your account and to one server IP. Each card you check through the API then costs
+              API access costs <b>${fee.toFixed(2)}</b>, taken from your balance once.
+              After payment your private key is issued instantly, bound to your account and to one server IP. Each card you check through the API then costs
               <b> ${price.toFixed(2)}</b>, taken from your key credits first and from your account balance after that.
             </div>
             <Input
@@ -117,7 +134,7 @@ const ApiAccess = () => {
             />
             {enough ? (
               <Button onClick={submit} disabled={busy}>
-                <KeyRound className="h-4 w-4 mr-2" />{busy ? "Sending…" : `Pay $${fee.toFixed(2)} and request`}
+                <KeyRound className="h-4 w-4 mr-2" />{busy ? "Processing…" : `Pay $${fee.toFixed(2)} and get key`}
               </Button>
             ) : (
               <div className="flex flex-wrap items-center gap-3">
