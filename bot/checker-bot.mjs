@@ -1,397 +1,521 @@
 #!/usr/bin/env node
 /**
- * Zoru Telegram Checker Bot
- * -------------------------
- * Standalone long-polling bot. It never touches the database directly — every
- * action goes through the public checker API, exactly like any third-party bot
- * would, so billing / limits / refunds stay identical to the web checker.
+ * Zoru Telegram bot — fully connected to the website backend.
  *
- * Env (see /etc/zoru/telegram.env):
- *   TELEGRAM_BOT_TOKEN   bot token from @BotFather                (required)
- *   API_BASE             https://zoru.cc                          (default)
- *   TELEGRAM_ADMIN_IDS   comma separated telegram user ids (admins)
- *   BOT_ADMIN_SECRET     same secret the site has, lets admins mint API keys
- *   BOT_DATA_FILE        where per-user API keys are stored
+ * Every Telegram user automatically gets a real website account on /start.
+ * Balance, deposits (Plisio), referrals, single + bulk checking and $100 API
+ * access all run through the site's own API, so the rules are identical
+ * everywhere and the admin panel manages bot users like any other user.
  *
- * Run:  bash selfhost/bot-start.sh
+ * Env (loaded by selfhost/bot-start.sh from /etc/zoru/telegram.env):
+ *   TELEGRAM_BOT_TOKEN   bot token from @BotFather
+ *   BOT_API_BASE         site base url, default https://zoru.cc
+ *   BOT_ADMIN_SECRET     shared secret, must match the site's .env
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { dirname } from "node:path";
 
-const TOKEN = (process.env.TELEGRAM_BOT_TOKEN ?? "").trim();
+const TOKEN = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+const BASE = (process.env.BOT_API_BASE || "https://zoru.cc").trim().replace(/\/+$/, "");
+const SECRET = (process.env.BOT_ADMIN_SECRET || process.env.TELEGRAM_BOT_ADMIN_SECRET || "").trim();
+
 if (!TOKEN) {
-  console.error("TELEGRAM_BOT_TOKEN missing. bash selfhost/set-secrets.sh telegram TELEGRAM_BOT_TOKEN=xxx");
+  console.error("TELEGRAM_BOT_TOKEN is missing");
   process.exit(1);
 }
-const API_BASE = (process.env.API_BASE ?? "https://zoru.cc").replace(/\/+$/, "");
-const TG = `https://api.telegram.org/bot${TOKEN}`;
-const ADMINS = new Set(
-  (process.env.TELEGRAM_ADMIN_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
-);
-const BOT_ADMIN_SECRET = (process.env.BOT_ADMIN_SECRET ?? "").trim();
-const DATA_FILE = process.env.BOT_DATA_FILE ?? "/var/lib/zoru-bot/users.json";
-const MAX_CARDS = 500;
-
-/* ---------------------------------------------------------------- storage */
-function loadStore() {
-  try {
-    return JSON.parse(readFileSync(DATA_FILE, "utf8"));
-  } catch {
-    return {};
-  }
+if (!SECRET) {
+  console.error("BOT_ADMIN_SECRET is missing (must match the website .env)");
+  process.exit(1);
 }
-let store = loadStore();
-function saveStore() {
-  mkdirSync(dirname(DATA_FILE), { recursive: true });
-  writeFileSync(DATA_FILE, JSON.stringify(store, null, 2), { mode: 0o600 });
-}
-const userOf = (id) => (store[String(id)] ??= {});
-const keyOf = (id) => userOf(id).apiKey ?? null;
 
-/* ------------------------------------------------------------ telegram io */
+const API = `https://api.telegram.org/bot${TOKEN}`;
+const money = (n) => `$${Number(n || 0).toFixed(2)}`;
+const esc = (s) => String(s).replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]);
+
+/* ------------------------------------------------------------------ */
+/* Telegram helpers                                                    */
+/* ------------------------------------------------------------------ */
+
 async function tg(method, payload) {
-  const res = await fetch(`${TG}/${method}`, {
+  const res = await fetch(`${API}/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   const data = await res.json().catch(() => ({}));
-  if (!data.ok) console.error(`telegram ${method} failed:`, data.description ?? res.status);
+  if (!data.ok) console.error("telegram error", method, data.description || res.status);
   return data.result;
 }
+
+const MENU = {
+  inline_keyboard: [
+    [
+      { text: "💰 Balance", callback_data: "balance" },
+      { text: "➕ Deposit", callback_data: "deposit" },
+    ],
+    [
+      { text: "🧪 Check cards", callback_data: "check" },
+      { text: "⚙️ Gate", callback_data: "gates" },
+    ],
+    [
+      { text: "👥 Referrals", callback_data: "refer" },
+      { text: "🔑 API access", callback_data: "api" },
+    ],
+    [{ text: "📜 My tasks", callback_data: "tasks" }],
+  ],
+};
+
 const send = (chat, text, extra = {}) =>
   tg("sendMessage", { chat_id: chat, text, parse_mode: "HTML", disable_web_page_preview: true, ...extra });
 
-async function sendFile(chat, filename, content, caption) {
-  const form = new FormData();
-  form.append("chat_id", String(chat));
-  if (caption) form.append("caption", caption);
-  form.append("document", new Blob([content], { type: "text/plain" }), filename);
-  const res = await fetch(`${TG}/sendDocument`, { method: "POST", body: form });
-  if (!res.ok) console.error("sendDocument failed:", await res.text());
-}
+const menu = (chat, text) => send(chat, text, { reply_markup: MENU });
 
-async function downloadTgFile(fileId) {
-  const info = await tg("getFile", { file_id: fileId });
-  if (!info?.file_path) return "";
-  const res = await fetch(`https://api.telegram.org/file/bot${TOKEN}/${info.file_path}`);
-  return res.ok ? await res.text() : "";
-}
+/* ------------------------------------------------------------------ */
+/* Website bridge                                                      */
+/* ------------------------------------------------------------------ */
 
-/* ----------------------------------------------------------------- shop api */
-async function api(path, { method = "POST", body, apiKey, adminSecret } = {}) {
-  const headers = { "Content-Type": "application/json" };
-  if (apiKey) headers["x-api-key"] = apiKey;
-  if (adminSecret) headers["x-bot-admin-secret"] = adminSecret;
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
+async function api(action, from, body = {}) {
+  const res = await fetch(`${BASE}/api/public/bot/${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-bot-secret": SECRET },
+    body: JSON.stringify({
+      telegram_id: from.id,
+      username: from.username ?? null,
+      first_name: from.first_name ?? null,
+      ...body,
+    }),
   });
-  const text = await res.text();
   let data;
   try {
-    data = JSON.parse(text);
+    data = await res.json();
   } catch {
-    throw new Error(`bad response from server (${res.status})`);
+    throw new Error(`server_error_${res.status}`);
   }
-  if (!res.ok || data.status === "error") throw new Error(data.message ?? `http_${res.status}`);
+  if (!res.ok || data.status !== "success") throw new Error(data.message || `error_${res.status}`);
   return data;
 }
 
-/* ------------------------------------------------------------------- cards */
-const digits = (s) => String(s).replace(/\D/g, "");
-function parseCardLine(raw) {
-  const p = String(raw).trim().split(/[|:/\s,]+/).filter(Boolean);
-  if (p.length < 4) return null;
-  const pan = digits(p[0]);
-  let mm = digits(p[1]);
-  let yy = digits(p[2]);
-  const cvv = digits(p[3]);
-  if (pan.length < 12 || !mm || !yy || !cvv) return null;
-  if (mm.length === 1) mm = `0${mm}`;
-  if (yy.length === 2) yy = `20${yy}`;
-  return `${pan}|${mm}|${yy}|${cvv}`;
-}
-const parseCards = (text) => [
-  ...new Set(String(text).split(/\r?\n/).map(parseCardLine).filter(Boolean)),
-];
+/* ------------------------------------------------------------------ */
+/* Card parsing                                                        */
+/* ------------------------------------------------------------------ */
 
-/* ------------------------------------------------------------------ texts */
-const HELP = `<b>Zoru Checker Bot</b>
-
-<b>Setup</b>
-/setkey &lt;api_key&gt; — save your API key
-/mykey — show the saved key (masked)
-/balance — key credits + owner balance
-
-<b>Checking</b>
-/check — reply or paste cards, one per line
-  <code>4111111111111111|12|2027|123</code>
-Or just upload a <code>.txt</code> file with cards (max ${MAX_CARDS}).
-/gate &lt;name&gt; — set a gate for your checks
-/task &lt;task_id&gt; — re-fetch a task result
-
-<b>Build your own bot</b>
-Every command above is a plain HTTP call:
-<code>POST ${API_BASE}/api/public/checker/check</code>
-<code>POST ${API_BASE}/api/public/checker/result</code>
-<code>GET  ${API_BASE}/api/public/checker/balance</code>
-Header: <code>x-api-key: YOUR_KEY</code>
-/api — full request/response examples`;
-
-const API_DOC = `<b>API for your own bot</b>
-
-1) Balance
-<pre>curl ${API_BASE}/api/public/checker/balance \\
- -H "x-api-key: KEY"</pre>
-
-2) Submit cards
-<pre>curl -X POST ${API_BASE}/api/public/checker/check \\
- -H "x-api-key: KEY" -H "Content-Type: application/json" \\
- -d '{"cards":["4111111111111111|12|2027|123"],"gate":"CCV_Braintree_Auth"}'</pre>
-→ <code>{"task_id":"...","cost_usd":0.02}</code>
-
-3) Poll result (every ~5s until <code>done:true</code>)
-<pre>curl -X POST ${API_BASE}/api/public/checker/result \\
- -H "x-api-key: KEY" -H "Content-Type: application/json" \\
- -d '{"task_id":"TASK"}'</pre>
-
-Billing: $0.02 per card — key credits first, then the owner's account balance.
-Cards the gateway never answers are refunded automatically.`;
-
-const ADMIN_HELP = `<b>Admin</b>
-/newkey &lt;label&gt; [credits] [daily_limit] — issue a new API key
-/whoami — your telegram id`;
-
-/* ---------------------------------------------------------------- checking */
-const running = new Map(); // chatId -> true
-
-async function runCheck(chat, userId, lines) {
-  const apiKey = keyOf(userId);
-  if (!apiKey) return send(chat, "No API key yet. Use /setkey &lt;api_key&gt; first.");
-  if (running.get(chat)) return send(chat, "A check is already running for you. Please wait.");
-  if (lines.length > MAX_CARDS) lines = lines.slice(0, MAX_CARDS);
-
-  running.set(chat, true);
-  try {
-    const gate = userOf(userId).gate;
-    const started = await api("/api/public/checker/check", {
-      apiKey,
-      body: gate ? { cards: lines, gate } : { cards: lines },
-    });
-    userOf(userId).lastTask = started.task_id;
-    saveStore();
-
-    const status = await send(
-      chat,
-      `Started <b>${started.total}</b> cards\nGate: <code>${started.gate}</code>\nCost: $${started.cost_usd}\nTask: <code>${started.task_id}</code>`,
-    );
-
-    await pollTask(chat, apiKey, started.task_id, status?.message_id);
-  } catch (e) {
-    await send(chat, `Check failed: <code>${e.message}</code>`);
-  } finally {
-    running.delete(chat);
-  }
+function extractCards(text) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => /\d{12,}/.test(l))
+    .slice(0, 500);
 }
 
-async function pollTask(chat, apiKey, taskId, messageId) {
-  const deadline = Date.now() + 30 * 60 * 1000;
-  let last = "";
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 5000));
-    let res;
-    try {
-      res = await api("/api/public/checker/result", { apiKey, body: { task_id: taskId } });
-    } catch (e) {
-      await send(chat, `Result error: <code>${e.message}</code>`);
-      return;
-    }
-    const rows = res.results ?? [];
-    const live = rows.filter((r) => r.status === "live");
-    const dead = rows.filter((r) => r.status === "dead");
-    const line = `Progress ${res.answered}/${res.total} — LIVE ${live.length} | DEAD ${dead.length}`;
-    if (messageId && line !== last) {
-      last = line;
-      await tg("editMessageText", { chat_id: chat, message_id: messageId, text: line }).catch(() => {});
-    }
-    if (res.done) {
-      await finish(chat, taskId, res, live, dead);
-      return;
-    }
-  }
-  await send(chat, `Timed out waiting for <code>${taskId}</code>. Use /task ${taskId} later.`);
+/* ------------------------------------------------------------------ */
+/* Feature handlers                                                    */
+/* ------------------------------------------------------------------ */
+
+const pendingAction = new Map(); // chat id -> "deposit" | "check"
+
+async function showAccount(chat, from) {
+  const { account } = await api("session", from);
+  const lines = [
+    `<b>👤 ${esc(account.username || from.first_name || "user")}</b>`,
+    ``,
+    `💰 Balance: <b>${money(account.balance)}</b>`,
+    `🎁 Bonus: <b>${money(account.bonus_balance)}</b>`,
+    `🧪 Price per check: <b>${money(account.price_per_card)}</b>`,
+    `⚙️ Gate: <code>${esc(account.gate || account.default_gate)}</code>`,
+    `👥 Referrals: <b>${account.referral_count}</b> · earned <b>${money(account.referral_earned)}</b>`,
+    `🔑 API: ${account.api_key?.active ? `active (<code>${esc(account.api_key.prefix)}…</code>)` : `not active — ${money(account.api_fee)}`}`,
+  ];
+  if (account.blocked) lines.push("", "🚫 <b>This account is banned.</b>");
+  await menu(chat, lines.join("\n"));
 }
 
-async function finish(chat, taskId, res, live, dead) {
-  const fmt = (r) => `${r.card} | ${r.status.toUpperCase()} | ${r.category} | ${r.msg}`;
-  const refund =
-    res.credits_refunded || res.balance_refunded
-      ? `\nRefunded: ${res.credits_refunded} credits / $${res.balance_refunded}`
-      : "";
+async function startDeposit(chat) {
+  pendingAction.set(chat, "deposit");
+  await send(chat, "💵 Send the amount in USD you want to add (example: <code>50</code>).");
+}
+
+async function createDeposit(chat, from, amount) {
+  const d = await api("deposit", from, { amount });
   await send(
     chat,
-    `<b>Done</b> — task <code>${taskId}</code>\nTotal ${res.total} | LIVE ${live.length} | DEAD ${dead.length}${refund}`,
+    [
+      `<b>Deposit created</b>`,
+      ``,
+      `Credited on payment: <b>${money(d.credit)}</b>`,
+      `Fee: ${money(d.fee)} · You pay: <b>${money(d.charged)}</b>`,
+      `Send exactly <b>${esc(d.crypto_amount)} LTC</b> to:`,
+      `<code>${esc(d.wallet_address)}</code>`,
+      ``,
+      d.invoice_url ? `Pay page: ${esc(d.invoice_url)}` : "",
+      `Balance is credited automatically once the payment confirms.`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    { reply_markup: MENU },
   );
-  if (live.length) {
-    const preview = live.slice(0, 20).map(fmt).join("\n");
-    await send(chat, `<b>LIVE</b>\n<pre>${preview}</pre>`);
-  }
-  const all = (res.results ?? []).map(fmt).join("\n");
-  if (all) await sendFile(chat, `result-${taskId}.txt`, all, "Full result");
 }
 
-/* --------------------------------------------------------------- commands */
+async function showReferrals(chat, from) {
+  const { account } = await api("session", from);
+  const link = `${BASE}/auth?ref=${account.referral_code || ""}`;
+  await menu(
+    chat,
+    [
+      `<b>👥 Referral program</b>`,
+      ``,
+      `Your code: <code>${esc(account.referral_code || "-")}</code>`,
+      `Your link: ${esc(link)}`,
+      ``,
+      `You earn <b>${money(account.referral_bonus)}</b> for every referred user who makes a successful deposit (paid once per user).`,
+      `Referrals: <b>${account.referral_count}</b> · Earned: <b>${money(account.referral_earned)}</b>`,
+    ].join("\n"),
+  );
+}
+
+async function showGates(chat, from) {
+  const g = await api("gates", from);
+  const rows = g.gates.slice(0, 20).map((gate) => [{ text: gate.id, callback_data: `gate:${gate.id}` }]);
+  await send(chat, `⚙️ Current gate: <code>${esc(g.selected)}</code>\nPick a gate:`, {
+    reply_markup: { inline_keyboard: rows.length ? rows : MENU.inline_keyboard },
+  });
+}
+
+async function startCheck(chat) {
+  pendingAction.set(chat, "check");
+  await send(
+    chat,
+    [
+      "🧪 <b>Send cards to check</b>",
+      "",
+      "Single card or bulk — one per line, or upload a <code>.txt</code> file (max 500).",
+      "Format: <code>PAN|MM|YYYY|CVV</code>",
+    ].join("\n"),
+  );
+}
+
+async function runCheck(chat, from, cards) {
+  if (!cards.length) {
+    await send(chat, "No valid cards found. Format: <code>PAN|MM|YYYY|CVV</code>");
+    return;
+  }
+  let task;
+  try {
+    task = await api("check", from, { cards });
+  } catch (e) {
+    const msg = String(e.message || "");
+    if (msg.includes("insufficient_balance")) {
+      await menu(chat, "❌ Not enough balance. Use ➕ Deposit to top up.");
+      return;
+    }
+    await menu(chat, `❌ ${esc(msg)}`);
+    return;
+  }
+
+  const status = await send(
+    chat,
+    `⏳ Checking <b>${task.total}</b> card(s) on <code>${esc(task.gate)}</code>\nCharged: <b>${money(task.cost)}</b>`,
+  );
+
+  const started = Date.now();
+  let last = "";
+  while (Date.now() - started < 20 * 60 * 1000) {
+    await new Promise((r) => setTimeout(r, 4000));
+    let res;
+    try {
+      res = await api("result", from, { task_id: task.task_id });
+    } catch {
+      continue;
+    }
+    const line = `⏳ ${res.answered}/${res.total} done · ✅ ${res.live} live · ❌ ${res.dead} dead`;
+    if (line !== last && status) {
+      last = line;
+      await tg("editMessageText", {
+        chat_id: chat,
+        message_id: status.message_id,
+        text: line,
+        parse_mode: "HTML",
+      }).catch(() => {});
+    }
+    if (res.done) {
+      await sendResults(chat, task, res);
+      return;
+    }
+  }
+  await menu(chat, "Task is taking too long — use 📜 My tasks to fetch the result later.");
+}
+
+async function sendResults(chat, task, res) {
+  const lives = res.rows.filter((r) => r.status === "live");
+  const summary = [
+    `<b>✅ Check finished</b>`,
+    ``,
+    `Total: <b>${res.total}</b> · Live: <b>${res.live}</b> · Dead: <b>${res.dead}</b>`,
+    res.refunded > 0 ? `Refunded (no answer): <b>${money(res.refunded)}</b>` : "",
+    ``,
+    lives.length
+      ? lives.slice(0, 20).map((r) => `✅ <code>${esc(r.card)}</code> — ${esc(r.category)}`).join("\n")
+      : "No live cards.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  await menu(chat, summary);
+
+  const body = res.rows
+    .map((r) => `${r.status.toUpperCase()} | ${r.card} | ${r.category} | ${r.msg}`)
+    .join("\n");
+  const form = new FormData();
+  form.append("chat_id", String(chat));
+  form.append("document", new Blob([body], { type: "text/plain" }), `${task.task_id}.txt`);
+  await fetch(`${API}/sendDocument`, { method: "POST", body: form }).catch(() => {});
+}
+
+async function showTasks(chat, from) {
+  const t = await api("tasks", from);
+  if (!t.tasks.length) {
+    await menu(chat, "No checks yet.");
+    return;
+  }
+  await menu(
+    chat,
+    [
+      "<b>📜 Recent checks</b>",
+      "",
+      ...t.tasks.map(
+        (x) => `<code>${esc(x.task_id)}</code> · ${x.total} cards · ${x.status} · ${money(x.cost)}`,
+      ),
+      "",
+      "Fetch one with <code>/task &lt;id&gt;</code>",
+    ].join("\n"),
+  );
+}
+
+async function showApi(chat, from) {
+  const { account } = await api("session", from);
+  if (account.api_key?.active) {
+    await menu(
+      chat,
+      [
+        "<b>🔑 API access — active</b>",
+        "",
+        `Key prefix: <code>${esc(account.api_key.prefix)}…</code>`,
+        "",
+        "Endpoints:",
+        `<code>POST ${BASE}/api/public/checker/check</code>`,
+        `<code>POST ${BASE}/api/public/checker/result</code>`,
+        `<code>GET  ${BASE}/api/public/checker/balance</code>`,
+        "",
+        "Send your key in the <code>x-api-key</code> header.",
+      ].join("\n"),
+    );
+    return;
+  }
+  await send(
+    chat,
+    [
+      "<b>🔑 API access</b>",
+      "",
+      `One-time fee: <b>${money(account.api_fee)}</b> — same as the website.`,
+      "It is charged from your balance and the key is shown once.",
+    ].join("\n"),
+    { reply_markup: { inline_keyboard: [[{ text: `Buy API access (${money(account.api_fee)})`, callback_data: "buyapi" }]] } },
+  );
+}
+
+async function buyApi(chat, from) {
+  try {
+    const r = await api("apikey", from);
+    await menu(chat, `✅ API access active.\n\nYour key (shown once):\n<code>${esc(r.key)}</code>`);
+  } catch (e) {
+    const msg = String(e.message || "");
+    if (msg.includes("insufficient_balance")) await menu(chat, "❌ Not enough balance for API access.");
+    else if (msg.includes("api_already_active")) await menu(chat, "You already have an active API key.");
+    else await menu(chat, `❌ ${esc(msg)}`);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Update routing                                                      */
+/* ------------------------------------------------------------------ */
+
 async function handleMessage(msg) {
-  const chat = msg.chat?.id;
-  const userId = msg.from?.id;
-  if (!chat || !userId) return;
-  const isAdmin = ADMINS.has(String(userId));
-  const text = (msg.text ?? msg.caption ?? "").trim();
-  const [rawCmd, ...args] = text.split(/\s+/);
-  const cmd = rawCmd?.split("@")[0]?.toLowerCase() ?? "";
+  const chat = msg.chat.id;
+  const from = msg.from;
+  const text = (msg.text || msg.caption || "").trim();
 
-  // file upload -> cards
   if (msg.document) {
-    const content = await downloadTgFile(msg.document.file_id);
-    const cards = parseCards(content);
-    if (!cards.length) return send(chat, "No valid cards found in that file.");
-    await send(chat, `Found <b>${cards.length}</b> cards. Starting…`);
-    return runCheck(chat, userId, cards);
+    const file = await tg("getFile", { file_id: msg.document.file_id });
+    const res = await fetch(`https://api.telegram.org/file/bot${TOKEN}/${file.file_path}`);
+    const content = await res.text();
+    pendingAction.delete(chat);
+    await runCheck(chat, from, extractCards(content));
+    return;
   }
 
-  switch (cmd) {
-    case "/start":
-    case "/help":
-      return send(chat, HELP + (isAdmin ? `\n\n${ADMIN_HELP}` : ""));
-
-    case "/api":
-      return send(chat, API_DOC);
-
-    case "/whoami":
-      return send(chat, `Your telegram id: <code>${userId}</code>`);
-
-    case "/setkey": {
-      const key = args[0]?.trim();
-      if (!key) return send(chat, "Usage: /setkey &lt;api_key&gt;");
-      userOf(userId).apiKey = key;
-      saveStore();
-      try {
-        const bal = await api("/api/public/checker/balance", { method: "GET", apiKey: key });
-        return send(
+  if (text.startsWith("/")) {
+    const [cmd, ...args] = text.split(/\s+/);
+    pendingAction.delete(chat);
+    switch (cmd.split("@")[0]) {
+      case "/start": {
+        const ref = args[0] ? { ref: args[0] } : {};
+        await api("session", from, ref);
+        await menu(
           chat,
-          `Key saved ✅\nLabel: <b>${bal.label}</b>\nCredits: ${bal.credits}\nBalance: $${bal.balance}`,
+          [
+            "<b>Welcome to Zoru Checker</b>",
+            "",
+            "Your account is ready — it is the same account as the website.",
+            "Deposit, check cards (single or bulk), invite friends and buy API access right here.",
+          ].join("\n"),
         );
-      } catch (e) {
-        return send(chat, `Key saved, but the server said: <code>${e.message}</code>`);
+        return;
       }
-    }
-
-    case "/mykey": {
-      const key = keyOf(userId);
-      if (!key) return send(chat, "No key saved. Use /setkey &lt;api_key&gt;");
-      return send(chat, `Saved key: <code>${key.slice(0, 10)}…${key.slice(-4)}</code>`);
-    }
-
-    case "/gate": {
-      const gate = args.join(" ").trim();
-      if (!gate) return send(chat, "Usage: /gate &lt;gate_name&gt;");
-      userOf(userId).gate = gate;
-      saveStore();
-      return send(chat, `Gate set to <code>${gate}</code>`);
-    }
-
-    case "/balance": {
-      const key = keyOf(userId);
-      if (!key) return send(chat, "No key saved. Use /setkey &lt;api_key&gt;");
-      try {
-        const bal = await api("/api/public/checker/balance", { method: "GET", apiKey: key });
-        return send(
+      case "/menu":
+      case "/profile":
+      case "/balance":
+        await showAccount(chat, from);
+        return;
+      case "/deposit":
+        if (args[0] && Number(args[0]) > 0) await createDeposit(chat, from, Number(args[0]));
+        else await startDeposit(chat);
+        return;
+      case "/check":
+        if (args.length) await runCheck(chat, from, extractCards(args.join("\n")));
+        else await startCheck(chat);
+        return;
+      case "/gate":
+        if (args[0]) {
+          await api("setgate", from, { gate: args[0] });
+          await menu(chat, `⚙️ Gate set to <code>${esc(args[0])}</code>`);
+        } else await showGates(chat, from);
+        return;
+      case "/refer":
+        await showReferrals(chat, from);
+        return;
+      case "/api":
+        await showApi(chat, from);
+        return;
+      case "/tasks":
+        await showTasks(chat, from);
+        return;
+      case "/task": {
+        if (!args[0]) {
+          await send(chat, "Usage: <code>/task &lt;id&gt;</code>");
+          return;
+        }
+        const res = await api("result", from, { task_id: args[0] });
+        await sendResults(chat, { task_id: args[0] }, res);
+        return;
+      }
+      case "/help":
+      default:
+        await menu(
           chat,
-          `<b>${bal.label}</b>\nCredits: ${bal.credits}\nBalance: $${bal.balance}\nPrice/card: $${bal.price_per_card}\nCards affordable: ${bal.cards_affordable}`,
+          [
+            "<b>Commands</b>",
+            "/balance — profile & balance",
+            "/deposit [amount] — add funds with crypto",
+            "/check — check one card or bulk (or send a .txt)",
+            "/gate — pick a checking gate",
+            "/refer — referral link & earnings",
+            "/api — API access",
+            "/tasks — recent checks",
+          ].join("\n"),
         );
-      } catch (e) {
-        return send(chat, `Error: <code>${e.message}</code>`);
-      }
+        return;
     }
+  }
 
-    case "/task": {
-      const key = keyOf(userId);
-      const taskId = args[0] ?? userOf(userId).lastTask;
-      if (!key || !taskId) return send(chat, "Usage: /task &lt;task_id&gt;");
-      try {
-        const res = await api("/api/public/checker/result", { apiKey: key, body: { task_id: taskId } });
-        const rows = res.results ?? [];
-        return finish(
-          chat,
-          taskId,
-          res,
-          rows.filter((r) => r.status === "live"),
-          rows.filter((r) => r.status === "dead"),
-        );
-      } catch (e) {
-        return send(chat, `Error: <code>${e.message}</code>`);
-      }
+  const waiting = pendingAction.get(chat);
+  if (waiting === "deposit") {
+    const amount = Number(text.replace(/[^0-9.]/g, ""));
+    pendingAction.delete(chat);
+    if (!Number.isFinite(amount) || amount < 1) {
+      await menu(chat, "Enter a valid amount, for example 50.");
+      return;
     }
+    await createDeposit(chat, from, amount);
+    return;
+  }
 
-    case "/newkey": {
-      if (!isAdmin) return send(chat, "Admins only.");
-      if (!BOT_ADMIN_SECRET) return send(chat, "BOT_ADMIN_SECRET is not configured on the bot.");
-      const label = args[0];
-      if (!label) return send(chat, "Usage: /newkey &lt;label&gt; [credits] [daily_limit]");
-      try {
-        const out = await api("/api/public/checker/key", {
-          adminSecret: BOT_ADMIN_SECRET,
-          body: {
-            label,
-            credits: Number(args[1] ?? 0) || 0,
-            daily_limit: Number(args[2] ?? 5000) || 5000,
-          },
-        });
-        return send(
-          chat,
-          `New key for <b>${out.label}</b>\n<code>${out.api_key}</code>\nCredits: ${out.credits} | Daily limit: ${out.daily_limit}\n\nShown once — save it now.`,
-        );
-      } catch (e) {
-        return send(chat, `Error: <code>${e.message}</code>`);
-      }
-    }
+  const cards = extractCards(text);
+  if (cards.length) {
+    pendingAction.delete(chat);
+    await runCheck(chat, from, cards);
+    return;
+  }
 
-    case "/check": {
-      const body = text.slice(rawCmd.length);
-      const source = msg.reply_to_message?.text ?? "";
-      const cards = parseCards(`${body}\n${source}`);
-      if (!cards.length)
-        return send(chat, "Send cards after /check (one per line) or reply to a message with cards.");
-      return runCheck(chat, userId, cards);
-    }
+  await showAccount(chat, from);
+}
 
-    default: {
-      if (cmd.startsWith("/")) return send(chat, "Unknown command. /help");
-      const cards = parseCards(text);
-      if (cards.length) return runCheck(chat, userId, cards);
-      return send(chat, "Send cards (one per line), a .txt file, or /help.");
-    }
+async function handleCallback(q) {
+  const chat = q.message.chat.id;
+  const from = q.from;
+  await tg("answerCallbackQuery", { callback_query_id: q.id });
+  const data = q.data || "";
+
+  if (data.startsWith("gate:")) {
+    const gate = data.slice(5);
+    await api("setgate", from, { gate });
+    await menu(chat, `⚙️ Gate set to <code>${esc(gate)}</code>`);
+    return;
+  }
+
+  switch (data) {
+    case "balance":
+      return showAccount(chat, from);
+    case "deposit":
+      return startDeposit(chat);
+    case "check":
+      return startCheck(chat);
+    case "gates":
+      return showGates(chat, from);
+    case "refer":
+      return showReferrals(chat, from);
+    case "api":
+      return showApi(chat, from);
+    case "buyapi":
+      return buyApi(chat, from);
+    case "tasks":
+      return showTasks(chat, from);
+    default:
+      return showAccount(chat, from);
   }
 }
 
-/* ------------------------------------------------------------- poll loop */
+/* ------------------------------------------------------------------ */
+/* Long polling — updates are handled concurrently so the bot stays fast */
+/* ------------------------------------------------------------------ */
+
 async function main() {
-  console.log(`Zoru checker bot started. API base: ${API_BASE}`);
-  if (existsSync(DATA_FILE)) store = loadStore();
   await tg("deleteWebhook", { drop_pending_updates: false });
+  await tg("setMyCommands", {
+    commands: [
+      { command: "menu", description: "Main menu" },
+      { command: "balance", description: "Profile & balance" },
+      { command: "deposit", description: "Add funds" },
+      { command: "check", description: "Check cards" },
+      { command: "gate", description: "Choose gate" },
+      { command: "refer", description: "Referral program" },
+      { command: "api", description: "API access" },
+      { command: "tasks", description: "Recent checks" },
+    ],
+  });
+  console.log(`zoru bot running against ${BASE}`);
+
   let offset = 0;
   for (;;) {
     try {
-      const updates =
-        (await tg("getUpdates", { offset, timeout: 50, allowed_updates: ["message"] })) ?? [];
-      for (const u of updates) {
+      const updates = await tg("getUpdates", { offset, timeout: 30, allowed_updates: ["message", "callback_query"] });
+      for (const u of updates ?? []) {
         offset = u.update_id + 1;
-        if (u.message) handleMessage(u.message).catch((e) => console.error("handler:", e));
+        const run = u.message ? handleMessage(u.message) : u.callback_query ? handleCallback(u.callback_query) : null;
+        if (run)
+          run.catch(async (e) => {
+            console.error("handler error", e);
+            const chat = u.message?.chat?.id ?? u.callback_query?.message?.chat?.id;
+            if (chat) await menu(chat, `⚠️ ${esc(e.message || "Something went wrong")}`).catch(() => {});
+          });
       }
     } catch (e) {
-      console.error("poll error:", e.message);
+      console.error("poll error", e);
       await new Promise((r) => setTimeout(r, 3000));
     }
   }

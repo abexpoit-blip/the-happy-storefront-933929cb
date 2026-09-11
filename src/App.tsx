@@ -43,6 +43,7 @@ const Checker = lazy(() => import("./pages/Checker"));
 const AdminSupport = lazy(() => import("./pages/AdminSupport"));
 const AdminCheckerLogs = lazy(() => import("./pages/AdminCheckerLogs"));
 const AdminApiKeys = lazy(() => import("./pages/AdminApiKeys"));
+const AdminBotUsers = lazy(() => import("./pages/AdminBotUsers"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 enforceSelfHostedBackend();
@@ -98,6 +99,7 @@ const App = () => (
             <Route path="/admin/support" element={<AdminRoute><AdminSupport /></AdminRoute>} />
             <Route path="/admin/checker" element={<AdminRoute><AdminCheckerLogs /></AdminRoute>} />
             <Route path="/admin/api-keys" element={<AdminRoute><AdminApiKeys /></AdminRoute>} />
+            <Route path="/admin/bot-users" element={<AdminRoute><AdminBotUsers /></AdminRoute>} />
 
             {/* Buyer routes — Scorpion-style: only 5 nav pages */}
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />

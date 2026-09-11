@@ -16,6 +16,7 @@ import { Route as ApiPublicCheckerResultRouteImport } from './routes/api/public/
 import { Route as ApiPublicCheckerKeyRouteImport } from './routes/api/public/checker.key'
 import { Route as ApiPublicCheckerCheckRouteImport } from './routes/api/public/checker.check'
 import { Route as ApiPublicCheckerBalanceRouteImport } from './routes/api/public/checker.balance'
+import { Route as ApiPublicBotActionRouteImport } from './routes/api/public/bot/$action'
 import { Route as ApiPublicBinBinRouteImport } from './routes/api/public/bin.$bin'
 
 const SplatRoute = SplatRouteImport.update({
@@ -54,6 +55,11 @@ const ApiPublicCheckerBalanceRoute = ApiPublicCheckerBalanceRouteImport.update({
   path: '/api/public/checker/balance',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicBotActionRoute = ApiPublicBotActionRouteImport.update({
+  id: '/api/public/bot/$action',
+  path: '/api/public/bot/$action',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicBinBinRoute = ApiPublicBinBinRouteImport.update({
   id: '/api/public/bin/$bin',
   path: '/api/public/bin/$bin',
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/$': typeof SplatRoute
   '/api/public/deposit-callback': typeof ApiPublicDepositCallbackRoute
   '/api/public/bin/$bin': typeof ApiPublicBinBinRoute
+  '/api/public/bot/$action': typeof ApiPublicBotActionRoute
   '/api/public/checker/balance': typeof ApiPublicCheckerBalanceRoute
   '/api/public/checker/check': typeof ApiPublicCheckerCheckRoute
   '/api/public/checker/key': typeof ApiPublicCheckerKeyRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/$': typeof SplatRoute
   '/api/public/deposit-callback': typeof ApiPublicDepositCallbackRoute
   '/api/public/bin/$bin': typeof ApiPublicBinBinRoute
+  '/api/public/bot/$action': typeof ApiPublicBotActionRoute
   '/api/public/checker/balance': typeof ApiPublicCheckerBalanceRoute
   '/api/public/checker/check': typeof ApiPublicCheckerCheckRoute
   '/api/public/checker/key': typeof ApiPublicCheckerKeyRoute
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/$': typeof SplatRoute
   '/api/public/deposit-callback': typeof ApiPublicDepositCallbackRoute
   '/api/public/bin/$bin': typeof ApiPublicBinBinRoute
+  '/api/public/bot/$action': typeof ApiPublicBotActionRoute
   '/api/public/checker/balance': typeof ApiPublicCheckerBalanceRoute
   '/api/public/checker/check': typeof ApiPublicCheckerCheckRoute
   '/api/public/checker/key': typeof ApiPublicCheckerKeyRoute
@@ -98,6 +107,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/api/public/deposit-callback'
     | '/api/public/bin/$bin'
+    | '/api/public/bot/$action'
     | '/api/public/checker/balance'
     | '/api/public/checker/check'
     | '/api/public/checker/key'
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/api/public/deposit-callback'
     | '/api/public/bin/$bin'
+    | '/api/public/bot/$action'
     | '/api/public/checker/balance'
     | '/api/public/checker/check'
     | '/api/public/checker/key'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/api/public/deposit-callback'
     | '/api/public/bin/$bin'
+    | '/api/public/bot/$action'
     | '/api/public/checker/balance'
     | '/api/public/checker/check'
     | '/api/public/checker/key'
@@ -129,6 +141,7 @@ export interface RootRouteChildren {
   SplatRoute: typeof SplatRoute
   ApiPublicDepositCallbackRoute: typeof ApiPublicDepositCallbackRoute
   ApiPublicBinBinRoute: typeof ApiPublicBinBinRoute
+  ApiPublicBotActionRoute: typeof ApiPublicBotActionRoute
   ApiPublicCheckerBalanceRoute: typeof ApiPublicCheckerBalanceRoute
   ApiPublicCheckerCheckRoute: typeof ApiPublicCheckerCheckRoute
   ApiPublicCheckerKeyRoute: typeof ApiPublicCheckerKeyRoute
@@ -186,6 +199,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCheckerBalanceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/bot/$action': {
+      id: '/api/public/bot/$action'
+      path: '/api/public/bot/$action'
+      fullPath: '/api/public/bot/$action'
+      preLoaderRoute: typeof ApiPublicBotActionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/bin/$bin': {
       id: '/api/public/bin/$bin'
       path: '/api/public/bin/$bin'
@@ -201,6 +221,7 @@ const rootRouteChildren: RootRouteChildren = {
   SplatRoute: SplatRoute,
   ApiPublicDepositCallbackRoute: ApiPublicDepositCallbackRoute,
   ApiPublicBinBinRoute: ApiPublicBinBinRoute,
+  ApiPublicBotActionRoute: ApiPublicBotActionRoute,
   ApiPublicCheckerBalanceRoute: ApiPublicCheckerBalanceRoute,
   ApiPublicCheckerCheckRoute: ApiPublicCheckerCheckRoute,
   ApiPublicCheckerKeyRoute: ApiPublicCheckerKeyRoute,
