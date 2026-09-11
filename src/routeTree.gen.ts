@@ -13,6 +13,7 @@ import { Route as SplatRouteImport } from './routes/$'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicDepositCallbackRouteImport } from './routes/api/public/deposit-callback'
 import { Route as ApiPublicCheckerResultRouteImport } from './routes/api/public/checker.result'
+import { Route as ApiPublicCheckerKeyRouteImport } from './routes/api/public/checker.key'
 import { Route as ApiPublicCheckerCheckRouteImport } from './routes/api/public/checker.check'
 import { Route as ApiPublicCheckerBalanceRouteImport } from './routes/api/public/checker.balance'
 import { Route as ApiPublicBinBinRouteImport } from './routes/api/public/bin.$bin'
@@ -38,6 +39,11 @@ const ApiPublicCheckerResultRoute = ApiPublicCheckerResultRouteImport.update({
   path: '/api/public/checker/result',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicCheckerKeyRoute = ApiPublicCheckerKeyRouteImport.update({
+  id: '/api/public/checker/key',
+  path: '/api/public/checker/key',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicCheckerCheckRoute = ApiPublicCheckerCheckRouteImport.update({
   id: '/api/public/checker/check',
   path: '/api/public/checker/check',
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/api/public/bin/$bin': typeof ApiPublicBinBinRoute
   '/api/public/checker/balance': typeof ApiPublicCheckerBalanceRoute
   '/api/public/checker/check': typeof ApiPublicCheckerCheckRoute
+  '/api/public/checker/key': typeof ApiPublicCheckerKeyRoute
   '/api/public/checker/result': typeof ApiPublicCheckerResultRoute
 }
 export interface FileRoutesByTo {
@@ -70,6 +77,7 @@ export interface FileRoutesByTo {
   '/api/public/bin/$bin': typeof ApiPublicBinBinRoute
   '/api/public/checker/balance': typeof ApiPublicCheckerBalanceRoute
   '/api/public/checker/check': typeof ApiPublicCheckerCheckRoute
+  '/api/public/checker/key': typeof ApiPublicCheckerKeyRoute
   '/api/public/checker/result': typeof ApiPublicCheckerResultRoute
 }
 export interface FileRoutesById {
@@ -80,6 +88,7 @@ export interface FileRoutesById {
   '/api/public/bin/$bin': typeof ApiPublicBinBinRoute
   '/api/public/checker/balance': typeof ApiPublicCheckerBalanceRoute
   '/api/public/checker/check': typeof ApiPublicCheckerCheckRoute
+  '/api/public/checker/key': typeof ApiPublicCheckerKeyRoute
   '/api/public/checker/result': typeof ApiPublicCheckerResultRoute
 }
 export interface FileRouteTypes {
@@ -91,6 +100,7 @@ export interface FileRouteTypes {
     | '/api/public/bin/$bin'
     | '/api/public/checker/balance'
     | '/api/public/checker/check'
+    | '/api/public/checker/key'
     | '/api/public/checker/result'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -100,6 +110,7 @@ export interface FileRouteTypes {
     | '/api/public/bin/$bin'
     | '/api/public/checker/balance'
     | '/api/public/checker/check'
+    | '/api/public/checker/key'
     | '/api/public/checker/result'
   id:
     | '__root__'
@@ -109,6 +120,7 @@ export interface FileRouteTypes {
     | '/api/public/bin/$bin'
     | '/api/public/checker/balance'
     | '/api/public/checker/check'
+    | '/api/public/checker/key'
     | '/api/public/checker/result'
   fileRoutesById: FileRoutesById
 }
@@ -119,6 +131,7 @@ export interface RootRouteChildren {
   ApiPublicBinBinRoute: typeof ApiPublicBinBinRoute
   ApiPublicCheckerBalanceRoute: typeof ApiPublicCheckerBalanceRoute
   ApiPublicCheckerCheckRoute: typeof ApiPublicCheckerCheckRoute
+  ApiPublicCheckerKeyRoute: typeof ApiPublicCheckerKeyRoute
   ApiPublicCheckerResultRoute: typeof ApiPublicCheckerResultRoute
 }
 
@@ -152,6 +165,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCheckerResultRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/checker/key': {
+      id: '/api/public/checker/key'
+      path: '/api/public/checker/key'
+      fullPath: '/api/public/checker/key'
+      preLoaderRoute: typeof ApiPublicCheckerKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/checker/check': {
       id: '/api/public/checker/check'
       path: '/api/public/checker/check'
@@ -183,6 +203,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicBinBinRoute: ApiPublicBinBinRoute,
   ApiPublicCheckerBalanceRoute: ApiPublicCheckerBalanceRoute,
   ApiPublicCheckerCheckRoute: ApiPublicCheckerCheckRoute,
+  ApiPublicCheckerKeyRoute: ApiPublicCheckerKeyRoute,
   ApiPublicCheckerResultRoute: ApiPublicCheckerResultRoute,
 }
 export const routeTree = rootRouteImport
