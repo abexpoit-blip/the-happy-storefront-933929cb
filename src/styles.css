@@ -198,3 +198,33 @@
 .gold-border {
   box-shadow: 0 0 0 1px hsl(var(--border)) !important;
 }
+
+/* --- Zoru Admin Luxury Dark Theme Overrides --- */
+.admin-scope,
+[data-admin="true"] {
+  --background: 222 47% 7%;
+  --foreground: 210 40% 98%;
+  --card: 222 47% 11%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222 47% 11%;
+  --popover-foreground: 210 40% 98%;
+  --border: 217 33% 20%;
+  --input: 222 47% 14%;
+  --muted: 222 47% 12%;
+  --muted-foreground: 215 20.2% 65.1%;
+  --secondary: 222 47% 14%;
+  --secondary-foreground: 210 40% 98%;
+}
+
+.admin-scope .glass,
+.admin-scope .glass-neon,
+.admin-scope .glass-gold,
+[data-admin="true"] .glass,
+[data-admin="true"] .glass-neon,
+[data-admin="true"] .glass-gold {
+  background: #0c1430 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #f1f5f9 !important;
+  box-shadow: 0 18px 40px -22px rgba(2, 8, 26, 0.9) !important;
+}
+

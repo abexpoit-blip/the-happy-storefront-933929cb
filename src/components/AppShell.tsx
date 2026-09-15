@@ -64,8 +64,9 @@ export const AppShell = ({ children, wide }: { children: ReactNode; wide?: boole
 
   return (
     <div
+      data-admin={isAdmin ? "true" : "false"}
       className={`min-h-screen flex flex-col transition-colors ${
-        isAdmin ? "bg-[#070d1e] text-slate-100" : "bg-white text-[#1a1a1a]"
+        isAdmin ? "admin-scope bg-[#070d1e] text-slate-100" : "bg-white text-[#1a1a1a]"
       }`}
       style={{ fontFamily: '"DM Sans", "Segoe UI", system-ui, sans-serif' }}
     >

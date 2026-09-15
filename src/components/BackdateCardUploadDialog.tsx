@@ -931,6 +931,17 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                   })}
                 </div>
               )}
+
+              <div className="flex justify-end pt-3 border-t border-slate-800">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => onOpenChange(false)}
+                  className="h-9 px-4 bg-[#1e293b] hover:bg-[#334155] text-slate-200 border border-slate-700 font-semibold rounded-lg transition"
+                >
+                  Close
+                </Button>
+              </div>
             </div>
           </TabsContent>
         </Tabs>
