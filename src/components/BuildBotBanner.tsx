@@ -1,9 +1,8 @@
-import { Link } from "react-router-dom";
-import { Bot, LifeBuoy, Sparkles } from "lucide-react";
+import { Send, Bot, Sparkles } from "lucide-react";
 
 /**
  * Animated call-to-action: build a CC shop or a checker bot.
- * Telegram is intentionally not linked yet — support only.
+ * Direct contact on Telegram: @Zorushop_service
  */
 export const BuildBotBanner = ({ className = "" }: { className?: string }) => (
   <div
@@ -22,19 +21,23 @@ export const BuildBotBanner = ({ className = "" }: { className?: string }) => (
           Wanna build a CC Shop or a Checker bot? Contact admin.
         </p>
         <p className="mt-0.5 text-[12.5px] text-[#5b6472]">
-          Message us on support — full shop, checker and API setup, built for you.
+          Contact us on Telegram — full shop, checker and API setup, custom built for you.
         </p>
       </div>
 
-      <Link
-        to="/support"
-        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#409eff] to-[#4fc3f7] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:brightness-110"
-      >
-        <LifeBuoy className="h-4 w-4" /> Message support
-      </Link>
-      <span className="inline-flex items-center gap-1 rounded-full border border-[#cfe4ff] bg-[#ecf5ff] px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#409eff]">
-        <Sparkles className="h-3 w-3" /> Custom build
-      </span>
+      <div className="flex items-center gap-2 flex-wrap">
+        <a
+          href="https://t.me/Zorushop_service"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#409eff] to-[#4fc3f7] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:brightness-110 shadow-sm"
+        >
+          <Send className="h-4 w-4" /> Contact @Zorushop_service
+        </a>
+        <span className="inline-flex items-center gap-1 rounded-full border border-[#cfe4ff] bg-[#ecf5ff] px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#409eff]">
+          <Sparkles className="h-3 w-3" /> Custom build
+        </span>
+      </div>
     </div>
   </div>
 );
