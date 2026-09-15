@@ -61,7 +61,6 @@ async function sendTelegramBroadcast(baseName, count, brand, country, price) {
     `⚡ <b>ZORU SHOP — NEW BASE UPDATE!</b> ⚡`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `📦 <b>Base:</b> <code>${cleanBase}</code>`,
-    `💳 <b>Stock Added:</b> <b>${count} PCS</b>`,
     `🏷 <b>Brand:</b> ${brand || "VISA/MC"}`,
     `🌍 <b>Country:</b> ${country || "MIX"}`,
     `💰 <b>Price:</b> $${Number(price || 1.5).toFixed(2)}`,
@@ -238,8 +237,8 @@ async function processActiveQueues() {
     if (queue.auto_announce) {
       const pub = baseName.replace(/^\s*(admin|seller)[\s_\-.:]+/i, "");
       await db.from("announcements").insert({
-        title: `Обновление базы: ${pub} (+${items.length} PCS)`,
-        body: `Добавлена свежая партия карт для базы ${pub}. Всего добавлено ${items.length} шт. Доступно в магазине.`,
+        title: `Base Update: ${pub}`,
+        body: `Fresh batch of verified cards added for base ${pub}. Available in shop now.`,
         kind: "update",
         created_at: now.toISOString(),
       }).catch((e) => console.error("Announcement insert error:", e.message));

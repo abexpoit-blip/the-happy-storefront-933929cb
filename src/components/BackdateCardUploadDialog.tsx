@@ -223,8 +223,8 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
           if (postAnnouncements) {
             const pubName = `${dateStr}_${brand}`;
             await adminCreateAnnouncement({
-              title: `Обновление базы: ${pubName} (+${brandCards.length} PCS)`,
-              body: `Добавлена свежая партия карт для базы ${pubName}. Доступно к покупке в магазине.`,
+              title: `Base Update: ${pubName}`,
+              body: `Fresh batch of verified cards added for base ${pubName}. Available now in shop.`,
               kind: "update",
               created_at: curDate.toISOString(),
             }).catch(() => {});
@@ -422,14 +422,14 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
               className="flex items-center gap-2 text-xs font-semibold py-2.5 data-[state=active]:bg-primary data-[state=active]:text-black"
             >
               <Calendar className="h-4 w-4" />
-              1. Back-Date Card Upload (অতীত তারিখ আপলোড)
+              1. Back-Date Card Upload
             </TabsTrigger>
             <TabsTrigger
               value="drip"
               className="flex items-center gap-2 text-xs font-semibold py-2.5 data-[state=active]:bg-primary data-[state=active]:text-black"
             >
               <Clock className="h-4 w-4" />
-              2. Daily Auto-Drip Scheduler (প্রতিদিন অটো রিলিজ)
+              2. Daily Auto-Drip Scheduler
             </TabsTrigger>
           </TabsList>
 
@@ -456,7 +456,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
             {/* Input & Parameters Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Start Date (শুরুর তারিখ)</Label>
+                <Label className="text-xs text-muted-foreground mb-1.5 block">Start Date</Label>
                 <Input
                   type="date"
                   value={startDate}
@@ -469,7 +469,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
               </div>
 
               <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Cards Per Day (প্রতিদিন কার্ড)</Label>
+                <Label className="text-xs text-muted-foreground mb-1.5 block">Cards Per Day</Label>
                 <Input
                   type="number"
                   min="1"
@@ -710,7 +710,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                   />
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground mb-1 block">Release Per Day (প্রতিদিন)</Label>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Release Per Day</Label>
                   <Input
                     type="number"
                     min="1"

@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import Seo from "@/components/Seo";
 import { BuildBotBanner } from "@/components/BuildBotBanner";
@@ -87,8 +88,12 @@ const Index = () => {
             )}
             {!loading && news.map((n) => (
               <div key={n.id}>
-                {n.label}
-                {n.count ? `,КОЛ-ВО:${n.count}` : ""}
+                <Link
+                  to={`/shop?base=${encodeURIComponent(n.label)}`}
+                  className="hover:underline hover:text-[#b71c1c] transition-colors"
+                >
+                  {n.label}
+                </Link>
               </div>
             ))}
           </div>

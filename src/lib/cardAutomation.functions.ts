@@ -83,7 +83,6 @@ export const broadcastChannelAlert = createServerFn({ method: "POST" })
       `⚡ <b>ZORU SHOP — NEW BASE UPDATE!</b> ⚡`,
       `━━━━━━━━━━━━━━━━━━━━━━`,
       `📦 <b>Base:</b> <code>${pBase}</code>`,
-      `💳 <b>Stock Added:</b> <b>${data.count} PCS</b>`,
       `🏷 <b>Brand:</b> ${brandStr}`,
       `🌍 <b>Country:</b> ${countryStr}`,
       `💰 <b>Price:</b> ${priceStr}`,
@@ -102,7 +101,7 @@ export const broadcastChannelAlert = createServerFn({ method: "POST" })
       inline_keyboard: [
         [
           { text: "🛒 Buy Cards Now", url: "https://zoru.cc/shop" },
-          { text: "🤖 Checker Bot", url: "https://t.me/ZoruCheckerbot" },
+          { text: "🤖 Telegram Checker Bot", url: "https://t.me/ZoruCheckerbot" },
         ],
         [
           { text: "💬 Support", url: "https://t.me/Zorushop_service" },
@@ -407,8 +406,8 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
     if (queue.auto_announce) {
       const pub = publicBase(baseName);
       await db.from("announcements").insert({
-        title: `Обновление базы: ${pub} (+${items.length} PCS)`,
-        body: `Добавлена свежая партия карт для базы ${pub}. Всего добавлено ${items.length} шт. Доступно в магазине.`,
+        title: `Base Update: ${pub}`,
+        body: `Fresh batch of verified cards added for base ${pub}. Available in shop now.`,
         kind: "update",
         created_at: today.toISOString(),
       }).catch(() => {});
@@ -426,7 +425,6 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
           `⚡ <b>ZORU SHOP — NEW BASE UPDATE!</b> ⚡`,
           `━━━━━━━━━━━━━━━━━━━━━━`,
           `📦 <b>Base:</b> <code>${pBase}</code>`,
-          `💳 <b>Stock Added:</b> <b>${items.length} PCS</b>`,
           `🏷 <b>Brand:</b> ${primaryBrand}`,
           `🌍 <b>Country:</b> ${countries}`,
           `💰 <b>Price:</b> $${Number(queue.price).toFixed(2)}`,
@@ -452,7 +450,7 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
                 inline_keyboard: [
                   [
                     { text: "🛒 Buy Cards Now", url: "https://zoru.cc/shop" },
-                    { text: "🤖 Checker Bot", url: "https://t.me/ZoruCheckerbot" },
+                    { text: "🤖 Telegram Checker Bot", url: "https://t.me/ZoruCheckerbot" },
                   ],
                   [
                     { text: "💬 Support", url: "https://t.me/Zorushop_service" },

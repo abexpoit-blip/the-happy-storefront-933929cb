@@ -255,8 +255,8 @@ const Admin = () => {
       // Auto-post site announcement
       const baseLabel = rows[0]?.base?.replace(/^\s*admin[\s_\-.:]+/i, "") || "NEW_BASE";
       await adminCreateAnnouncement({
-        title: `Обновление базы: ${baseLabel} (+${count} PCS)`,
-        body: `Добавлена свежая партия карт базы ${baseLabel}. Всего ${count} шт. Доступно в магазине.`,
+        title: `Base Update: ${baseLabel}`,
+        body: `Fresh batch of verified cards added for base ${baseLabel}. Available now in shop.`,
         kind: "update",
       }).catch(() => {});
 
