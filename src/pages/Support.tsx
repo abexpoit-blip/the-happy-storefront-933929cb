@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import Seo from "@/components/Seo";
 import { toast } from "sonner";
-import { LifeBuoy, Plus, Send, Loader2, MessageSquare, ShieldCheck, Clock, CheckCircle2 } from "lucide-react";
+import { LifeBuoy, Plus, Send, Loader2, MessageSquare, ShieldCheck, Clock, CheckCircle2, MessageCircle, Bot } from "lucide-react";
 import {
   listMyTickets,
   listMessages,
@@ -138,6 +138,85 @@ const Support = () => {
         >
           <Plus className="h-4 w-4" /> New ticket
         </button>
+      </div>
+
+      {/* Official Telegram Channels & Direct Support */}
+      <div className="mt-4 rounded-2xl border border-[#e6e6e6] bg-white p-5 shadow-[0_6px_22px_rgba(20,30,60,0.05)]">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="text-[14px] font-bold text-[#1f2d3d] flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-[#229ed9] animate-pulse" />
+            Official Telegram Channels & Support
+          </div>
+          <span className="text-[11px] font-semibold text-[#64748b] bg-[#f1f5f9] px-2.5 py-1 rounded-md">
+            Verified Links
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <a
+            href="https://t.me/zorushop"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-3 p-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] hover:bg-[#eff6ff] hover:border-[#3b82f6]/50 transition group"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#229ed9]/15 text-[#229ed9] group-hover:scale-110 transition-transform">
+              <Send className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold text-[#64748b] uppercase tracking-wider">Main Group</div>
+              <div className="text-[13px] font-bold text-[#0f172a] truncate group-hover:text-[#229ed9]">Zoru Main Group</div>
+              <div className="text-[11px] text-[#229ed9] truncate">t.me/zorushop</div>
+            </div>
+          </a>
+
+          <a
+            href="https://t.me/zorushop_backup"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-3 p-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] hover:bg-[#eff6ff] hover:border-[#3b82f6]/50 transition group"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#3b82f6]/15 text-[#3b82f6] group-hover:scale-110 transition-transform">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold text-[#64748b] uppercase tracking-wider">Backup Group</div>
+              <div className="text-[13px] font-bold text-[#0f172a] truncate group-hover:text-[#3b82f6]">Zoru Back up Group</div>
+              <div className="text-[11px] text-[#3b82f6] truncate">t.me/zorushop_backup</div>
+            </div>
+          </a>
+
+          <a
+            href="https://t.me/Zorushop_service"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-3 p-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] hover:bg-[#fef3c7] hover:border-[#f59e0b]/50 transition group"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f59e0b]/15 text-[#f59e0b] group-hover:scale-110 transition-transform">
+              <MessageCircle className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold text-[#64748b] uppercase tracking-wider">Direct Support</div>
+              <div className="text-[13px] font-bold text-[#0f172a] truncate group-hover:text-[#d97706]">@Zorushop_service</div>
+              <div className="text-[11px] text-[#d97706] truncate">Telegram Account</div>
+            </div>
+          </a>
+
+          <a
+            href="https://t.me/ZoruCheckerbot"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-3 p-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] hover:bg-[#f0fdf4] hover:border-[#22c55e]/50 transition group"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#22c55e]/15 text-[#22c55e] group-hover:scale-110 transition-transform">
+              <Bot className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold text-[#64748b] uppercase tracking-wider">Fast Checker Bot</div>
+              <div className="text-[13px] font-bold text-[#0f172a] truncate group-hover:text-[#16a34a]">Zoru Checker Bot</div>
+              <div className="text-[11px] text-[#16a34a] truncate">t.me/ZoruCheckerbot</div>
+            </div>
+          </a>
+        </div>
       </div>
 
       {composing && (

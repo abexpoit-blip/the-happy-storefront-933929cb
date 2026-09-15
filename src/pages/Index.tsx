@@ -4,6 +4,7 @@ import Seo from "@/components/Seo";
 import { BuildBotBanner } from "@/components/BuildBotBanner";
 import { listAnnouncements, type Announcement } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
+import { Send, ShieldCheck, MessageCircle, Bot } from "lucide-react";
 
 /**
  * Buyer HOME — Zoru Shop:
@@ -142,15 +143,77 @@ const Index = () => {
           </div>
         </Panel>
 
-        <Panel title="Контактная информация">
-          <div className="px-6 py-5 space-y-3 text-[13px] text-[#333] border-l-2 border-[#e6e6e6] ml-3 leading-[1.7]">
-            <p>Остерегайтесь поддельной поддержки. Официальная поддержка Zoru Shop доступна только через тикеты на сайте или через наш официальный Telegram-бот.</p>
-            <div>
-              <div className="text-[#333] mb-1">Поддержка:</div>
-              <p className="block">Через систему тикетов на сайте — раздел «Поддержка» в личном кабинете или через Telegram-бот.</p>
+        <Panel title="Контактная информация / Official Contacts">
+          <div className="px-6 py-5 space-y-3.5 text-[13px] text-[#333] border-l-2 border-[#e6e6e6] ml-3 leading-[1.7]">
+            <p className="text-[#555]">
+              Остерегайтесь фейков и мошенников. Все официальные ресурсы и поддержка <b>Zoru Shop</b> перечислены ниже:
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <a
+                href="https://t.me/zorushop"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2.5 p-2.5 rounded-lg border border-[#e0e6ed] bg-[#f8fafc] hover:bg-[#eff6ff] hover:border-[#3b82f6]/40 transition group"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#229ed9]/15 text-[#229ed9] group-hover:scale-110 transition-transform">
+                  <Send className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold text-[#64748b] uppercase tracking-wider">Main Channel</div>
+                  <div className="text-[13px] font-bold text-[#0f172a] truncate group-hover:text-[#229ed9]">Zoru Main Group</div>
+                </div>
+              </a>
+
+              <a
+                href="https://t.me/zorushop_backup"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2.5 p-2.5 rounded-lg border border-[#e0e6ed] bg-[#f8fafc] hover:bg-[#eff6ff] hover:border-[#3b82f6]/40 transition group"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#3b82f6]/15 text-[#3b82f6] group-hover:scale-110 transition-transform">
+                  <ShieldCheck className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold text-[#64748b] uppercase tracking-wider">Backup Channel</div>
+                  <div className="text-[13px] font-bold text-[#0f172a] truncate group-hover:text-[#3b82f6]">Zoru Back up Group</div>
+                </div>
+              </a>
+
+              <a
+                href="https://t.me/Zorushop_service"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2.5 p-2.5 rounded-lg border border-[#e0e6ed] bg-[#f8fafc] hover:bg-[#fef3c7] hover:border-[#f59e0b]/40 transition group"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f59e0b]/15 text-[#f59e0b] group-hover:scale-110 transition-transform">
+                  <MessageCircle className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold text-[#64748b] uppercase tracking-wider">Direct Support</div>
+                  <div className="text-[13px] font-bold text-[#0f172a] truncate group-hover:text-[#d97706]">@Zorushop_service</div>
+                </div>
+              </a>
+
+              <a
+                href="https://t.me/ZoruCheckerbot"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2.5 p-2.5 rounded-lg border border-[#e0e6ed] bg-[#f8fafc] hover:bg-[#f0fdf4] hover:border-[#22c55e]/40 transition group"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#22c55e]/15 text-[#22c55e] group-hover:scale-110 transition-transform">
+                  <Bot className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold text-[#64748b] uppercase tracking-wider">Telegram Bot</div>
+                  <div className="text-[13px] font-bold text-[#0f172a] truncate group-hover:text-[#16a34a]">Zoru Checker Bot</div>
+                </div>
+              </a>
             </div>
-            <p>Ответы на вопросы, предложения и жалобы принимаются исключительно через тикеты на этом сайте.</p>
-            <p className="text-[#d32f2f] font-semibold pt-2">Приглашаем продавцов присоединиться к нашей платформе</p>
+
+            <p className="text-[#d32f2f] font-semibold pt-2 text-[12px]">
+              ★ Приглашаем проверенных продавцов и поставщиков к сотрудничеству через тикеты или @Zorushop_service.
+            </p>
           </div>
         </Panel>
       </div>

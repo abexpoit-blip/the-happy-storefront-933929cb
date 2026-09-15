@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { authApi, setToken, ApiError } from "@/lib/api";
 import { toast } from "sonner";
-import { Loader2, User as UserIcon, Lock, Eye, EyeOff, ShieldCheck, Zap, BadgeCheck, Send, Gift } from "lucide-react";
+import { Loader2, User as UserIcon, Lock, Eye, EyeOff, ShieldCheck, Zap, BadgeCheck, Send, Gift, MessageCircle, Bot } from "lucide-react";
 import Seo from "@/components/Seo";
 import { useAuth } from "@/hooks/useAuth";
 import { ScorpionAuthShell } from "@/components/ScorpionAuthShell";
@@ -241,8 +241,54 @@ const Auth = () => {
           ))}
         </div>
 
+        {/* Official Telegram Links */}
+        <div className="mt-5 pt-4 border-t border-white/10 space-y-2">
+          <div className="text-[11px] font-semibold tracking-wider text-center text-[#ffb300]/90 uppercase">
+            Official Zoru Community & Support
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-[11px]">
+            <a
+              href="https://t.me/zorushop"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 p-2 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#229ed9]/60 hover:bg-[#229ed9]/10 text-white/80 hover:text-white transition group"
+            >
+              <Send className="h-3.5 w-3.5 text-[#229ed9] shrink-0 group-hover:scale-110 transition-transform" />
+              <span className="truncate font-medium">Main Group</span>
+            </a>
+            <a
+              href="https://t.me/zorushop_backup"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 p-2 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#3b82f6]/60 hover:bg-[#3b82f6]/10 text-white/80 hover:text-white transition group"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-[#3b82f6] shrink-0 group-hover:scale-110 transition-transform" />
+              <span className="truncate font-medium">Backup Group</span>
+            </a>
+            <a
+              href="https://t.me/Zorushop_service"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 p-2 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#f59e0b]/60 hover:bg-[#f59e0b]/10 text-white/80 hover:text-white transition group"
+            >
+              <MessageCircle className="h-3.5 w-3.5 text-[#f59e0b] shrink-0 group-hover:scale-110 transition-transform" />
+              <span className="truncate font-medium">@Zorushop_service</span>
+            </a>
+            <a
+              href="https://t.me/ZoruCheckerbot"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 p-2 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#22c55e]/60 hover:bg-[#22c55e]/10 text-white/80 hover:text-white transition group"
+            >
+              <Bot className="h-3.5 w-3.5 text-[#22c55e] shrink-0 group-hover:scale-110 transition-transform" />
+              <span className="truncate font-medium">Checker Bot</span>
+            </a>
+          </div>
+        </div>
+
       </ScorpionAuthShell>
     </>
+
   );
 };
 
