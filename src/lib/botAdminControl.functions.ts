@@ -149,7 +149,10 @@ export const getBroadcastHistory = createServerFn({ method: "GET" })
       .select("id, text, sent_count, failed_count, target, created_at")
       .order("created_at", { ascending: false })
       .limit(20);
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.warn("bot_broadcasts table lookup warning (may need SQL migration):", error.message);
+      return [];
+    }
     return (data ?? []) as BroadcastRow[];
   });
 

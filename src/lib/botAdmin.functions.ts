@@ -35,33 +35,53 @@ export const listBotUsers = createServerFn({ method: "POST" })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = supabaseAdmin as any;
 
-    let query = db
-      .from("telegram_accounts")
-      .select("telegram_id, user_id, username, first_name, banned, created_at, last_seen")
-      .order("last_seen", { ascending: false })
-      .limit(300);
-    const search = data.search?.trim();
-    if (search) query = query.ilike("username", `%${search}%`);
-
-    const { data: accounts, error } = await query;
-    if (error) throw new Error(error.message);
-    const rows = (accounts ?? []) as {
+    let rows: {
       telegram_id: number | string;
       user_id: string;
       username: string | null;
       first_name: string | null;
-      banned: boolean;
-      created_at: string;
-      last_seen: string;
-    }[];
+      banned?: boolean;
+      created_at?: string;
+      last_seen?: string;
+    }[] = [];
+
+    try {
+      let query = db
+        .from("telegram_accounts")
+        .select("telegram_id, user_id, username, first_name, banned, created_at, last_seen")
+        .order("last_seen", { ascending: false })
+        .limit(300);
+      const search = data.search?.trim();
+      if (search) query = query.ilike("username", `%${search}%`);
+
+      const { data: accounts, error } = await query;
+      if (error) {
+        console.warn("Primary telegram_accounts query warning, attempting fallback:", error.message);
+        let fbQuery = db.from("telegram_accounts").select("*").limit(300);
+        if (search) fbQuery = fbQuery.ilike("username", `%${search}%`);
+        const fbRes = await fbQuery;
+        rows = (fbRes.data ?? []) as typeof rows;
+      } else {
+        rows = (accounts ?? []) as typeof rows;
+      }
+    } catch (err) {
+      console.warn("telegram_accounts query caught exception:", err);
+      const fbRes = await db.from("telegram_accounts").select("*").limit(300);
+      rows = (fbRes.data ?? []) as typeof rows;
+    }
+
     if (!rows.length) return [];
 
-    const ids = rows.map((r) => r.user_id);
-    const [{ data: profiles }, { data: checks }, { data: deposits }] = await Promise.all([
+    const ids = rows.map((r) => r.user_id).filter(Boolean);
+    const [profilesRes, checksRes, depositsRes] = await Promise.allSettled([
       db.from("profiles").select("id, balance, bonus_balance, blocked").in("id", ids),
       db.from("self_checks").select("user_id, total").in("user_id", ids),
       db.from("deposits").select("user_id, amount, status").in("user_id", ids).eq("status", "approved"),
     ]);
+
+    const profiles = profilesRes.status === "fulfilled" ? profilesRes.value.data ?? [] : [];
+    const checks = checksRes.status === "fulfilled" ? checksRes.value.data ?? [] : [];
+    const deposits = depositsRes.status === "fulfilled" ? depositsRes.value.data ?? [] : [];
 
     const profileMap = new Map(
       ((profiles ?? []) as { id: string; balance: number; bonus_balance: number; blocked: boolean }[]).map(
@@ -89,8 +109,8 @@ export const listBotUsers = createServerFn({ method: "POST" })
         bonus: Number(p?.bonus_balance ?? 0),
         checks: checkMap.get(r.user_id) ?? 0,
         deposited: depositMap.get(r.user_id) ?? 0,
-        createdAt: r.created_at,
-        lastSeen: r.last_seen,
+        createdAt: r.created_at || new Date().toISOString(),
+        lastSeen: r.last_seen || r.created_at || new Date().toISOString(),
       };
     });
   });

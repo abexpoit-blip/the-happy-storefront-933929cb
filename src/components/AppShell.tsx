@@ -11,7 +11,14 @@ import { UserAvatar } from "@/components/UserAvatar";
 import dragonLogo from "@/assets/dragon-logo.png";
 
 
-const buyerNav = [
+interface BuyerNavItem {
+  to: string;
+  en: string;
+  ru: string;
+  end?: boolean;
+}
+
+const buyerNav: BuyerNavItem[] = [
   { to: "/", en: "HOME", ru: "ГЛАВНАЯ", end: true },
   { to: "/shop", en: "SHOP", ru: "МАГАЗИН" },
   { to: "/bins", en: "BIN", ru: "BIN" },
@@ -31,7 +38,8 @@ export const AppShell = ({ children, wide }: { children: ReactNode; wide?: boole
   const { lang } = useLanguage();
   const settings = useSiteSettings();
   const nav = useNavigate();
-  useLocation();
+  const loc = useLocation();
+  const isAdmin = loc.pathname.startsWith("/admin");
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -56,7 +64,9 @@ export const AppShell = ({ children, wide }: { children: ReactNode; wide?: boole
 
   return (
     <div
-      className="min-h-screen bg-white text-[#1a1a1a] flex flex-col"
+      className={`min-h-screen flex flex-col transition-colors ${
+        isAdmin ? "bg-[#070d1e] text-slate-100" : "bg-white text-[#1a1a1a]"
+      }`}
       style={{ fontFamily: '"DM Sans", "Segoe UI", system-ui, sans-serif' }}
     >
       {settings.site_maintenance && profile?.role === "admin" && (
@@ -93,7 +103,7 @@ export const AppShell = ({ children, wide }: { children: ReactNode; wide?: boole
                 <NavLink
                   key={n.to}
                   to={n.to}
-                  end={(n as any).end}
+                  end={n.end}
                   className={({ isActive }) =>
                     `h-full px-4 flex items-center transition-colors border-b-2 relative ${
                       isActive
@@ -140,7 +150,7 @@ export const AppShell = ({ children, wide }: { children: ReactNode; wide?: boole
               <NavLink
                 key={n.to}
                 to={n.to}
-                end={(n as any).end}
+                end={n.end}
                 onClick={() => setDrawerOpen(false)}
                 className={({ isActive }) =>
                   `block px-4 py-3 text-sm border-l-2 ${
@@ -161,17 +171,25 @@ export const AppShell = ({ children, wide }: { children: ReactNode; wide?: boole
       </header>
 
       {/* SUB BAR */}
-      <div className="bg-white border-b border-[#e6e6e6]">
+      <div className={isAdmin ? "bg-[#0b1329] border-b border-slate-800/80" : "bg-white border-b border-[#e6e6e6]"}>
         <div className="mx-auto max-w-[1400px] px-3 sm:px-6 min-h-16 py-2.5 flex flex-wrap items-center justify-end gap-2.5 sm:gap-3.5 text-[13px] sm:text-[14px]">
           <LanguageToggle />
-          <span className="px-3 sm:px-3.5 py-2 border border-[#e6e6e6] text-[#2196f3] max-w-[140px] sm:max-w-none truncate">
-
-
+          <span
+            className={`px-3 sm:px-3.5 py-2 font-medium rounded-lg max-w-[140px] sm:max-w-none truncate ${
+              isAdmin
+                ? "border border-slate-700/80 bg-[#121c3b] text-[#38bdf8]"
+                : "border border-[#e6e6e6] text-[#2196f3]"
+            }`}
+          >
             {uname}
           </span>
           <Link
             to="/recharge"
-            className="px-3 sm:px-3.5 py-2 border border-[#e6e6e6] text-[#2fb344] hover:bg-[#f4fbf5] transition font-medium whitespace-nowrap"
+            className={`px-3 sm:px-3.5 py-2 font-mono font-bold rounded-lg transition whitespace-nowrap ${
+              isAdmin
+                ? "border border-emerald-500/40 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
+                : "border border-[#e6e6e6] text-[#2fb344] hover:bg-[#f4fbf5]"
+            }`}
           >
             $ {balance}
           </Link>
@@ -179,55 +197,69 @@ export const AppShell = ({ children, wide }: { children: ReactNode; wide?: boole
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setMenuOpen((v) => !v)}
-              className="group flex items-center gap-2 rounded-full border border-[#e6e6e6] bg-gradient-to-b from-white to-[#f4f6f8] pl-1 pr-2 py-1 hover:border-[#2196f3]/60 hover:shadow-[0_6px_16px_-10px_rgba(33,150,243,0.9)] transition"
+              className={`group flex items-center gap-2 rounded-full border pl-1 pr-2 py-1 transition ${
+                isAdmin
+                  ? "border-slate-700 bg-[#121c3b] hover:border-[#38bdf8]/60 hover:shadow-[0_6px_16px_-10px_rgba(56,189,248,0.5)]"
+                  : "border-[#e6e6e6] bg-gradient-to-b from-white to-[#f4f6f8] hover:border-[#2196f3]/60 hover:shadow-[0_6px_16px_-10px_rgba(33,150,243,0.9)]"
+              }`}
             >
               <span className="relative h-11 w-11 rounded-full p-[2px] bg-[conic-gradient(from_180deg,#42a5f5,#7e57c2,#f9a825,#42a5f5)] shadow-[0_6px_14px_-8px_rgba(31,45,61,0.9)]">
                 <UserAvatar username={uname} avatarUrl={profile?.avatar_url} className="h-full w-full rounded-full object-cover" />
                 <span className="absolute -bottom-0 -right-0 h-2.5 w-2.5 rounded-full bg-[#2fb344] ring-2 ring-white" />
               </span>
               <span className="hidden sm:flex flex-col items-start leading-tight">
-                <span className="text-[13px] font-semibold text-[#1f2d3d] max-w-[130px] truncate">{uname}</span>
-                <span className="text-[11px] text-[#8a97a5]">
+                <span className={`text-[13px] font-semibold max-w-[130px] truncate ${isAdmin ? "text-white" : "text-[#1f2d3d]"}`}>
+                  {uname}
+                </span>
+                <span className={`text-[11px] font-bold ${isAdmin ? "text-[#38bdf8]" : "text-[#8a97a5]"}`}>
                   {profile?.role === "admin" ? "ADMIN" : "PREMIUM"}
                 </span>
               </span>
-              <ChevronDown className="h-3.5 w-3.5 text-[#666] group-hover:text-[#2196f3]" />
+              <ChevronDown className={`h-3.5 w-3.5 ${isAdmin ? "text-slate-400 group-hover:text-[#38bdf8]" : "text-[#666] group-hover:text-[#2196f3]"}`} />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-60 rounded-xl bg-white border border-[#e6e6e6] shadow-[0_20px_50px_-24px_rgba(31,45,61,0.85)] z-20 text-sm overflow-hidden">
-                <div className="flex items-center gap-3 px-3 py-3 bg-gradient-to-r from-[#304156] to-[#3d5570] text-white">
+              <div
+                className={`absolute right-0 top-full mt-2 w-60 rounded-xl border shadow-2xl z-50 text-sm overflow-hidden ${
+                  isAdmin ? "bg-[#0c1430] border-slate-700 text-white" : "bg-white border-[#e6e6e6] text-[#333]"
+                }`}
+              >
+                <div className="flex items-center gap-3 px-3 py-3 bg-gradient-to-r from-[#192749] to-[#0c1430] text-white border-b border-slate-800">
                   <span className="h-11 w-11 rounded-full p-[2px] bg-[conic-gradient(from_180deg,#42a5f5,#7e57c2,#f9a825,#42a5f5)]">
                     <UserAvatar username={uname} avatarUrl={profile?.avatar_url} className="h-full w-full rounded-full object-cover" />
                   </span>
                   <div className="min-w-0">
                     <div className="text-[13px] font-semibold truncate">{uname}</div>
-                    <div className="text-[11px] text-white/70">$ {balance}</div>
+                    <div className="text-[11px] text-white/70 font-mono">$ {balance}</div>
                   </div>
                 </div>
                 <Link
                   to="/profile"
                   onClick={() => setMenuOpen(false)}
-                  className="block px-3 py-2 hover:bg-[#f7f7f7] text-[#333]"
+                  className={`block px-3.5 py-2.5 transition ${isAdmin ? "hover:bg-white/5 text-slate-200 hover:text-white" : "hover:bg-[#f7f7f7] text-[#333]"}`}
                 >
                   {lang === "en" ? "Profile" : "Профиль"}
                 </Link>
                 <Link
                   to="/orders"
                   onClick={() => setMenuOpen(false)}
-                  className="block px-3 py-2 hover:bg-[#f7f7f7] text-[#333]"
+                  className={`block px-3.5 py-2.5 transition ${isAdmin ? "hover:bg-white/5 text-slate-200 hover:text-white" : "hover:bg-[#f7f7f7] text-[#333]"}`}
                 >
                   {lang === "en" ? "Orders" : "Заказы"}
                 </Link>
                 <Link
                   to="/recharge"
                   onClick={() => setMenuOpen(false)}
-                  className="block px-3 py-2 hover:bg-[#f7f7f7] text-[#333]"
+                  className={`block px-3.5 py-2.5 transition ${isAdmin ? "hover:bg-white/5 text-slate-200 hover:text-white" : "hover:bg-[#f7f7f7] text-[#333]"}`}
                 >
                   {lang === "en" ? "Recharge" : "Пополнение"}
                 </Link>
                 <button
                   onClick={async () => { setMenuOpen(false); await signOut(); nav("/auth"); }}
-                  className="w-full text-left px-3 py-2 hover:bg-[#fff5f5] flex items-center gap-2 text-[#d32f2f] border-t border-[#eee]"
+                  className={`w-full text-left px-3.5 py-2.5 flex items-center gap-2 border-t transition ${
+                    isAdmin
+                      ? "hover:bg-red-500/10 text-red-400 border-slate-800"
+                      : "hover:bg-[#fff5f5] text-[#d32f2f] border-[#eee]"
+                  }`}
                 >
                   <LogOut className="h-3.5 w-3.5" /> {lang === "en" ? "Log out" : "Выйти"}
                 </button>

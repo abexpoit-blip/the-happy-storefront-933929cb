@@ -32,6 +32,7 @@ import {
   ChevronRight,
   Database,
   ArrowRight,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -416,17 +417,17 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "backdate" | "drip")} className="w-full">
-          <TabsList className="grid grid-cols-2 bg-secondary/30 p-1 border border-border/40 rounded-xl mb-6">
+          <TabsList className="grid grid-cols-2 bg-[#121c3b] p-1.5 border border-slate-700/80 rounded-xl mb-6 shadow-md">
             <TabsTrigger
               value="backdate"
-              className="flex items-center gap-2 text-xs font-semibold py-2.5 data-[state=active]:bg-primary data-[state=active]:text-black"
+              className="flex items-center justify-center gap-2 text-xs font-bold py-2.5 rounded-lg transition-all text-slate-300 data-[state=active]:bg-[#38bdf8] data-[state=active]:text-[#07101f] data-[state=active]:shadow-lg"
             >
               <Calendar className="h-4 w-4" />
               1. Back-Date Card Upload
             </TabsTrigger>
             <TabsTrigger
               value="drip"
-              className="flex items-center gap-2 text-xs font-semibold py-2.5 data-[state=active]:bg-primary data-[state=active]:text-black"
+              className="flex items-center justify-center gap-2 text-xs font-bold py-2.5 rounded-lg transition-all text-slate-300 data-[state=active]:bg-[#38bdf8] data-[state=active]:text-[#07101f] data-[state=active]:shadow-lg"
             >
               <Clock className="h-4 w-4" />
               2. Daily Auto-Drip Scheduler
@@ -437,17 +438,17 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
           {/* TAB 1: BACK-DATE CARD UPLOAD */}
           {/* ========================================================= */}
           <TabsContent value="backdate" className="space-y-5">
-            <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 text-xs text-muted-foreground flex items-start gap-3">
-              <Zap className="h-5 w-5 text-primary-glow flex-shrink-0 mt-0.5" />
+            <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 text-xs text-slate-300 flex items-start gap-3 shadow-md">
+              <Zap className="h-5 w-5 text-[#38bdf8] flex-shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold text-primary-glow mb-1">
+                <p className="font-bold text-[#38bdf8] mb-1">
                   How Historical Back-Date Upload Works:
                 </p>
-                <p>
+                <p className="leading-relaxed">
                   You provide raw bulk card lines (any format — auto-format cleans and dedupes automatically).
                   The system distributes your cards <b>day by day</b> from your specified Start Date up to today
                   (e.g. 20 cards per day for the last 6 months). For each day, cards are created with that day's
-                  timestamp, dated BASE name (<code className="text-primary-glow">2026_03_15_VISA</code>), stock ticker
+                  timestamp, dated BASE name (<code className="text-[#38bdf8] font-bold">2026_03_15_VISA</code>), stock ticker
                   updates, and site announcements so customers see a legitimate history of stock updates!
                 </p>
               </div>
@@ -456,20 +457,20 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
             {/* Input & Parameters Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Start Date</Label>
+                <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Start Date</Label>
                 <Input
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="bg-secondary/40 border-border/40 text-xs"
+                  className="bg-[#121c3b] border-slate-700 text-white font-medium text-xs rounded-lg h-10 px-3 focus:border-[#38bdf8] shadow-inner"
                 />
-                <span className="text-[10px] text-muted-foreground mt-1 block">
+                <span className="text-[11px] text-slate-400 mt-1 block">
                   Default: 6 months ago ({defaultSixMonthsAgo})
                 </span>
               </div>
 
               <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Cards Per Day</Label>
+                <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Cards Per Day</Label>
                 <Input
                   type="number"
                   min="1"
@@ -477,15 +478,15 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                   value={cardsPerDay}
                   onChange={(e) => setCardsPerDay(e.target.value)}
                   placeholder="20"
-                  className="bg-secondary/40 border-border/40 text-xs font-mono"
+                  className="bg-[#121c3b] border-slate-700 text-white font-mono font-medium text-xs rounded-lg h-10 px-3 focus:border-[#38bdf8] shadow-inner"
                 />
-                <span className="text-[10px] text-muted-foreground mt-1 block">
+                <span className="text-[11px] text-slate-400 mt-1 block">
                   Standard recommendation: 20 pcs / day
                 </span>
               </div>
 
               <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Default Card Price ($)</Label>
+                <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Default Card Price ($)</Label>
                 <Input
                   type="number"
                   step="0.10"
@@ -493,20 +494,20 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                   value={backdatePrice}
                   onChange={(e) => setBackdatePrice(e.target.value)}
                   placeholder="1.50"
-                  className="bg-secondary/40 border-border/40 text-xs font-mono"
+                  className="bg-[#121c3b] border-slate-700 text-white font-mono font-medium text-xs rounded-lg h-10 px-3 focus:border-[#38bdf8] shadow-inner"
                 />
-                <span className="text-[10px] text-muted-foreground mt-1 block">Default: $1.50 / card</span>
+                <span className="text-[11px] text-slate-400 mt-1 block">Default: $1.50 / card</span>
               </div>
             </div>
 
             {/* Secondary Options */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-3 rounded-xl bg-secondary/20 border border-border/30 text-xs">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-3.5 rounded-xl bg-[#121c3b]/80 border border-slate-700/80 text-xs shadow-md">
               <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Category</Label>
+                <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Category</Label>
                 <select
                   value={backdateCategoryId}
                   onChange={(e) => setBackdateCategoryId(e.target.value)}
-                  className="w-full bg-input/60 border border-border/40 rounded-md h-9 px-2 text-xs"
+                  className="w-full bg-[#162348] border border-slate-700 text-white rounded-lg h-10 px-2.5 text-xs focus:border-[#38bdf8] shadow-inner"
                 >
                   <option value="">(None / General)</option>
                   {categories.map((c) => (
@@ -517,18 +518,18 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                 </select>
               </div>
 
-              <div className="flex items-center justify-between p-2 rounded-lg bg-background/30 border border-border/20">
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#162348] border border-slate-700/80">
                 <div>
-                  <div className="font-medium text-xs">Post Announcements</div>
-                  <div className="text-[10px] text-muted-foreground">Add dated news on site</div>
+                  <div className="font-semibold text-xs text-white">Post Announcements</div>
+                  <div className="text-[11px] text-slate-400">Add dated news on site</div>
                 </div>
                 <Switch checked={postAnnouncements} onCheckedChange={setPostAnnouncements} />
               </div>
 
-              <div className="flex items-center justify-between p-2 rounded-lg bg-background/30 border border-border/20">
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#162348] border border-slate-700/80">
                 <div>
-                  <div className="font-medium text-xs">Notify TG Channel</div>
-                  <div className="text-[10px] text-muted-foreground">Alert @zorushop channel</div>
+                  <div className="font-semibold text-xs text-white">Notify TG Channel</div>
+                  <div className="text-[11px] text-slate-400">Alert @zorushop channel</div>
                 </div>
                 <Switch checked={notifyTelegramLatest} onCheckedChange={setNotifyTelegramLatest} />
               </div>
@@ -537,7 +538,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
             {/* Raw Cards Input Area */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <Label className="text-xs text-muted-foreground">
+                <Label className="text-xs font-semibold text-slate-200">
                   Paste Cards or Upload .txt File (Auto-formatting applies automatically):
                 </Label>
                 <div className="flex items-center gap-2">
@@ -550,12 +551,11 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                   />
                   <Button
                     type="button"
-                    variant="outline"
                     size="sm"
                     onClick={() => fileInputRef.current?.click()}
-                    className="h-7 text-xs border-primary/40 text-primary-glow hover:bg-primary/10"
+                    className="h-8 px-3 text-xs bg-[#1e293b] hover:bg-[#334155] border border-[#38bdf8]/50 text-[#38bdf8] font-bold rounded-lg transition"
                   >
-                    <Upload className="h-3 w-3 mr-1" />
+                    <Upload className="h-3.5 w-3.5 mr-1 text-[#38bdf8]" />
                     Load .txt File
                   </Button>
                 </div>
@@ -565,26 +565,26 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                 value={backdateRaw}
                 onChange={(e) => setBackdateRaw(e.target.value)}
                 placeholder="4147202100000000|12|2028|123|John Doe|123 Main St|New York|NY|10001|US&#10;Any delimiter, format or headers are auto-detected..."
-                className="font-mono text-xs bg-black/40 border-border/40 focus:border-primary"
+                className="font-mono text-xs bg-[#080d1e] border-slate-700 text-slate-100 placeholder:text-slate-500 rounded-xl p-3 focus:border-[#38bdf8] shadow-inner"
               />
             </div>
 
             {/* Real-Time Preview Simulation */}
             {backdatePreview && (
-              <div className="p-4 rounded-xl bg-gradient-to-r from-primary/[0.08] to-transparent border border-primary/30 space-y-3">
+              <div className="p-4 rounded-xl bg-[#121c3b] border border-[#38bdf8]/40 space-y-3 shadow-lg">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                    <span className="text-xs font-semibold text-emerald-300">
+                    <span className="text-xs font-bold text-emerald-300">
                       {backdatePreview.valid.toLocaleString()} Valid Cards Ready
                     </span>
                     {backdatePreview.dupes > 0 && (
-                      <Badge variant="secondary" className="text-[10px] bg-warning/20 text-warning">
+                      <Badge variant="secondary" className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30">
                         {backdatePreview.dupes} Dupes Filtered
                       </Badge>
                     )}
                     {backdatePreview.failed > 0 && (
-                      <Badge variant="secondary" className="text-[10px] bg-destructive/20 text-destructive">
+                      <Badge variant="secondary" className="text-[10px] bg-red-500/20 text-red-300 border border-red-500/30">
                         {backdatePreview.failed} Unparseable Lines Skipped
                       </Badge>
                     )}
@@ -592,29 +592,29 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
 
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {Object.entries(backdatePreview.brands).map(([b, count]) => (
-                      <Badge key={b} variant="outline" className="text-[10px] border-primary/30 text-primary-glow">
+                      <Badge key={b} className="text-[10px] bg-[#162348] border border-[#38bdf8]/40 text-[#38bdf8] font-mono">
                         {b}: {count}
                       </Badge>
                     ))}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3 rounded-lg bg-black/30 border border-white/5 text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3 rounded-lg bg-[#0c1430] border border-slate-700/60 text-xs">
                   <div>
-                    <span className="text-muted-foreground block text-[10px]">TOTAL DAYS SPANNED:</span>
-                    <span className="font-mono font-bold text-primary-glow text-sm">
+                    <span className="text-slate-400 block text-[10px] font-bold">TOTAL DAYS SPANNED:</span>
+                    <span className="font-mono font-black text-[#38bdf8] text-sm">
                       {backdatePreview.daysNeeded} Days
                     </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground block text-[10px]">HISTORICAL DATE RANGE:</span>
-                    <span className="font-mono text-xs text-white">
-                      {backdatePreview.startDateFormatted} <ArrowRight className="inline h-3 w-3 mx-1 text-primary-glow" /> {backdatePreview.endDateFormatted}
+                    <span className="text-slate-400 block text-[10px] font-bold">HISTORICAL DATE RANGE:</span>
+                    <span className="font-mono text-xs text-white font-semibold">
+                      {backdatePreview.startDateFormatted} <ArrowRight className="inline h-3 w-3 mx-1 text-[#38bdf8]" /> {backdatePreview.endDateFormatted}
                     </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground block text-[10px]">DAILY PACE:</span>
-                    <span className="font-mono text-xs text-white font-semibold">
+                    <span className="text-slate-400 block text-[10px] font-bold">DAILY PACE:</span>
+                    <span className="font-mono text-xs text-white font-bold">
                       {cardsPerDay} cards / base per day
                     </span>
                   </div>
@@ -624,28 +624,29 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
 
             {/* Live Upload Progress */}
             {backdateProgress && (
-              <div className="p-4 rounded-xl bg-primary/10 border border-primary/40 space-y-2">
+              <div className="p-4 rounded-xl bg-blue-500/10 border border-[#38bdf8]/40 space-y-2 shadow-md">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-mono text-primary-glow font-semibold">
+                  <span className="font-mono text-[#38bdf8] font-bold">
                     Uploading Day {backdateProgress.currentDay} / {backdateProgress.totalDays} ({backdateProgress.currentDate})...
                   </span>
-                  <span className="font-mono text-xs text-muted-foreground">
+                  <span className="font-mono text-xs text-slate-300">
                     {backdateProgress.totalUploaded} / {backdateProgress.totalExpected} cards
                   </span>
                 </div>
                 <Progress
                   value={(backdateProgress.currentDay / backdateProgress.totalDays) * 100}
-                  className="h-2 bg-secondary"
+                  className="h-2 bg-[#162348]"
                 />
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-border/30">
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
               <Button
-                variant="outline"
+                type="button"
                 size="sm"
                 onClick={() => onOpenChange(false)}
                 disabled={backdateBusy}
+                className="h-9 px-4 bg-[#1e293b] hover:bg-[#334155] text-slate-200 border border-slate-700 font-semibold rounded-lg transition"
               >
                 Close
               </Button>
@@ -653,16 +654,16 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                 size="sm"
                 onClick={runBackdateUpload}
                 disabled={backdateBusy || !backdatePreview || backdatePreview.valid === 0}
-                className="bg-gradient-to-r from-emerald-500 to-teal-500 text-black font-semibold hover:opacity-90"
+                className="h-9 px-5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-110 text-white font-bold rounded-lg shadow-lg shadow-emerald-500/20 transition disabled:opacity-40"
               >
                 {backdateBusy ? (
                   <>
-                    <Clock className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    <Clock className="h-3.5 w-3.5 mr-1.5 animate-spin text-white" />
                     Back-Dating Cards...
                   </>
                 ) : (
                   <>
-                    <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                    <Calendar className="h-3.5 w-3.5 mr-1.5 text-white" />
                     Start Back-Date Upload ({backdatePreview?.valid || 0} Cards)
                   </>
                 )}
@@ -674,13 +675,13 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
           {/* TAB 2: DAILY AUTO-DRIP SCHEDULER */}
           {/* ========================================================= */}
           <TabsContent value="drip" className="space-y-6">
-            <div className="p-4 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-xs text-muted-foreground flex items-start gap-3">
-              <Clock className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+            <div className="p-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-xs text-slate-300 flex items-start gap-3 shadow-md">
+              <Clock className="h-5 w-5 text-[#38bdf8] flex-shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold text-cyan-300 mb-1">
+                <p className="font-bold text-[#38bdf8] mb-1">
                   How Daily Auto-Drip Scheduler Works:
                 </p>
-                <p>
+                <p className="leading-relaxed">
                   Upload your bulk cards here. They are saved in a staged staging queue.
                   Every day, the system automatically cuts the exact daily batch (e.g. 20 cards),
                   publishes them to the store with today's date base, updates the stock ticker and news,
@@ -691,9 +692,9 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
             </div>
 
             {/* Create Queue Section */}
-            <div className="p-4 rounded-xl bg-secondary/20 border border-border/40 space-y-4">
+            <div className="p-5 rounded-xl bg-[#121c3b]/80 border border-slate-700/80 space-y-4 shadow-lg">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-cyan-300 flex items-center gap-2">
+                <h3 className="text-sm font-bold text-[#38bdf8] flex items-center gap-2">
                   <Upload className="h-4 w-4" />
                   Create New Staged Drip Queue
                 </h3>
@@ -701,45 +702,45 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <Label className="text-xs text-muted-foreground mb-1 block">Queue Name</Label>
+                  <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Queue Name</Label>
                   <Input
                     value={dripName}
                     onChange={(e) => setDripName(e.target.value)}
                     placeholder="e.g. VISA US Bulk 500"
-                    className="bg-secondary/40 border-border/40 text-xs"
+                    className="bg-[#162348] border-slate-700 text-white font-medium text-xs rounded-lg h-10 px-3 focus:border-[#38bdf8] shadow-inner"
                   />
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground mb-1 block">Release Per Day</Label>
+                  <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Release Per Day</Label>
                   <Input
                     type="number"
                     min="1"
                     value={dripPerDay}
                     onChange={(e) => setDripPerDay(e.target.value)}
                     placeholder="20"
-                    className="bg-secondary/40 border-border/40 text-xs font-mono"
+                    className="bg-[#162348] border-slate-700 text-white font-mono font-medium text-xs rounded-lg h-10 px-3 focus:border-[#38bdf8] shadow-inner"
                   />
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground mb-1 block">Price Per Card ($)</Label>
+                  <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Price Per Card ($)</Label>
                   <Input
                     type="number"
                     step="0.10"
                     value={dripPrice}
                     onChange={(e) => setDripPrice(e.target.value)}
                     placeholder="1.50"
-                    className="bg-secondary/40 border-border/40 text-xs font-mono"
+                    className="bg-[#162348] border-slate-700 text-white font-mono font-medium text-xs rounded-lg h-10 px-3 focus:border-[#38bdf8] shadow-inner"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                 <div>
-                  <Label className="text-xs text-muted-foreground mb-1 block">Category</Label>
+                  <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Category</Label>
                   <select
                     value={dripCategoryId}
                     onChange={(e) => setDripCategoryId(e.target.value)}
-                    className="w-full bg-input/60 border border-border/40 rounded-md h-9 px-2 text-xs"
+                    className="w-full bg-[#162348] border border-slate-700 rounded-lg h-10 px-2.5 text-xs text-white focus:border-[#38bdf8] shadow-inner"
                   >
                     <option value="">(None / General)</option>
                     {categories.map((c) => (
@@ -750,25 +751,25 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                   </select>
                 </div>
 
-                <div className="flex items-center justify-between p-2 rounded-lg bg-background/30 border border-border/20">
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#162348] border border-slate-700/80">
                   <div>
-                    <div className="font-medium text-xs">Auto Announcement</div>
-                    <div className="text-[10px] text-muted-foreground">Post to site on daily release</div>
+                    <div className="font-semibold text-xs text-white">Auto Announcement</div>
+                    <div className="text-[11px] text-slate-400">Post to site on daily release</div>
                   </div>
                   <Switch checked={dripAutoAnnounce} onCheckedChange={setDripAutoAnnounce} />
                 </div>
 
-                <div className="flex items-center justify-between p-2 rounded-lg bg-background/30 border border-border/20">
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#162348] border border-slate-700/80">
                   <div>
-                    <div className="font-medium text-xs">Telegram Broadcast</div>
-                    <div className="text-[10px] text-muted-foreground">Alert @zorushop daily</div>
+                    <div className="font-semibold text-xs text-white">Telegram Broadcast</div>
+                    <div className="text-[11px] text-slate-400">Alert @zorushop daily</div>
                   </div>
                   <Switch checked={dripTgBroadcast} onCheckedChange={setDripTgBroadcast} />
                 </div>
               </div>
 
               <div>
-                <Label className="text-xs text-muted-foreground mb-1 block">
+                <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">
                   Paste Cards or Upload .txt File:
                 </Label>
                 <Textarea
@@ -776,18 +777,18 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                   value={dripRaw}
                   onChange={(e) => setDripRaw(e.target.value)}
                   placeholder="Paste raw cards here to enqueue for daily automatic release..."
-                  className="font-mono text-xs bg-black/40 border-border/40"
+                  className="font-mono text-xs bg-[#080d1e] border-slate-700 text-slate-100 placeholder:text-slate-500 rounded-xl p-3 focus:border-[#38bdf8] shadow-inner"
                 />
               </div>
 
               {dripPreview && (
-                <div className="p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-between text-xs flex-wrap gap-2">
+                <div className="p-3.5 rounded-xl bg-[#162348] border border-[#38bdf8]/40 flex items-center justify-between text-xs flex-wrap gap-2 shadow-md">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-cyan-400" />
-                    <span className="font-semibold text-cyan-300">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                    <span className="font-bold text-emerald-300">
                       {dripPreview.valid} Cards Ready
                     </span>
-                    <span className="text-muted-foreground">
+                    <span className="text-slate-300">
                       (Will drip over approx ~{dripPreview.estimatedDays} days @ {dripPerDay} pcs/day)
                     </span>
                   </div>
@@ -795,7 +796,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                     size="sm"
                     onClick={createQueueHandler}
                     disabled={dripCreating || dripPreview.valid === 0}
-                    className="bg-cyan-500 text-black font-semibold hover:bg-cyan-400 h-8"
+                    className="bg-[#38bdf8] hover:bg-[#0ea5e9] text-[#07101f] font-bold h-9 px-4 rounded-lg shadow-md transition"
                   >
                     {dripCreating ? "Saving..." : "Create & Start Drip Queue"}
                   </Button>
@@ -806,23 +807,23 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
             {/* Active Queues Table */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-primary-glow flex items-center gap-2">
-                  <Database className="h-4 w-4" />
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Database className="h-4 w-4 text-[#38bdf8]" />
                   Active Drip Queues ({dripQueues.length})
                 </h3>
                 <Button
-                  variant="ghost"
                   size="sm"
                   onClick={loadQueues}
                   disabled={loadingQueues}
-                  className="h-7 text-xs text-muted-foreground"
+                  className="h-8 px-3 text-xs bg-[#121c3b] hover:bg-[#1a2954] text-slate-200 border border-slate-700 font-semibold rounded-lg transition"
                 >
+                  <RefreshCw className={`mr-1.5 h-3 w-3 ${loadingQueues ? "animate-spin text-[#38bdf8]" : "text-[#38bdf8]"}`} />
                   Refresh
                 </Button>
               </div>
 
               {dripQueues.length === 0 ? (
-                <div className="text-center py-8 text-xs text-muted-foreground border border-dashed border-border/40 rounded-xl">
+                <div className="text-center py-8 text-xs text-slate-400 border border-dashed border-slate-700/80 rounded-xl bg-[#0c1430]">
                   No active drip queues. Create one above to begin automated daily releases.
                 </div>
               ) : (
@@ -835,19 +836,18 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                     return (
                       <div
                         key={q.id}
-                        className="p-4 rounded-xl bg-secondary/30 border border-border/40 space-y-3 hover:border-primary/40 transition"
+                        className="p-4 rounded-xl bg-[#121c3b] border border-slate-700/80 space-y-3 hover:border-[#38bdf8]/50 transition shadow-lg"
                       >
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold text-sm text-white">{q.name}</span>
+                            <span className="font-bold text-sm text-white">{q.name}</span>
                             <Badge
-                              variant="outline"
-                              className={`text-[10px] uppercase ${
+                              className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-md ${
                                 q.status === "active"
-                                  ? "border-emerald-500 text-emerald-400 bg-emerald-500/10"
+                                  ? "border border-emerald-500/50 text-emerald-300 bg-emerald-500/20"
                                   : q.status === "paused"
-                                  ? "border-amber-500 text-amber-400 bg-amber-500/10"
-                                  : "border-muted text-muted-foreground"
+                                  ? "border border-amber-500/50 text-amber-300 bg-amber-500/20"
+                                  : "border border-slate-600 text-slate-400 bg-slate-800"
                               }`}
                             >
                               {q.status}
@@ -859,9 +859,9 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                               size="sm"
                               onClick={() => handleManualRelease(q.id)}
                               disabled={releasingQueueId === q.id || q.cards_remaining <= 0}
-                              className="h-7 text-xs bg-gradient-to-r from-[#409eff] to-[#4fc3f7] text-white font-medium hover:opacity-90"
+                              className="h-8 px-3 text-xs bg-gradient-to-r from-[#409eff] to-[#4fc3f7] hover:brightness-110 text-white font-bold rounded-lg shadow-md transition"
                             >
-                              <Zap className="h-3 w-3 mr-1" />
+                              <Zap className="h-3.5 w-3.5 mr-1" />
                               {releasingQueueId === q.id
                                 ? "Releasing..."
                                 : `Release Today's Batch (${Math.min(q.per_day, q.cards_remaining)}) Now`}
@@ -870,60 +870,58 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                             {q.status === "active" ? (
                               <Button
                                 size="sm"
-                                variant="outline"
                                 onClick={() => handleQueueAction(q.id, "pause")}
-                                className="h-7 text-xs"
+                                className="h-8 px-3 text-xs bg-[#1e293b] hover:bg-[#334155] text-slate-200 border border-slate-600 font-semibold rounded-lg transition"
                               >
-                                <Pause className="h-3 w-3 mr-1" /> Pause
+                                <Pause className="h-3.5 w-3.5 mr-1 text-amber-400" /> Pause
                               </Button>
                             ) : q.status === "paused" ? (
                               <Button
                                 size="sm"
-                                variant="outline"
                                 onClick={() => handleQueueAction(q.id, "resume")}
-                                className="h-7 text-xs text-emerald-400 border-emerald-500/40"
+                                className="h-8 px-3 text-xs bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/50 font-semibold rounded-lg transition"
                               >
-                                <Play className="h-3 w-3 mr-1" /> Resume
+                                <Play className="h-3.5 w-3.5 mr-1 text-emerald-400" /> Resume
                               </Button>
                             ) : null}
 
                             <Button
                               size="sm"
-                              variant="destructive"
                               onClick={() => handleQueueAction(q.id, "delete")}
-                              className="h-7 text-xs p-2"
+                              className="h-8 w-8 p-0 bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-500/50 font-semibold rounded-lg transition"
+                              title="Delete queue"
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              <Trash2 className="h-3.5 w-3.5 mx-auto" />
                             </Button>
                           </div>
                         </div>
 
                         {/* Progress bar and details */}
                         <div className="space-y-1.5 text-xs">
-                          <div className="flex items-center justify-between text-muted-foreground text-[11px]">
+                          <div className="flex items-center justify-between text-slate-300 text-[11px]">
                             <span>
-                              Remaining: <b className="text-white">{q.cards_remaining}</b> / {q.total_cards} cards
+                              Remaining: <b className="text-[#38bdf8] font-bold font-mono">{q.cards_remaining}</b> / {q.total_cards} cards
                             </span>
-                            <span>{pct}% Dispatched</span>
+                            <span className="font-mono font-bold text-slate-200">{pct}% Dispatched</span>
                           </div>
-                          <Progress value={pct} className="h-2 bg-secondary/60" />
+                          <Progress value={pct} className="h-2 bg-[#0c1430]" />
                         </div>
 
-                        <div className="flex items-center gap-4 text-[11px] text-muted-foreground pt-1 border-t border-border/20 flex-wrap">
+                        <div className="flex items-center gap-4 text-[11px] text-slate-300 pt-1.5 border-t border-slate-700/60 flex-wrap">
                           <span>
-                            Pace: <b className="text-white">{q.per_day} cards/day</b>
+                            Pace: <b className="text-white font-bold">{q.per_day} cards/day</b>
                           </span>
                           <span>
-                            Price: <b className="text-white">${Number(q.price).toFixed(2)}</b>
+                            Price: <b className="text-emerald-400 font-mono font-bold">${Number(q.price).toFixed(2)}</b>
                           </span>
                           <span>
                             Last Run:{" "}
-                            <b className="text-white">
+                            <b className="text-white font-semibold">
                               {q.last_run_at ? new Date(q.last_run_at).toLocaleString() : "Not run yet"}
                             </b>
                           </span>
                           {q.telegram_broadcast && (
-                            <span className="text-cyan-400 flex items-center gap-1">
+                            <span className="text-[#38bdf8] font-semibold flex items-center gap-1">
                               <Send className="h-3 w-3" /> TG Broadcast Active (@zorushop)
                             </span>
                           )}

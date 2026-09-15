@@ -106,16 +106,16 @@ const AdminBotUsers = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && refresh(search)}
-              placeholder="Search by telegram username"
-              className="w-72 pl-9 bg-white text-slate-900 border-slate-300 font-medium placeholder:text-slate-400 shadow-sm"
+              placeholder="Search by telegram username..."
+              className="w-72 pl-9 bg-[#121c3b] text-white border-slate-700 font-medium placeholder:text-slate-400 shadow-inner rounded-xl text-xs h-9 focus:border-[#38bdf8]"
             />
           </div>
           <Button
-            className="bg-[#0c1430] text-white border border-slate-700 hover:bg-[#15234d] font-semibold"
+            className="bg-[#121c3b] hover:bg-[#1a2954] text-white border border-slate-700 font-semibold text-xs h-9 px-4 rounded-xl shadow-md transition"
             onClick={() => refresh(search)}
             disabled={loading}
           >
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
+            <RefreshCw className={`mr-2 h-3.5 w-3.5 ${loading ? "animate-spin text-[#38bdf8]" : "text-[#38bdf8]"}`} /> Refresh
           </Button>
         </div>
 
