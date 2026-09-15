@@ -160,7 +160,7 @@ const Shop = () => {
       if (q.refund === "no" && p.refundable) return false;
       return true;
     });
-  }, [all, q, searched, section]);
+  }, [all, q, searched]);
 
   const [perPage, setPerPage] = useState(10);
   const [page, setPage] = useState(1);

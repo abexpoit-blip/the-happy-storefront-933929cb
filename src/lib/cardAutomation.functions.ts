@@ -49,6 +49,31 @@ export interface DripQueueRow {
   created_at: string;
 }
 
+export interface DripStagedItem {
+  id: string;
+  queue_id: string;
+  card_line: string;
+  bin: string;
+  brand: string | null;
+  country: string | null;
+  state: string | null;
+  city: string | null;
+  zip: string | null;
+  month: string | null;
+  year: string | null;
+  cc: string | null;
+  tel: string | null;
+  email: string | null;
+  status: string;
+  released_at?: string | null;
+  created_at?: string;
+}
+
+export interface InsertedProduct {
+  id: string;
+  slug: string;
+}
+
 /**
  * Broadcast base update / restock alert to Telegram channel (@zorushop)
  */
@@ -324,7 +349,8 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
       .order("created_at", { ascending: true })
       .limit(countToRelease);
 
-    if (iErr || !items || items.length === 0) {
+    const stagedItems = (items ?? []) as unknown as DripStagedItem[];
+    if (iErr || stagedItems.length === 0) {
       throw new Error(iErr?.message || "No pending items found in queue");
     }
 
@@ -334,14 +360,14 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
     const mm = String(today.getUTCMonth() + 1).padStart(2, "0");
     const dd = String(today.getUTCDate()).padStart(2, "0");
     const dateStr = `${yyyy}_${mm}_${dd}`;
-    const primaryBrand = items[0]?.brand || "CARD";
+    const primaryBrand = stagedItems[0]?.brand || "CARD";
     const baseName = `ADMIN_${dateStr}_${primaryBrand}`;
-    const clean = (s: string) => (!s || s.toLowerCase() === "null" ? "" : s);
+    const clean = (s: string | null | undefined) => (!s || s.toLowerCase() === "null" ? "" : s);
     const stamp = Date.now().toString(36);
 
-    const products = items.map((c: any, i: number) => ({
+    const products = stagedItems.map((c, i: number) => ({
       category_id: queue.category_id || null,
-      title: `${c.brand} ${c.bin} · ${clean(c.city) || clean(c.state) || clean(c.country) || "—"}`,
+      title: `${c.brand || "CARD"} ${c.bin} · ${clean(c.city) || clean(c.state) || clean(c.country) || "—"}`,
       slug: `${c.bin}-${stamp}-${i}-${Math.random().toString(36).slice(2, 8)}`,
       price: queue.price,
       delivery_type: "key",
@@ -371,17 +397,19 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
 
     if (pErr) throw new Error(pErr.message);
 
+    const insertedRows = (insertedProducts ?? []) as unknown as InsertedProduct[];
+
     // 5. Insert keys into product_keys
-    const keyRows = (insertedProducts ?? []).map((prod: any, idx: number) => ({
+    const keyRows = insertedRows.map((prod, idx: number) => ({
       product_id: prod.id,
-      content: items[idx].card_line,
+      content: stagedItems[idx].card_line,
     }));
 
     const { error: kErr } = await db.from("product_keys").insert(keyRows);
     if (kErr) throw new Error(kErr.message);
 
     // 6. Mark items as released
-    const releasedIds = items.map((it: any) => it.id);
+    const releasedIds = stagedItems.map((it) => it.id);
     await db
       .from("card_drip_items")
       .update({
@@ -391,7 +419,7 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
       .in("id", releasedIds);
 
     // 7. Update queue remaining count and last_run_at
-    const remainingAfter = Math.max(0, queue.cards_remaining - items.length);
+    const remainingAfter = Math.max(0, queue.cards_remaining - stagedItems.length);
     await db
       .from("card_drip_queues")
       .update({
@@ -420,7 +448,7 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
       if (token) {
         const channelId = getTelegramChannelId();
         const pBase = publicBase(baseName);
-        const countries = [...new Set(items.map((it: any) => it.country).filter(Boolean))].join(", ") || "MIX";
+        const countries = [...new Set(stagedItems.map((it) => it.country).filter(Boolean))].join(", ") || "MIX";
         const text = [
           `⚡ <b>ZORU SHOP — NEW BASE UPDATE!</b> ⚡`,
           `━━━━━━━━━━━━━━━━━━━━━━`,

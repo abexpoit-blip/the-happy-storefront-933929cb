@@ -40,7 +40,7 @@ const Admin = () => {
   const [users, setUsers] = useState<Profile[]>([]);
   const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [payouts, setPayouts] = useState<Payout[]>([]);
-  const [stats, setStats] = useState<Record<string, any>>({});
+  const [stats, setStats] = useState<Record<string, unknown>>({});
   const [vpsState, setVpsState] = useState<SystemSnapshot | null>(null);
   const [vpsBusy, setVpsBusy] = useState(false);
   const [userSearch, setUserSearch] = useState("");

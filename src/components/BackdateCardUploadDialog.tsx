@@ -415,7 +415,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
           </div>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "backdate" | "drip")} className="w-full">
           <TabsList className="grid grid-cols-2 bg-secondary/30 p-1 border border-border/40 rounded-xl mb-6">
             <TabsTrigger
               value="backdate"
