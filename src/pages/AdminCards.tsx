@@ -6,8 +6,9 @@ import {
 } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CreditCard, Trash2, Search, EyeOff, Eye, DollarSign, Check, X, ChevronLeft, ChevronRight, AlertTriangle, LayoutGrid, Layers } from "lucide-react";
+import { CreditCard, Trash2, Search, EyeOff, Eye, DollarSign, Check, X, ChevronLeft, ChevronRight, AlertTriangle, LayoutGrid, Layers, Calendar, Sparkles } from "lucide-react";
 import { publicBase, sortBasesLatestFirst } from "@/lib/baseLabel";
+import { BackdateCardUploadDialog } from "@/components/BackdateCardUploadDialog";
 import { toast } from "sonner";
 
 type Card = AdminCardRow;
@@ -21,6 +22,7 @@ const AdminCards = () => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [showBackdateModal, setShowBackdateModal] = useState(false);
 
   const totalCards = allCards.length;
   const totalPages = Math.max(1, Math.ceil(totalCards / PER_PAGE));
@@ -157,9 +159,19 @@ const AdminCards = () => {
             <CreditCard className="h-4 w-4 text-primary-glow" />
             <h2 className="font-display tracking-wider text-primary-glow">ALL CARDS ({totalCards.toLocaleString()})</h2>
           </div>
-          <Button size="sm" variant="outline" onClick={cleanupExpired} className="border-warning/40 text-warning hover:bg-warning/10">
-            <AlertTriangle className="h-3.5 w-3.5 mr-1" />Auto-expire old cards
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
+              onClick={() => setShowBackdateModal(true)}
+              className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-black font-semibold hover:opacity-95 shadow-md"
+            >
+              <Sparkles className="h-3.5 w-3.5 mr-1 text-black" />
+              ⏳ Back-Date & Auto-Drip Upload
+            </Button>
+            <Button size="sm" variant="outline" onClick={cleanupExpired} className="border-warning/40 text-warning hover:bg-warning/10">
+              <AlertTriangle className="h-3.5 w-3.5 mr-1" />Auto-expire old cards
+            </Button>
+          </div>
         </div>
 
         <div className="flex gap-2 mb-3 flex-wrap">
@@ -309,6 +321,13 @@ const AdminCards = () => {
           </div>
         )}
       </section>
+
+      <BackdateCardUploadDialog
+        open={showBackdateModal}
+        onOpenChange={setShowBackdateModal}
+        categories={categories}
+        onUploadSuccess={load}
+      />
     </AdminLayout>
   );
 };

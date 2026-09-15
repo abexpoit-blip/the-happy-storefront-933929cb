@@ -4,6 +4,7 @@ import Seo from "@/components/Seo";
 import { BuildBotBanner } from "@/components/BuildBotBanner";
 import { listAnnouncements, type Announcement } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
+import { publicBase } from "@/lib/baseLabel";
 import { Send, ShieldCheck, MessageCircle, Bot } from "lucide-react";
 
 /**
@@ -24,22 +25,26 @@ const Index = () => {
         listAnnouncements(),
         supabase
           .from("products")
-          .select("id, title, stock, created_at")
+          .select("id, title, stock, base, created_at")
           .eq("active", true)
           .order("created_at", { ascending: false })
-          .limit(15),
+          .limit(60),
       ]);
       if (annRes.status === "fulfilled" && annRes.value) {
         setAnns(annRes.value);
       }
       if (prodRes.status === "fulfilled" && prodRes.value.data) {
-        setNews(
-          prodRes.value.data.map((p) => ({
-            id: p.id,
-            label: p.title,
-            count: Number(p.stock || 1),
-          }))
-        );
+        const map = new Map<string, { id: string; label: string; count: number }>();
+        for (const p of prodRes.value.data) {
+          const label = p.base ? publicBase(p.base) : p.title;
+          const cur = map.get(label);
+          if (cur) {
+            cur.count += Number(p.stock || 1);
+          } else {
+            map.set(label, { id: p.id, label, count: Number(p.stock || 1) });
+          }
+        }
+        setNews(Array.from(map.values()).slice(0, 15));
       }
     } catch {
       /* ignore */

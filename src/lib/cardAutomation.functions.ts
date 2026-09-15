@@ -1,0 +1,478 @@
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { publicBase } from "@/lib/baseLabel";
+import fs from "node:fs";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function assertAdmin(context: any) {
+  const { data: isAdmin } = await context.supabase.rpc("has_role", {
+    _user_id: context.userId,
+    _role: "admin",
+  });
+  if (!isAdmin) throw new Error("forbidden");
+}
+
+export function getTelegramBotToken(): string {
+  const envToken = (process.env.TELEGRAM_BOT_TOKEN ?? "").trim();
+  if (envToken) return envToken;
+  try {
+    if (fs.existsSync("/etc/zoru/telegram.env")) {
+      const content = fs.readFileSync("/etc/zoru/telegram.env", "utf8");
+      const m = content.match(/TELEGRAM_BOT_TOKEN\s*=\s*["']?([^"'\r\n]+)/);
+      if (m && m[1]) return m[1].trim();
+    }
+  } catch {
+    /* ignore */
+  }
+  return "";
+}
+
+export function getTelegramChannelId(): string {
+  const ch = (process.env.TELEGRAM_CHANNEL_ID ?? "").trim();
+  return ch || "@zorushop";
+}
+
+export interface DripQueueRow {
+  id: string;
+  name: string;
+  per_day: number;
+  price: number;
+  refundable: boolean;
+  category_id: string | null;
+  status: "active" | "paused" | "completed";
+  total_cards: number;
+  cards_remaining: number;
+  auto_announce: boolean;
+  telegram_broadcast: boolean;
+  last_run_at: string | null;
+  created_at: string;
+}
+
+/**
+ * Broadcast base update / restock alert to Telegram channel (@zorushop)
+ */
+export const broadcastChannelAlert = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        baseName: z.string().min(1),
+        count: z.number().int().min(1),
+        brand: z.string().optional(),
+        country: z.string().optional(),
+        price: z.number().optional(),
+        customNote: z.string().optional(),
+      })
+      .parse(input)
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const token = getTelegramBotToken();
+    if (!token) {
+      return { ok: false, error: "TELEGRAM_BOT_TOKEN not configured on server" };
+    }
+
+    const channelId = getTelegramChannelId();
+    const pBase = publicBase(data.baseName);
+    const brandStr = data.brand || "VISA/MC";
+    const countryStr = data.country || "MIX";
+    const priceStr = data.price ? `$${Number(data.price).toFixed(2)}` : "$1.50";
+
+    const text = [
+      `⚡ <b>ZORU SHOP — NEW BASE UPDATE!</b> ⚡`,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+      `📦 <b>Base:</b> <code>${pBase}</code>`,
+      `💳 <b>Stock Added:</b> <b>${data.count} PCS</b>`,
+      `🏷 <b>Brand:</b> ${brandStr}`,
+      `🌍 <b>Country:</b> ${countryStr}`,
+      `💰 <b>Price:</b> ${priceStr}`,
+      `⚡ <b>Delivery:</b> Instant Automated Delivery`,
+      data.customNote ? `📝 <b>Note:</b> ${data.customNote}\n` : ``,
+      `🛒 <b>Shop Now:</b> <a href="https://zoru.cc/shop">zoru.cc/shop</a>`,
+      `🤖 <b>Checker Bot:</b> <a href="https://t.me/ZoruCheckerbot">@ZoruCheckerbot</a>`,
+      `📢 <b>Official Channel:</b> ${channelId}`,
+      `💬 <b>Support:</b> @Zorushop_service`,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const replyMarkup = {
+      inline_keyboard: [
+        [
+          { text: "🛒 Buy Cards Now", url: "https://zoru.cc/shop" },
+          { text: "🤖 Checker Bot", url: "https://t.me/ZoruCheckerbot" },
+        ],
+        [
+          { text: "💬 Support", url: "https://t.me/Zorushop_service" },
+          { text: "📢 Official Channel", url: "https://t.me/zorushop" },
+        ],
+      ],
+    };
+
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: channelId,
+          text,
+          parse_mode: "HTML",
+          disable_web_page_preview: true,
+          reply_markup: replyMarkup,
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        return { ok: false, error: json.description || `Telegram API error: ${res.status}` };
+      }
+      return { ok: true };
+    } catch (e: unknown) {
+      return { ok: false, error: e instanceof Error ? e.message : "Failed to broadcast to Telegram" };
+    }
+  });
+
+/**
+ * List active drip queues
+ */
+export const listDripQueues = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<DripQueueRow[]> => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabaseAdmin as any;
+
+    const { data, error } = await db
+      .from("card_drip_queues")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return (data ?? []) as DripQueueRow[];
+  });
+
+/**
+ * Create a new Drip Queue with staged cards
+ */
+export const createDripQueue = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        name: z.string().min(1).max(100),
+        per_day: z.number().int().min(1).max(1000),
+        price: z.number().min(0.1).max(1000),
+        refundable: z.boolean(),
+        category_id: z.string().nullable().optional(),
+        auto_announce: z.boolean(),
+        telegram_broadcast: z.boolean(),
+        items: z.array(
+          z.object({
+            card_line: z.string(),
+            cc: z.string(),
+            brand: z.string(),
+            bin: z.string(),
+            country: z.string().optional(),
+            state: z.string().optional(),
+            city: z.string().optional(),
+            zip: z.string().optional(),
+            month: z.string().optional(),
+            year: z.string().optional(),
+            cvv: z.string().optional(),
+            name: z.string().optional(),
+            addr: z.string().optional(),
+            tel: z.string().optional(),
+            email: z.string().optional(),
+          })
+        ),
+      })
+      .parse(input)
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabaseAdmin as any;
+
+    const total = data.items.length;
+    if (total === 0) throw new Error("No cards provided");
+
+    // 1. Create queue row
+    const { data: queueRow, error: qErr } = await db
+      .from("card_drip_queues")
+      .insert({
+        name: data.name,
+        per_day: data.per_day,
+        price: data.price,
+        refundable: data.refundable,
+        category_id: data.category_id || null,
+        status: "active",
+        total_cards: total,
+        cards_remaining: total,
+        auto_announce: data.auto_announce,
+        telegram_broadcast: data.telegram_broadcast,
+      })
+      .select("id")
+      .single();
+
+    if (qErr) throw new Error(qErr.message);
+    const queueId = queueRow.id;
+
+    // 2. Insert items in chunks of 200
+    const CHUNK = 200;
+    for (let i = 0; i < data.items.length; i += CHUNK) {
+      const slice = data.items.slice(i, i + CHUNK).map((item) => ({
+        queue_id: queueId,
+        card_line: item.card_line,
+        cc: item.cc,
+        brand: item.brand,
+        bin: item.bin,
+        country: item.country || null,
+        state: item.state || null,
+        city: item.city || null,
+        zip: item.zip || null,
+        month: item.month || null,
+        year: item.year || null,
+        cvv: item.cvv || null,
+        name: item.name || null,
+        addr: item.addr || null,
+        tel: item.tel || null,
+        email: item.email || null,
+        status: "pending",
+      }));
+
+      const { error: insErr } = await db.from("card_drip_items").insert(slice);
+      if (insErr) throw new Error(insErr.message);
+    }
+
+    return { queue_id: queueId, total_cards: total };
+  });
+
+/**
+ * Update queue status (pause, resume, delete)
+ */
+export const updateDripQueue = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        queue_id: z.string().uuid(),
+        action: z.enum(["pause", "resume", "delete"]),
+      })
+      .parse(input)
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabaseAdmin as any;
+
+    if (data.action === "delete") {
+      const { error } = await db.from("card_drip_queues").delete().eq("id", data.queue_id);
+      if (error) throw new Error(error.message);
+      return { status: "deleted" };
+    }
+
+    const newStatus = data.action === "pause" ? "paused" : "active";
+    const { error } = await db
+      .from("card_drip_queues")
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq("id", data.queue_id);
+
+    if (error) throw new Error(error.message);
+    return { status: newStatus };
+  });
+
+/**
+ * Release next batch of cards immediately from a queue
+ */
+export const triggerDripRelease = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        queue_id: z.string().uuid(),
+      })
+      .parse(input)
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabaseAdmin as any;
+
+    // 1. Fetch queue
+    const { data: queue, error: qErr } = await db
+      .from("card_drip_queues")
+      .select("*")
+      .eq("id", data.queue_id)
+      .single();
+
+    if (qErr || !queue) throw new Error(qErr?.message || "Queue not found");
+    if (queue.cards_remaining <= 0) throw new Error("No cards remaining in queue");
+
+    // 2. Fetch up to per_day pending items
+    const countToRelease = Math.min(queue.per_day, queue.cards_remaining);
+    const { data: items, error: iErr } = await db
+      .from("card_drip_items")
+      .select("*")
+      .eq("queue_id", data.queue_id)
+      .eq("status", "pending")
+      .order("created_at", { ascending: true })
+      .limit(countToRelease);
+
+    if (iErr || !items || items.length === 0) {
+      throw new Error(iErr?.message || "No pending items found in queue");
+    }
+
+    // 3. Prepare product insertion with today's date base
+    const today = new Date();
+    const yyyy = today.getUTCFullYear();
+    const mm = String(today.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(today.getUTCDate()).padStart(2, "0");
+    const dateStr = `${yyyy}_${mm}_${dd}`;
+    const primaryBrand = items[0]?.brand || "CARD";
+    const baseName = `ADMIN_${dateStr}_${primaryBrand}`;
+    const clean = (s: string) => (!s || s.toLowerCase() === "null" ? "" : s);
+    const stamp = Date.now().toString(36);
+
+    const products = items.map((c: any, i: number) => ({
+      category_id: queue.category_id || null,
+      title: `${c.brand} ${c.bin} · ${clean(c.city) || clean(c.state) || clean(c.country) || "—"}`,
+      slug: `${c.bin}-${stamp}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+      price: queue.price,
+      delivery_type: "key",
+      active: true,
+      stock: 1,
+      bin: c.bin,
+      brand: c.brand || null,
+      country: clean(c.country) || null,
+      state: clean(c.state) || null,
+      city: clean(c.city) || null,
+      zip: clean(c.zip) || null,
+      exp_month: clean(c.month) || null,
+      exp_year: clean(c.year) || null,
+      base: baseName,
+      refundable: queue.refundable,
+      last_digits: (c.cc || "").replace(/\D/g, "").slice(-3) || null,
+      has_phone: !!clean(c.tel),
+      has_email: !!clean(c.email),
+      created_at: today.toISOString(),
+    }));
+
+    // 4. Insert into products
+    const { data: insertedProducts, error: pErr } = await db
+      .from("products")
+      .insert(products)
+      .select("id, slug");
+
+    if (pErr) throw new Error(pErr.message);
+
+    // 5. Insert keys into product_keys
+    const keyRows = (insertedProducts ?? []).map((prod: any, idx: number) => ({
+      product_id: prod.id,
+      content: items[idx].card_line,
+    }));
+
+    const { error: kErr } = await db.from("product_keys").insert(keyRows);
+    if (kErr) throw new Error(kErr.message);
+
+    // 6. Mark items as released
+    const releasedIds = items.map((it: any) => it.id);
+    await db
+      .from("card_drip_items")
+      .update({
+        status: "released",
+        released_at: today.toISOString(),
+      })
+      .in("id", releasedIds);
+
+    // 7. Update queue remaining count and last_run_at
+    const remainingAfter = Math.max(0, queue.cards_remaining - items.length);
+    await db
+      .from("card_drip_queues")
+      .update({
+        cards_remaining: remainingAfter,
+        last_run_at: today.toISOString(),
+        status: remainingAfter === 0 ? "completed" : queue.status,
+        updated_at: today.toISOString(),
+      })
+      .eq("id", data.queue_id);
+
+    // 8. Auto-Announce if enabled
+    if (queue.auto_announce) {
+      const pub = publicBase(baseName);
+      await db.from("announcements").insert({
+        title: `Обновление базы: ${pub} (+${items.length} PCS)`,
+        body: `Добавлена свежая партия карт для базы ${pub}. Всего добавлено ${items.length} шт. Доступно в магазине.`,
+        kind: "update",
+        created_at: today.toISOString(),
+      }).catch(() => {});
+    }
+
+    // 9. Telegram Channel Broadcast if enabled
+    let tgStatus = "skipped";
+    if (queue.telegram_broadcast) {
+      const token = getTelegramBotToken();
+      if (token) {
+        const channelId = getTelegramChannelId();
+        const pBase = publicBase(baseName);
+        const countries = [...new Set(items.map((it: any) => it.country).filter(Boolean))].join(", ") || "MIX";
+        const text = [
+          `⚡ <b>ZORU SHOP — NEW BASE UPDATE!</b> ⚡`,
+          `━━━━━━━━━━━━━━━━━━━━━━`,
+          `📦 <b>Base:</b> <code>${pBase}</code>`,
+          `💳 <b>Stock Added:</b> <b>${items.length} PCS</b>`,
+          `🏷 <b>Brand:</b> ${primaryBrand}`,
+          `🌍 <b>Country:</b> ${countries}`,
+          `💰 <b>Price:</b> $${Number(queue.price).toFixed(2)}`,
+          `⚡ <b>Delivery:</b> Instant Automated Delivery`,
+          ``,
+          `🛒 <b>Shop Now:</b> <a href="https://zoru.cc/shop">zoru.cc/shop</a>`,
+          `🤖 <b>Checker Bot:</b> <a href="https://t.me/ZoruCheckerbot">@ZoruCheckerbot</a>`,
+          `📢 <b>Official Channel:</b> ${channelId}`,
+          `💬 <b>Support:</b> @Zorushop_service`,
+          `━━━━━━━━━━━━━━━━━━━━━━`,
+        ].join("\n");
+
+        try {
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: channelId,
+              text,
+              parse_mode: "HTML",
+              disable_web_page_preview: true,
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: "🛒 Buy Cards Now", url: "https://zoru.cc/shop" },
+                    { text: "🤖 Checker Bot", url: "https://t.me/ZoruCheckerbot" },
+                  ],
+                  [
+                    { text: "💬 Support", url: "https://t.me/Zorushop_service" },
+                    { text: "📢 Official Channel", url: "https://t.me/zorushop" },
+                  ],
+                ],
+              },
+            }),
+          });
+          tgStatus = "sent";
+        } catch {
+          tgStatus = "failed";
+        }
+      }
+    }
+
+    return {
+      released: items.length,
+      remaining: remainingAfter,
+      base: publicBase(baseName),
+      telegram: tgStatus,
+    };
+  });

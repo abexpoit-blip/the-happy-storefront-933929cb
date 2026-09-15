@@ -10,7 +10,7 @@ import {
   adminPublishFullCards, adminListUsers, adminAdjustBalance, adminSetBlocked,
   adminOverview, adminSystemSnapshot, adminListDeposits, adminSetDepositStatus,
   adminSetRole, listAnnouncements, adminCreateAnnouncement, adminDeleteAnnouncement,
-  type SystemSnapshot,
+  listCategories, type Category, type SystemSnapshot,
 } from "@/lib/store";
 import { toast } from "sonner";
 import {
@@ -18,7 +18,10 @@ import {
   TrendingUp, DollarSign, ShoppingCart, Package, FileText, Upload,
   Search, LogIn, Activity, ArrowUpRight, ArrowDownRight, Plus,
   Trash2, Wand2, Newspaper, Send, Eye, UserPlus, BarChart3,
+  Calendar, Sparkles,
 } from "lucide-react";
+import { BackdateCardUploadDialog } from "@/components/BackdateCardUploadDialog";
+import { broadcastChannelAlert } from "@/lib/cardAutomation.functions";
 import { useAuth } from "@/hooks/useAuth";
 
 interface Profile {
@@ -53,6 +56,9 @@ const Admin = () => {
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [showBackdateModal, setShowBackdateModal] = useState(false);
+  const [tgBroadcastCardUpload, setTgBroadcastCardUpload] = useState(true);
 
   const formatPreview = useMemo(() => {
     if (!cardRaw.trim()) {
@@ -107,11 +113,12 @@ const Admin = () => {
 
   const load = async () => {
     try {
-      const [s, u, d, n] = await Promise.allSettled([
+      const [s, u, d, n, catRes] = await Promise.allSettled([
         adminOverview(),
         loadUsers(userSearch),
         adminListDeposits(),
         listAnnouncements(),
+        listCategories(true),
       ]);
       if (s.status === "fulfilled") setStats(s.value as unknown as Record<string, unknown>);
       if (u.status === "fulfilled") setUsers(u.value as Profile[]);
@@ -121,6 +128,7 @@ const Admin = () => {
           id: a.id, title: a.title, body: a.body, type: a.kind, created_at: a.created_at,
         })) as unknown as NewsItem[]);
       }
+      if (catRes.status === "fulfilled") setCategories(catRes.value);
       setPayouts([]);
     } catch { /* ignore */ }
   };
@@ -243,6 +251,35 @@ const Admin = () => {
       });
 
       const count = await adminPublishFullCards(rows, (done, total) => setUploadProgress({ done, total }));
+      
+      // Auto-post site announcement
+      const baseLabel = rows[0]?.base?.replace(/^\s*admin[\s_\-.:]+/i, "") || "NEW_BASE";
+      await adminCreateAnnouncement({
+        title: `Обновление базы: ${baseLabel} (+${count} PCS)`,
+        body: `Добавлена свежая партия карт базы ${baseLabel}. Всего ${count} шт. Доступно в магазине.`,
+        kind: "update",
+      }).catch(() => {});
+
+      // Telegram Channel Broadcast
+      if (tgBroadcastCardUpload && rows.length > 0) {
+        try {
+          const sample = rows[0];
+          const countries = [...new Set(rows.map(r => r.country))].slice(0, 4).join(", ");
+          await broadcastChannelAlert({
+            data: {
+              baseName: sample.base,
+              count,
+              brand: sample.brand,
+              country: countries || "MIX",
+              price,
+            },
+          });
+          toast.info("Sent restock alert to Telegram channel @zorushop!");
+        } catch {
+          /* ignore */
+        }
+      }
+
       toast.success(`Published ${count} cards` + (dropped > 0 ? ` (${dropped} dupes removed)` : "") + (failed.length > 0 ? ` · ${failed.length} unparseable` : ""));
       setCardRaw(""); load();
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Publish failed"); }
@@ -610,6 +647,30 @@ const Admin = () => {
         {/* ═══ CARD UPLOAD TAB ═══ */}
         {tab === "cards" && (
           <>
+            {/* Backdate / Auto-Drip Quick Access Banner */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-cyan-500/10 border border-emerald-500/30 flex items-center justify-between flex-wrap gap-3 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm text-emerald-300">
+                    Looking to Back-Date Cards or Automate Daily Drip Releases?
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Upload cards across past dates (e.g. 20 pcs/day for 6 months) or enqueue bulk cards for automatic daily dispatch to shop & Telegram.
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={() => setShowBackdateModal(true)}
+                className="bg-gradient-to-r from-emerald-500 to-teal-500 text-black font-semibold hover:opacity-95 text-xs shadow-md"
+              >
+                <Calendar className="h-3.5 w-3.5 mr-1 text-black" />
+                ⏳ Open Back-Date & Auto-Drip Engine
+              </Button>
+            </div>
+
             <Section icon={Upload} title="ADMIN CARD UPLOAD">
               <p className="text-xs text-muted-foreground mb-4">
                 Paste cards in any format — fields, brand and dupes are detected automatically.
@@ -632,6 +693,18 @@ const Admin = () => {
                         <SelectItem value="yes">Refundable</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-secondary/40 border border-border/40">
+                    <div className="text-[11px] font-medium flex items-center gap-1.5">
+                      <Send className="h-3 w-3 text-cyan-400" />
+                      Alert @zorushop Channel
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={tgBroadcastCardUpload}
+                      onChange={e => setTgBroadcastCardUpload(e.target.checked)}
+                      className="accent-primary"
+                    />
                   </div>
                 </div>
 
@@ -832,6 +905,13 @@ const Admin = () => {
           </div>
         </div>
       )}
+
+      <BackdateCardUploadDialog
+        open={showBackdateModal}
+        onOpenChange={setShowBackdateModal}
+        categories={categories}
+        onUploadSuccess={load}
+      />
     </AdminLayout>
 
   );

@@ -536,6 +536,7 @@ export interface FullCardInput {
   price: number;
   refundable: boolean;
   category_id?: string | null;
+  created_at?: string;
 }
 
 export const adminPublishFullCards = async (
@@ -568,6 +569,7 @@ export const adminPublishFullCards = async (
     last_digits: (c.cc || "").replace(/\D/g, "").slice(-3) || null,
     has_phone: !!clean(c.tel),
     has_email: !!clean(c.email),
+    ...(c.created_at ? { created_at: c.created_at } : {}),
   }));
 
   const lineFor = (c: FullCardInput) => [
@@ -792,11 +794,17 @@ export const listAnnouncements = async (): Promise<Announcement[]> => {
   return list;
 };
 
-export const adminCreateAnnouncement = async (input: { title: string; body: string; kind: string }) => {
+export const adminCreateAnnouncement = async (input: {
+  title: string;
+  body: string;
+  kind: string;
+  created_at?: string;
+}) => {
   const { error } = await supabase.from("announcements").insert({
     title: input.title,
     body: input.body,
     kind: input.kind,
+    ...(input.created_at ? { created_at: input.created_at } : {}),
   });
   if (error) throw error;
 };
