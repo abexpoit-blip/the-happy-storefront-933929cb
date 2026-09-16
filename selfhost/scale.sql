@@ -12,6 +12,7 @@ CREATE INDEX IF NOT EXISTS idx_products_created         ON public.products (crea
 
 -- Key delivery (purchase picks the oldest unsold key for a product)
 CREATE INDEX IF NOT EXISTS idx_keys_product_unsold ON public.product_keys (product_id, is_sold, created_at);
+CREATE INDEX IF NOT EXISTS idx_keys_is_sold        ON public.product_keys (is_sold);
 CREATE INDEX IF NOT EXISTS idx_keys_sold_to        ON public.product_keys (sold_to);
 
 -- Money / history

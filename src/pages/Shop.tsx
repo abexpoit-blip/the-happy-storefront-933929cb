@@ -62,7 +62,7 @@ const Shop = () => {
   const load = async (force = false) => {
     if (!force && Date.now() - lastLoad.current < 60_000) return;
     lastLoad.current = Date.now();
-    setLoading(true);
+    if (all.length === 0) setLoading(true);
     // Two silent retries — flaky first requests were showing "try again" to users.
     for (let attempt = 0; attempt < 3; attempt++) {
       try {

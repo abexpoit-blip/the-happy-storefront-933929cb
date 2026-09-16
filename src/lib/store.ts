@@ -117,10 +117,17 @@ const CACHE_TTL_MS = 60_000; // 60s in-memory cache for instant UI performance
 
 export const invalidateProductCache = () => {
   productCache = null;
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.removeItem("zoru_product_cache");
+    } catch {
+      /* ignore */
+    }
+  }
 };
 
-/** Hard cap so a huge stock table can never freeze the browser / blow up the response. */
-export const PRODUCT_FETCH_LIMIT = 50000;
+/** High performance cap for client memory safety (keeps browser silky smooth even with 50M DB cards) */
+export const PRODUCT_FETCH_LIMIT = 10000;
 
 export const listProducts = async (
   opts: {
@@ -132,18 +139,36 @@ export const listProducts = async (
   } = {},
 ) => {
   const isDefaultFetch = !opts.categoryId && !opts.search && !opts.includeInactive && !opts.limit;
+  
+  // 1. Fast in-memory cache check (0ms)
   if (isDefaultFetch && !opts.forceFresh && productCache && Date.now() - productCache.at < CACHE_TTL_MS) {
     return productCache.data;
   }
 
-  const CHUNK_SIZE = 1000;
-  const maxLimit = opts.limit ?? PRODUCT_FETCH_LIMIT;
+  // 2. Fast sessionStorage cache check (0ms)
+  if (isDefaultFetch && !opts.forceFresh && typeof window !== "undefined") {
+    try {
+      const raw = sessionStorage.getItem("zoru_product_cache");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.at && Date.now() - parsed.at < CACHE_TTL_MS && Array.isArray(parsed?.data)) {
+          productCache = parsed;
+          return parsed.data;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
 
-  const buildQuery = () => {
+  const CHUNK_SIZE = 1000;
+  const maxLimit = Math.min(opts.limit ?? PRODUCT_FETCH_LIMIT, PRODUCT_FETCH_LIMIT);
+
+  const buildQuery = (withCount = false) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let q = (supabase as any)
       .from("products")
-      .select(PRODUCT_COLUMNS)
+      .select(PRODUCT_COLUMNS, withCount ? { count: "exact" } : undefined)
       .order("created_at", { ascending: false });
 
     // A sold-out card must never stay on the shelf, even if `active` was not flipped.
@@ -153,7 +178,7 @@ export const listProducts = async (
     return q;
   };
 
-  // If specific small limit was explicitly requested
+  // If specific small limit was explicitly requested (e.g. 50 or 100)
   if (opts.limit && opts.limit <= CHUNK_SIZE) {
     const { data, error } = await buildQuery().range(0, opts.limit - 1);
     if (error) throw error;
@@ -164,45 +189,54 @@ export const listProducts = async (
     })) as Product[];
   }
 
-  // Fetch initial batch (0..999) WITHOUT count: "exact" (avoids expensive DB sequential scans)
-  const firstRes = await buildQuery().range(0, CHUNK_SIZE - 1);
+  // Fetch initial batch (0..999) WITH count: "exact" on the first request only
+  // This tells us the EXACT stock count so we NEVER make blind empty queries!
+  const firstRes = await buildQuery(true).range(0, CHUNK_SIZE - 1);
   if (firstRes.error) throw firstRes.error;
   const firstBatch = (firstRes.data ?? []) as Record<string, unknown>[];
 
-  // If fewer than 1000 cards exist, return immediately
-  if (firstBatch.length < CHUNK_SIZE) {
+  // If 1000 or fewer cards exist, return immediately
+  if (firstBatch.length < CHUNK_SIZE || (firstRes.count != null && firstRes.count <= CHUNK_SIZE)) {
     const mapped = firstBatch.map((p) => ({
       ...p,
       price: num(p.price as number | string),
       compare_at_price: p.compare_at_price == null ? null : num(p.compare_at_price as number | string),
     })) as Product[];
-    if (isDefaultFetch) productCache = { at: Date.now(), data: mapped };
+    if (isDefaultFetch) {
+      productCache = { at: Date.now(), data: mapped };
+      if (typeof window !== "undefined") {
+        try { sessionStorage.setItem("zoru_product_cache", JSON.stringify(productCache)); } catch { /* ignore */ }
+      }
+    }
     return mapped;
   }
 
-  // If 1000 returned, there are more cards (e.g. 5,000+ cards).
-  // Fetch subsequent chunks in parallel up to maxLimit.
+  // If more cards exist (e.g. 5,000 cards):
+  // Calculate EXACTLY how many remaining chunks we need based on the database count!
+  const totalCount = Math.min(firstRes.count ?? maxLimit, maxLimit);
   const allRows = [...firstBatch];
   const probeRanges: [number, number][] = [];
-  for (let from = CHUNK_SIZE; from < maxLimit; from += CHUNK_SIZE) {
-    probeRanges.push([from, Math.min(from + CHUNK_SIZE - 1, maxLimit - 1)]);
+
+  for (let from = CHUNK_SIZE; from < totalCount; from += CHUNK_SIZE) {
+    probeRanges.push([from, Math.min(from + CHUNK_SIZE - 1, totalCount - 1)]);
   }
 
-  // Run subsequent parallel range fetches
-  const remainingPages = await Promise.all(
-    probeRanges.map(([from, to]) =>
-      buildQuery()
-        .range(from, to)
-        .then((r: { data: Record<string, unknown>[] | null; error: unknown }) => {
-          if (r.error) throw r.error;
-          return (r.data ?? []) as Record<string, unknown>[];
-        }),
-    ),
-  );
+  // Run only the exact required chunks in parallel (e.g. 4 requests for 5k cards instead of 49)
+  if (probeRanges.length > 0) {
+    const remainingPages = await Promise.all(
+      probeRanges.map(([from, to]) =>
+        buildQuery()
+          .range(from, to)
+          .then((r: { data: Record<string, unknown>[] | null; error: unknown }) => {
+            if (r.error) throw r.error;
+            return (r.data ?? []) as Record<string, unknown>[];
+          }),
+      ),
+    );
 
-  for (const page of remainingPages) {
-    if (page.length > 0) allRows.push(...page);
-    if (page.length < CHUNK_SIZE) break; // End of stock reached
+    for (const page of remainingPages) {
+      if (page.length > 0) allRows.push(...page);
+    }
   }
 
   const mapped = allRows.map((p) => ({
@@ -211,7 +245,12 @@ export const listProducts = async (
     compare_at_price: p.compare_at_price == null ? null : num(p.compare_at_price as number | string),
   })) as Product[];
 
-  if (isDefaultFetch) productCache = { at: Date.now(), data: mapped };
+  if (isDefaultFetch) {
+    productCache = { at: Date.now(), data: mapped };
+    if (typeof window !== "undefined") {
+      try { sessionStorage.setItem("zoru_product_cache", JSON.stringify(productCache)); } catch { /* ignore */ }
+    }
+  }
   return mapped;
 };
 
@@ -720,18 +759,20 @@ export interface AdminOverview {
 }
 
 export const adminOverview = async (): Promise<AdminOverview> => {
-  const [orders, deposits, users, roles, keys] = await Promise.all([
-    supabase.from("orders").select("id, user_id, total, status, created_at").order("created_at", { ascending: false }).limit(500),
-    supabase.from("deposits").select("amount, status, created_at"),
-    supabase.from("profiles").select("id, username"),
-    supabase.from("user_roles").select("user_id, role"),
-    supabase.from("product_keys").select("is_sold"),
+  const [orders, deposits, users, roles, availableKeysRes, totalKeysRes] = await Promise.all([
+    supabase.from("orders").select("id, user_id, total, status, created_at").order("created_at", { ascending: false }).limit(1000),
+    supabase.from("deposits").select("amount, status, created_at").limit(2000),
+    supabase.from("profiles").select("id, username").limit(5000),
+    supabase.from("user_roles").select("user_id, role").limit(5000),
+    supabase.from("product_keys").select("*", { count: "exact", head: true }).eq("is_sold", false),
+    supabase.from("product_keys").select("*", { count: "exact", head: true }),
   ]);
 
   const nameById = new Map((users.data ?? []).map((u) => [u.id, u.username]));
   const orderRows = orders.data ?? [];
   const depositRows = deposits.data ?? [];
-  const keyRows = keys.data ?? [];
+  const totalCards = totalKeysRes.count ?? 0;
+  const availableCards = availableKeysRes.count ?? totalCards;
 
   const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
   const dayMs = 86_400_000;
@@ -756,7 +797,7 @@ export const adminOverview = async (): Promise<AdminOverview> => {
     monthRevenue: revenueSince(since(30)),
     totalUsers: (users.data ?? []).length,
     totalSellers: (roles.data ?? []).filter((r) => r.role === "seller").length,
-    cardsAvailable: keyRows.filter((k) => !k.is_sold).length,
+    cardsAvailable: availableCards,
     todaySalesCount: todayOrders.length,
     todaySalesAmount: todayOrders.reduce((s, o) => s + num(o.total), 0),
     todayDeposits: depositRows
@@ -793,15 +834,19 @@ export interface SystemSnapshot {
 }
 
 export const adminSystemSnapshot = async (): Promise<SystemSnapshot> => {
-  const [profiles, roles, keys, orders] = await Promise.all([
-    supabase.from("profiles").select("id, username, balance, blocked"),
-    supabase.from("user_roles").select("user_id, role"),
-    supabase.from("product_keys").select("is_sold"),
-    supabase.from("orders").select("total"),
+  const [profiles, roles, totalKeysRes, soldKeysRes, ordersRes, orderTotals] = await Promise.all([
+    supabase.from("profiles").select("id, username, balance, blocked").limit(10000),
+    supabase.from("user_roles").select("user_id, role").limit(10000),
+    supabase.from("product_keys").select("*", { count: "exact", head: true }),
+    supabase.from("product_keys").select("*", { count: "exact", head: true }).eq("is_sold", true),
+    supabase.from("orders").select("*", { count: "exact", head: true }),
+    supabase.from("orders").select("total").limit(5000),
   ]);
   const profileRows = profiles.data ?? [];
   const roleRows = roles.data ?? [];
-  const keyRows = keys.data ?? [];
+  const totalKeys = totalKeysRes.count ?? 0;
+  const soldKeys = soldKeysRes.count ?? 0;
+  const availableKeys = Math.max(0, totalKeys - soldKeys);
   const balances = profileRows.map((p) => num(p.balance));
   const sellerIds = new Set(roleRows.filter((r) => r.role === "seller").map((r) => r.user_id));
 
@@ -815,9 +860,9 @@ export const adminSystemSnapshot = async (): Promise<SystemSnapshot> => {
       banned: profileRows.filter((p) => p.blocked).length,
     },
     cards: {
-      total: keyRows.length,
-      available: keyRows.filter((k) => !k.is_sold).length,
-      sold: keyRows.filter((k) => k.is_sold).length,
+      total: totalKeys,
+      available: availableKeys,
+      sold: soldKeys,
       reserved: 0,
     },
     wallets: {
@@ -827,8 +872,8 @@ export const adminSystemSnapshot = async (): Promise<SystemSnapshot> => {
       avg_balance: balances.length ? balances.reduce((s, b) => s + b, 0) / balances.length : 0,
     },
     orders: {
-      total: (orders.data ?? []).length,
-      revenue: (orders.data ?? []).reduce((s, o) => s + num(o.total), 0),
+      total: ordersRes.count ?? (orderTotals.data ?? []).length,
+      revenue: (orderTotals.data ?? []).reduce((s, o) => s + num(o.total), 0),
     },
     pending_seller_applications: 0,
     sellers_breakdown: profileRows
