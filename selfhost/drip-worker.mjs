@@ -50,6 +50,62 @@ const db = createClient(supabaseUrl, serviceKey, {
   auth: { persistSession: false },
 });
 
+function detectBinMeta(rawCC) {
+  const digits = String(rawCC || "").replace(/\D/g, "");
+  const bin = digits.slice(0, 6);
+  let brand = "VISA";
+  if (/^4/.test(digits)) brand = "VISA";
+  else if (/^(5[1-5]|2[2-7])/.test(digits)) brand = "MASTERCARD";
+  else if (/^3[47]/.test(digits)) brand = "AMEX";
+  else if (/^6(?:011|5)/.test(digits)) brand = "DISCOVER";
+  else if (/^35/.test(digits)) brand = "JCB";
+
+  let level = "STANDARD";
+  const type = "CREDIT";
+  let refundable = false;
+
+  const binNum = parseInt(bin, 10) || 0;
+  if (["414720", "414709", "438857", "473702", "473703", "480000", "480213", "471644", "434256", "412800"].includes(bin)) {
+    level = "SIGNATURE";
+    refundable = true;
+  } else if (["446542", "400022", "426428", "426429"].includes(bin)) {
+    level = "INFINITE";
+    refundable = true;
+  } else if (["546616", "542432", "543460", "542423", "546617"].includes(bin)) {
+    level = "WORLD ELITE";
+    refundable = true;
+  } else if (["526284", "552433", "527506", "524332", "530000"].includes(bin)) {
+    level = "WORLD";
+    refundable = true;
+  } else if (["440066", "480001", "480214", "471645", "434258", "412801", "542418"].includes(bin)) {
+    level = "PLATINUM";
+    refundable = true;
+  } else if (["424604", "424631", "485458", "471646", "455365", "553420"].includes(bin)) {
+    level = "BUSINESS";
+    refundable = true;
+  } else {
+    refundable = (binNum % 100) < 50;
+    level = refundable ? "PLATINUM" : "CLASSIC";
+  }
+
+  let bank = "UNKNOWN BANK";
+  if (["414720", "414709", "424604", "424631", "438857", "440066", "473702", "473703", "446542", "546616", "526284", "542418"].includes(bin)) {
+    bank = "JPMORGAN CHASE BANK, N.A.";
+  } else if (["480000", "480001", "480213", "480214", "485458", "435607", "542432", "552433", "524332"].includes(bin)) {
+    bank = "BANK OF AMERICA, N.A.";
+  } else if (["471644", "471645", "471646", "409758", "434256", "434258", "543460", "527506"].includes(bin)) {
+    bank = "WELLS FARGO BANK, N.A.";
+  } else if (["412800", "412801", "455365", "542423"].includes(bin)) {
+    bank = "CITIBANK, N.A.";
+  } else if (["400344", "441290", "510510"].includes(bin)) {
+    bank = "CAPITAL ONE, N.A.";
+  } else if (/^3[47]/.test(digits)) {
+    bank = "AMERICAN EXPRESS";
+  }
+
+  return { bin, brand, level, type, bank, refundable, country: "US" };
+}
+
 async function sendTelegramBroadcast(baseName, count, brand, country, price) {
   if (!telegramToken) {
     console.log("[Drip Worker] TELEGRAM_BOT_TOKEN not set, skipping TG broadcast.");
@@ -165,29 +221,37 @@ async function processActiveQueues() {
 
     const clean = (s) => (!s || String(s).toLowerCase() === "null" ? "" : s);
 
-    const products = items.map((c, idx) => ({
-      category_id: queue.category_id || null,
-      title: `${c.brand} ${c.bin} · ${clean(c.city) || clean(c.state) || clean(c.country) || "—"}`,
-      slug: `${c.bin}-${stamp}-${idx}-${Math.random().toString(36).slice(2, 8)}`,
-      price: queue.price,
-      delivery_type: "key",
-      active: true,
-      stock: 1,
-      bin: c.bin,
-      brand: c.brand || null,
-      country: clean(c.country) || null,
-      state: clean(c.state) || null,
-      city: clean(c.city) || null,
-      zip: clean(c.zip) || null,
-      exp_month: clean(c.month) || null,
-      exp_year: clean(c.year) || null,
-      base: baseName,
-      refundable: queue.refundable,
-      last_digits: (c.cc || "").replace(/\D/g, "").slice(-3) || null,
-      has_phone: !!clean(c.tel),
-      has_email: !!clean(c.email),
-      created_at: now.toISOString(),
-    }));
+    const products = items.map((c, idx) => {
+      const meta = detectBinMeta(c.cc || c.bin);
+      const isRef = queue.refundable === true ? true : meta.refundable;
+      const cardCountry = clean(c.country) || meta.country || null;
+      return {
+        category_id: queue.category_id || null,
+        title: `${c.brand || meta.brand} ${c.bin} · ${clean(c.city) || clean(c.state) || cardCountry || "—"}`,
+        slug: `${c.bin}-${stamp}-${idx}-${Math.random().toString(36).slice(2, 8)}`,
+        price: queue.price,
+        delivery_type: "key",
+        active: true,
+        stock: 1,
+        bin: c.bin,
+        brand: c.brand || meta.brand || null,
+        country: cardCountry,
+        state: clean(c.state) || null,
+        city: clean(c.city) || null,
+        zip: clean(c.zip) || null,
+        exp_month: clean(c.month) || null,
+        exp_year: clean(c.year) || null,
+        base: baseName,
+        refundable: isRef,
+        card_type: meta.type,
+        card_level: meta.level,
+        bank: meta.bank,
+        last_digits: (c.cc || "").replace(/\D/g, "").slice(-3) || null,
+        has_phone: !!clean(c.tel),
+        has_email: !!clean(c.email),
+        created_at: now.toISOString(),
+      };
+    });
 
     const { data: inserted, error: pErr } = await db
       .from("products")

@@ -582,7 +582,7 @@ export interface FullCardInput {
   city: string;
   state: string;
   zip: string;
-  country: string;
+  country: string | null;
   tel: string;
   email: string;
   brand: string;
@@ -591,6 +591,9 @@ export interface FullCardInput {
   price: number;
   refundable: boolean;
   category_id?: string | null;
+  card_type?: string | null;
+  card_level?: string | null;
+  bank?: string | null;
   created_at?: string;
 }
 
@@ -599,7 +602,7 @@ export const adminPublishFullCards = async (
   onProgress?: (done: number, total: number) => void,
 ) => {
   if (!cards.length) return 0;
-  const clean = (s: string) => (!s || s.toLowerCase() === "null" ? "" : s);
+  const clean = (s: string | null | undefined) => (!s || s.toLowerCase() === "null" ? "" : s);
   const stamp = Date.now().toString(36);
 
   const products = cards.map((c, i) => ({
@@ -621,6 +624,9 @@ export const adminPublishFullCards = async (
     exp_year: clean(c.year) || null,
     base: c.base,
     refundable: c.refundable,
+    card_type: c.card_type ?? null,
+    card_level: c.card_level ?? null,
+    bank: c.bank ?? null,
     last_digits: (c.cc || "").replace(/\D/g, "").slice(-3) || null,
     has_phone: !!clean(c.tel),
     has_email: !!clean(c.email),

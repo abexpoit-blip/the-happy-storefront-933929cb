@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { detectOfflineBin } from "@/lib/binDetection";
 
 export interface BinInfo {
   bin: string;
@@ -97,10 +98,18 @@ export const Route = createFileRoute("/api/public/bin/$bin")({
           if (data?.brand || data?.bank) break;
         }
 
-        const fallback = fromPrefix(bin);
-        const merged: BinInfo = data
-          ? { ...data, brand: data.brand ?? fallback.brand }
-          : fallback;
+        const offline = detectOfflineBin(bin);
+        const merged: BinInfo = {
+          bin,
+          brand: data?.brand || offline.brand,
+          type: data?.type || offline.type,
+          level: data?.level || offline.level,
+          bank: data?.bank || offline.bank,
+          country: data?.country || offline.country,
+          countryName: data?.countryName || offline.countryName,
+          currency: data?.currency || null,
+          source: data?.source || "intelligence_engine",
+        };
 
         cache.set(bin, { at: Date.now(), data: merged });
         return Response.json(merged, {

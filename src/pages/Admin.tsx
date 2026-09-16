@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BrandLogo, detectBrandFromBin, BRANDS } from "@/lib/brands";
 import { parseAndFormat, dedupe, detectBrand, toPipeFormat } from "@/lib/cardFormatter";
+import { detectOfflineBin } from "@/lib/binDetection";
 import {
   adminPublishFullCards, adminListUsers, adminAdjustBalance, adminSetBlocked,
   adminOverview, adminSystemSnapshot, adminListDeposits, adminSetDepositStatus,
@@ -52,7 +53,7 @@ const Admin = () => {
   // Card upload state
   const [cardRaw, setCardRaw] = useState("");
   const [cardPrice, setCardPrice] = useState("1.50");
-  const [cardRefundable, setCardRefundable] = useState(false);
+  const [cardRefundable, setCardRefundable] = useState<"yes" | "no" | "mixed">("mixed");
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -233,20 +234,38 @@ const Admin = () => {
       if (unique.length === 0) { toast.error("No valid cards parsed"); setUploadBusy(false); return; }
 
       const price = Number(cardPrice) || 1.5;
-      const rows = unique.map(p => {
-        const brand = detectBrand(p.cc);
-        const country = p.country !== "null" ? p.country.toUpperCase() : "US";
+      const rows = unique.map((p) => {
+        const binInfo = detectOfflineBin(p.cc);
+        const brand = detectBrand(p.cc) || binInfo.brand;
+        const country = p.country !== "null" && p.country ? p.country.toUpperCase() : binInfo.country;
+        const isRefundable =
+          cardRefundable === "yes"
+            ? true
+            : cardRefundable === "no"
+            ? false
+            : binInfo.refundable;
+
         return {
           cc: p.cc,
-          month: p.month, year: p.year, cvv: p.cvv,
-          name: p.name, addr: p.addr,
-          city: p.city, state: p.state, zip: p.zip,
-          country, tel: p.tel, email: p.email,
+          month: p.month,
+          year: p.year,
+          cvv: p.cvv,
+          name: p.name,
+          addr: p.addr,
+          city: p.city,
+          state: p.state,
+          zip: p.zip,
+          country,
+          tel: p.tel,
+          email: p.email,
           brand,
           bin: p.cc.slice(0, 6),
           base: `ADMIN_${new Date().toISOString().slice(0, 10).replace(/-/g, "_")}_${brand}`,
           price,
-          refundable: cardRefundable,
+          refundable: isRefundable,
+          card_type: binInfo.type,
+          card_level: binInfo.level,
+          bank: binInfo.bank,
         };
       });
 
@@ -685,12 +704,13 @@ const Admin = () => {
                     <Input type="number" step="0.01" value={cardPrice} onChange={e => setCardPrice(e.target.value)} className="bg-input/60 mt-1" />
                   </div>
                   <div>
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Refundable</label>
-                    <Select value={cardRefundable ? "yes" : "no"} onValueChange={v => setCardRefundable(v === "yes")}>
+                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Refund Policy</label>
+                    <Select value={cardRefundable} onValueChange={(v: "yes" | "no" | "mixed") => setCardRefundable(v)}>
                       <SelectTrigger className="bg-input/60 mt-1"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="no">Non-refundable</SelectItem>
-                        <SelectItem value="yes">Refundable</SelectItem>
+                        <SelectItem value="mixed">🔀 Mixed (Auto: High BIN Yes, Low No)</SelectItem>
+                        <SelectItem value="yes">✅ All Refundable (Yes)</SelectItem>
+                        <SelectItem value="no">❌ Non-refundable (No)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

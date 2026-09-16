@@ -42,6 +42,7 @@ import {
   type Category,
 } from "@/lib/store";
 import { parseAndFormat, dedupe, detectBrand, toPipeFormat } from "@/lib/cardFormatter";
+import { detectOfflineBin } from "@/lib/binDetection";
 import {
   broadcastChannelAlert,
   createDripQueue,
@@ -79,7 +80,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
   const [startDate, setStartDate] = useState(defaultSixMonthsAgo);
   const [cardsPerDay, setCardsPerDay] = useState("20");
   const [backdatePrice, setBackdatePrice] = useState("1.50");
-  const [backdateRefundable, setBackdateRefundable] = useState(false);
+  const [backdateRefundable, setBackdateRefundable] = useState<"yes" | "no" | "mixed">("mixed");
   const [backdateCategoryId, setBackdateCategoryId] = useState<string>("");
   const [postAnnouncements, setPostAnnouncements] = useState(true);
   const [notifyTelegramLatest, setNotifyTelegramLatest] = useState(true);
@@ -194,27 +195,44 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
           latestBrand = brand;
           latestCountries = brandCards.map((c) => c.country).filter(Boolean);
 
-          const fullCardInputs: FullCardInput[] = brandCards.map((c) => ({
-            cc: c.cc,
-            month: c.month,
-            year: c.year,
-            cvv: c.cvv,
-            name: c.name,
-            addr: c.addr,
-            city: c.city,
-            state: c.state,
-            zip: c.zip,
-            country: c.country,
-            tel: c.tel,
-            email: c.email,
-            brand: brand,
-            bin: c.cc.replace(/\D/g, "").slice(0, 6),
-            base: baseName,
-            price: price,
-            refundable: backdateRefundable,
-            category_id: backdateCategoryId || null,
-            created_at: curDate.toISOString(),
-          }));
+          const fullCardInputs: FullCardInput[] = brandCards.map((c) => {
+            const binInfo = detectOfflineBin(c.cc);
+            const isRef =
+              backdateRefundable === "yes"
+                ? true
+                : backdateRefundable === "no"
+                ? false
+                : binInfo.refundable;
+            const country =
+              c.country && c.country !== "null"
+                ? c.country.toUpperCase()
+                : binInfo.country;
+
+            return {
+              cc: c.cc,
+              month: c.month,
+              year: c.year,
+              cvv: c.cvv,
+              name: c.name,
+              addr: c.addr,
+              city: c.city,
+              state: c.state,
+              zip: c.zip,
+              country: country || "US",
+              tel: c.tel,
+              email: c.email,
+              brand: brand || binInfo.brand,
+              bin: c.cc.replace(/\D/g, "").slice(0, 6),
+              base: baseName,
+              price: price,
+              refundable: isRef,
+              card_type: binInfo.type,
+              card_level: binInfo.level,
+              bank: binInfo.bank,
+              category_id: backdateCategoryId || null,
+              created_at: curDate.toISOString(),
+            };
+          });
 
           // 1. Insert cards into database
           await adminPublishFullCards(fullCardInputs);
@@ -271,7 +289,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
   const [dripName, setDripName] = useState("Daily Drip Queue");
   const [dripPerDay, setDripPerDay] = useState("20");
   const [dripPrice, setDripPrice] = useState("1.50");
-  const [dripRefundable, setDripRefundable] = useState(false);
+  const [dripRefundable, setDripRefundable] = useState<"yes" | "no" | "mixed">("mixed");
   const [dripCategoryId, setDripCategoryId] = useState("");
   const [dripAutoAnnounce, setDripAutoAnnounce] = useState(true);
   const [dripTgBroadcast, setDripTgBroadcast] = useState(true);
@@ -327,30 +345,34 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
     }
     setDripCreating(true);
     try {
-      const items = dripPreview.cards.map((c) => ({
-        card_line: toPipeFormat(c),
-        cc: c.cc,
-        brand: detectBrand(c.cc) || "OTHER",
-        bin: c.cc.replace(/\D/g, "").slice(0, 6),
-        country: c.country,
-        state: c.state,
-        city: c.city,
-        zip: c.zip,
-        month: c.month,
-        year: c.year,
-        cvv: c.cvv,
-        name: c.name,
-        addr: c.addr,
-        tel: c.tel,
-        email: c.email,
-      }));
+      const items = dripPreview.cards.map((c) => {
+        const binInfo = detectOfflineBin(c.cc);
+        const country = c.country && c.country !== "null" ? c.country.toUpperCase() : binInfo.country;
+        return {
+          card_line: toPipeFormat(c),
+          cc: c.cc,
+          brand: detectBrand(c.cc) || binInfo.brand || "OTHER",
+          bin: c.cc.replace(/\D/g, "").slice(0, 6),
+          country: country || null,
+          state: c.state || null,
+          city: c.city || null,
+          zip: c.zip || null,
+          month: c.month,
+          year: c.year,
+          cvv: c.cvv,
+          name: c.name,
+          addr: c.addr,
+          tel: c.tel,
+          email: c.email,
+        };
+      });
 
       const res = await createDripQueue({
         data: {
           name: dripName.trim() || `Drip Queue ${new Date().toLocaleDateString()}`,
           per_day: Math.max(1, parseInt(dripPerDay, 10) || 20),
           price: parseFloat(dripPrice) || 1.5,
-          refundable: dripRefundable,
+          refundable: dripRefundable === "yes",
           category_id: dripCategoryId || null,
           auto_announce: dripAutoAnnounce,
           telegram_broadcast: dripTgBroadcast,
@@ -501,7 +523,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
             </div>
 
             {/* Secondary Options */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-3.5 rounded-xl bg-[#121c3b]/80 border border-slate-700/80 text-xs shadow-md">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-3.5 rounded-xl bg-[#121c3b]/80 border border-slate-700/80 text-xs shadow-md">
               <div>
                 <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Category</Label>
                 <select
@@ -515,6 +537,19 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                       {c.name}
                     </option>
                   ))}
+                </select>
+              </div>
+
+              <div>
+                <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Refund Policy</Label>
+                <select
+                  value={backdateRefundable}
+                  onChange={(e) => setBackdateRefundable(e.target.value as "yes" | "no" | "mixed")}
+                  className="w-full bg-[#162348] border border-slate-700 text-white rounded-lg h-10 px-2.5 text-xs focus:border-[#38bdf8] shadow-inner font-medium"
+                >
+                  <option value="mixed">🔀 Mixed (Auto)</option>
+                  <option value="yes">✅ Refundable (Yes)</option>
+                  <option value="no">❌ Non-refundable (No)</option>
                 </select>
               </div>
 
@@ -734,7 +769,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
                 <div>
                   <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Category</Label>
                   <select
@@ -748,6 +783,19 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                         {c.name}
                       </option>
                     ))}
+                  </select>
+                </div>
+
+                <div>
+                  <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Refund Policy</Label>
+                  <select
+                    value={dripRefundable}
+                    onChange={(e) => setDripRefundable(e.target.value as "yes" | "no" | "mixed")}
+                    className="w-full bg-[#162348] border border-slate-700 rounded-lg h-10 px-2.5 text-xs text-white focus:border-[#38bdf8] shadow-inner font-medium"
+                  >
+                    <option value="mixed">🔀 Mixed (Auto)</option>
+                    <option value="yes">✅ Refundable (Yes)</option>
+                    <option value="no">❌ Non-refundable (No)</option>
                   </select>
                 </div>
 

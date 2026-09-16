@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { publicBase } from "@/lib/baseLabel";
+import { detectOfflineBin } from "@/lib/binDetection";
 import fs from "node:fs";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -365,29 +366,42 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
     const clean = (s: string | null | undefined) => (!s || s.toLowerCase() === "null" ? "" : s);
     const stamp = Date.now().toString(36);
 
-    const products = stagedItems.map((c, i: number) => ({
-      category_id: queue.category_id || null,
-      title: `${c.brand || "CARD"} ${c.bin} · ${clean(c.city) || clean(c.state) || clean(c.country) || "—"}`,
-      slug: `${c.bin}-${stamp}-${i}-${Math.random().toString(36).slice(2, 8)}`,
-      price: queue.price,
-      delivery_type: "key",
-      active: true,
-      stock: 1,
-      bin: c.bin,
-      brand: c.brand || null,
-      country: clean(c.country) || null,
-      state: clean(c.state) || null,
-      city: clean(c.city) || null,
-      zip: clean(c.zip) || null,
-      exp_month: clean(c.month) || null,
-      exp_year: clean(c.year) || null,
-      base: baseName,
-      refundable: queue.refundable,
-      last_digits: (c.cc || "").replace(/\D/g, "").slice(-3) || null,
-      has_phone: !!clean(c.tel),
-      has_email: !!clean(c.email),
-      created_at: today.toISOString(),
-    }));
+    const products = stagedItems.map((c, i: number) => {
+      const binInfo = detectOfflineBin(c.cc || c.bin);
+      const isRef =
+        queue.refundable === true
+          ? true
+          : binInfo.refundable;
+      const cardCountry = clean(c.country) || binInfo.country || null;
+      const brand = c.brand || binInfo.brand || primaryBrand;
+
+      return {
+        category_id: queue.category_id || null,
+        title: `${brand} ${c.bin} · ${clean(c.city) || clean(c.state) || cardCountry || "—"}`,
+        slug: `${c.bin}-${stamp}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+        price: queue.price,
+        delivery_type: "key",
+        active: true,
+        stock: 1,
+        bin: c.bin,
+        brand: brand,
+        country: cardCountry,
+        state: clean(c.state) || null,
+        city: clean(c.city) || null,
+        zip: clean(c.zip) || null,
+        exp_month: clean(c.month) || null,
+        exp_year: clean(c.year) || null,
+        base: baseName,
+        refundable: isRef,
+        card_type: binInfo.type,
+        card_level: binInfo.level,
+        bank: binInfo.bank,
+        last_digits: (c.cc || "").replace(/\D/g, "").slice(-3) || null,
+        has_phone: !!clean(c.tel),
+        has_email: !!clean(c.email),
+        created_at: today.toISOString(),
+      };
+    });
 
     // 4. Insert into products
     const { data: insertedProducts, error: pErr } = await db
