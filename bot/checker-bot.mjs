@@ -354,26 +354,25 @@ async function showAccount(chat, from) {
 async function startDeposit(chat) {
   pendingAction.set(chat, "deposit");
   const s = await getSettings();
+  const minDep = Number(s.min_deposit || 5);
+  const quickAmounts = Array.from(new Set([minDep, 10, 25, 50, 100].filter((n) => n >= minDep))).sort((a, b) => a - b);
+  const examplesStr = quickAmounts.join(", ");
+
   await send(chat, [
     `━━━━━━━━━━━━━━━━━━━`,
     `💎 <b>RECHARGE BALANCE (LTC)</b>`,
     `━━━━━━━━━━━━━━━━━━━`,
     `Please type the amount in USD you want to deposit into your account:`,
     ``,
-    `💡 <i>Examples:</i> <code>10</code>, <code>25</code>, <code>50</code>, <code>100</code>`,
+    `💡 <i>Examples:</i> <code>${examplesStr}</code>`,
     ``,
     `⚡ <b>Payment Method:</b> Litecoin (LTC)`,
-    `💵 <b>Minimum Recharge:</b> <code>$${s.min_deposit || 5}</code>`,
+    `💵 <b>Minimum Recharge:</b> <code>$${minDep}</code>`,
     `━━━━━━━━━━━━━━━━━━━`,
   ].join("\n"), {
     reply_markup: {
       inline_keyboard: [
-        [
-          { text: "$10", callback_data: "recharge:10" },
-          { text: "$25", callback_data: "recharge:25" },
-          { text: "$50", callback_data: "recharge:50" },
-          { text: "$100", callback_data: "recharge:100" },
-        ],
+        quickAmounts.map((amt) => ({ text: `$${amt}`, callback_data: `recharge:${amt}` })),
         [{ text: "🔙 Cancel", callback_data: "balance" }],
       ],
     },
@@ -757,8 +756,18 @@ async function handleMessage(msg) {
         await showAccount(chat, from);
         return;
       case "/deposit":
-        if (args[0] && Number(args[0]) > 0) await createDeposit(chat, from, Number(args[0]));
-        else await startDeposit(chat);
+        if (args[0] && Number(args[0]) > 0) {
+          const s = await getSettings();
+          const minDep = Number(s.min_deposit || 5);
+          const amt = Number(args[0]);
+          if (amt < minDep) {
+            await menu(chat, `❌ <b>Invalid Amount:</b> Minimum deposit is <code>$${minDep}</code>.`);
+            return;
+          }
+          await createDeposit(chat, from, amt);
+        } else {
+          await startDeposit(chat);
+        }
         return;
       case "/check":
         if (args.length) await runCheck(chat, from, extractCards(args.join("\n")));
@@ -839,8 +848,10 @@ async function handleMessage(msg) {
   if (waiting === "deposit") {
     const amount = Number(text.replace(/[^0-9.]/g, ""));
     pendingAction.delete(chat);
-    if (!Number.isFinite(amount) || amount < 1) {
-      await menu(chat, "Enter a valid amount, for example <code>50</code>.");
+    const s = await getSettings();
+    const minDep = Number(s.min_deposit || 5);
+    if (!Number.isFinite(amount) || amount < minDep) {
+      await menu(chat, `❌ <b>Invalid Amount:</b> Minimum deposit is <code>$${minDep}</code>.`);
       return;
     }
     await createDeposit(chat, from, amount);
