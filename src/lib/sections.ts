@@ -31,74 +31,28 @@ const mapRows = (rows: unknown[]): SectionProduct[] =>
   }));
 
 /** Public list for a section. Sold-out key products are hidden. */
-export const listSection = async (section: Section, limit = 100000): Promise<SectionProduct[]> => {
-  const CHUNK_SIZE = 1000;
-  const createQuery = (withCount = false) =>
-    supabase
-      .from("products")
-      .select("*", withCount ? { count: "exact" } : undefined)
-      .eq("active", true)
-      .order("created_at", { ascending: false });
-
-  const firstRes = await createQuery(true).range(0, CHUNK_SIZE - 1);
-  if (firstRes.error) throw firstRes.error;
-  const allRows = [...(firstRes.data ?? [])];
-  const totalCount = Math.min(firstRes.count ?? firstRes.data?.length ?? 0, limit);
-
-  if (totalCount > CHUNK_SIZE) {
-    const tasks = [];
-    for (let from = CHUNK_SIZE; from < totalCount; from += CHUNK_SIZE) {
-      const to = Math.min(from + CHUNK_SIZE - 1, totalCount - 1);
-      tasks.push(
-        createQuery()
-          .range(from, to)
-          .then((r) => {
-            if (r.error) throw r.error;
-            return r.data ?? [];
-          })
-      );
-    }
-    const pages = await Promise.all(tasks);
-    for (const page of pages) allRows.push(...page);
-  }
-
-  return mapRows(allRows)
+export const listSection = async (section: Section, limit = 2000): Promise<SectionProduct[]> => {
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("active", true)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return mapRows(data ?? [])
     .filter((p) => sectionOf(p) === section)
     .filter((p) => p.delivery_type !== "key" || (p.stock ?? 0) > 0);
 };
 
 /** Admin list (includes hidden / sold out). */
-export const adminListSection = async (section: Section, limit = 100000): Promise<SectionProduct[]> => {
-  const CHUNK_SIZE = 1000;
-  const createQuery = (withCount = false) =>
-    supabase
-      .from("products")
-      .select("*", withCount ? { count: "exact" } : undefined)
-      .order("created_at", { ascending: false });
-
-  const firstRes = await createQuery(true).range(0, CHUNK_SIZE - 1);
-  if (firstRes.error) throw firstRes.error;
-  const allRows = [...(firstRes.data ?? [])];
-  const totalCount = Math.min(firstRes.count ?? firstRes.data?.length ?? 0, limit);
-
-  if (totalCount > CHUNK_SIZE) {
-    const tasks = [];
-    for (let from = CHUNK_SIZE; from < totalCount; from += CHUNK_SIZE) {
-      const to = Math.min(from + CHUNK_SIZE - 1, totalCount - 1);
-      tasks.push(
-        createQuery()
-          .range(from, to)
-          .then((r) => {
-            if (r.error) throw r.error;
-            return r.data ?? [];
-          })
-      );
-    }
-    const pages = await Promise.all(tasks);
-    for (const page of pages) allRows.push(...page);
-  }
-
-  return mapRows(allRows).filter((p) => sectionOf(p) === section);
+export const adminListSection = async (section: Section, limit = 2000): Promise<SectionProduct[]> => {
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return mapRows(data ?? []).filter((p) => sectionOf(p) === section);
 };
 
 /* ---------------- BIN upload ---------------- */

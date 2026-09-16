@@ -222,10 +222,6 @@ const Shop = () => {
     () => cards.filter((c) => selected.has(c.id)).reduce((s, c) => s + Number(c.price), 0),
     [cards, selected],
   );
-  const resultsTotal = useMemo(
-    () => cards.reduce((s, c) => s + Number(c.price), 0),
-    [cards],
-  );
 
   const buyMany = (ids: string[]) => {
     if (!ids.length) return toast.error("Select cards first");
@@ -305,7 +301,7 @@ const Shop = () => {
               <optgroup label="In stock">
                 {stockCountries.map((c) => (
                   <option key={`s-${c.code}`} value={c.code}>
-                    {flagEmoji(c.code)} {c.name} ({c.n})
+                    {flagEmoji(c.code)} {c.name}
                   </option>
                 ))}
               </optgroup>
@@ -360,7 +356,7 @@ const Shop = () => {
             disabled={cards.length === 0}
             className="h-8 px-3 rounded-md border border-[#dcdcdc] bg-gradient-to-b from-white to-[#f4f6f8] text-[#37474f] text-[12px] hover:border-[#2196f3] active:translate-y-px transition disabled:opacity-50"
           >
-            Select all results ({cards.length})
+            Select all results
           </button>
           {selected.size > 0 && (
             <span className="text-[12px] font-semibold text-[#2e7d32] bg-[#e8f5e9] border border-[#c8e6c9] rounded-md px-2.5 h-8 inline-flex items-center">
@@ -380,7 +376,7 @@ const Shop = () => {
             </select>
           </label>
           {cards.length > 0 ? (
-            <span>{cards.length} results · page {page}/{totalPages} · stock value {resultsTotal.toFixed(2)}$</span>
+            <span>Page {page} of {totalPages}</span>
           ) : null}
           <Link to="/cart" className="text-[#2196f3] hover:underline">
             Cart{count > 0 ? ` (${count})` : ""}
@@ -610,7 +606,7 @@ const Shop = () => {
             Next <ChevronRight className="h-4 w-4" />
           </Button>
           <span className="basis-full text-center text-[12px] text-[#777]">
-            Page {page} of {totalPages} · {cards.length} cards
+            Page {page} of {totalPages}
           </span>
         </nav>
       )}
