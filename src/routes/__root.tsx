@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { initClientSecurity } from "../lib/clientSecurity";
 
 function NotFoundComponent() {
   return (
@@ -78,6 +79,11 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  useEffect(() => {
+    initClientSecurity();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />
