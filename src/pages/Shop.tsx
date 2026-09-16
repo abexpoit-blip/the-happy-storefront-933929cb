@@ -115,24 +115,6 @@ const Shop = () => {
     }
   }, [searchParams, bases]);
 
-  // Available BINs in currently selected base (or in all cards if base === "all")
-  const baseBins = useMemo(() => {
-    const pool =
-      base !== "all"
-        ? all.filter((p) => (p.base ?? "") === base || publicBase(p.base) === publicBase(base))
-        : all;
-    const counts = new Map<string, number>();
-    for (const p of pool) {
-      const b = (p.bin ?? "").replace(/\D/g, "").slice(0, 6);
-      if (b.length >= 6) {
-        counts.set(b, (counts.get(b) ?? 0) + 1);
-      }
-    }
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([b, count]) => ({ bin: b, count }));
-  }, [all, base]);
-
   // Countries actually in stock (with counts), plus the full ISO list below it.
   const stockCountries = useMemo(() => {
     const counts = new Map<string, number>();
@@ -277,16 +259,9 @@ const Shop = () => {
               setSearched(true);
             }}
             onKeyDown={(e) => e.key === "Enter" && runSearch()}
-            placeholder={base !== "all" ? `Filter ${baseBins.length} BINs in base...` : "Enter BIN / card number"}
+            placeholder={base !== "all" ? "Filter BIN in base..." : "Enter BIN / card number"}
             className="h-8 w-full min-w-0 lg:w-[180px] rounded-md border border-[#dcdcdc] px-2 text-[13px] font-mono outline-none focus:border-[#2196f3] focus:ring-2 focus:ring-[#2196f3]/15 transition"
           />
-          <datalist id="shop-bins-datalist">
-            {baseBins.map((b) => (
-              <option key={b.bin} value={b.bin}>
-                {b.bin} ({b.count} cards)
-              </option>
-            ))}
-          </datalist>
         </Field>
         <Field label="BASE">
           <select
@@ -367,47 +342,6 @@ const Shop = () => {
             <RotateCcw className="h-3.5 w-3.5" /> reset
           </button>
         </div>
-
-        {/* Base-Wise BIN Filter Pills */}
-        {baseBins.length > 0 && (
-          <div className="w-full sm:col-span-2 lg:col-span-full flex items-center gap-1.5 flex-wrap pt-2.5 border-t border-[#f0f0f0] text-xs">
-            <span className="text-[#777] font-medium text-[11.5px]">
-              {base !== "all" ? (
-                <>BINs in base <b className="text-[#2196f3]">{publicBase(base)}</b>:</>
-              ) : (
-                <>Top available BINs:</>
-              )}
-            </span>
-            <button
-              type="button"
-              onClick={() => { setBin(""); setQ((s) => ({ ...s, bin: "" })); setSearched(true); }}
-              className={`px-2 py-0.5 rounded text-[11px] font-mono transition ${
-                !bin ? "bg-[#2196f3] text-white font-bold shadow-sm" : "bg-[#f2f4f7] text-[#555] hover:bg-[#e4e7ec]"
-              }`}
-            >
-              All BINs
-            </button>
-            {baseBins.slice(0, 18).map((b) => (
-              <button
-                key={b.bin}
-                type="button"
-                onClick={() => {
-                  const next = bin === b.bin ? "" : b.bin;
-                  setBin(next);
-                  setQ((s) => ({ ...s, bin: next }));
-                  setSearched(true);
-                }}
-                className={`px-2 py-0.5 rounded text-[11px] font-mono transition ${
-                  bin === b.bin
-                    ? "bg-[#2196f3] text-white font-bold shadow-sm"
-                    : "bg-[#f2f4f7] text-[#444] hover:bg-[#e4e7ec]"
-                }`}
-              >
-                {b.bin} ({b.count})
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* ACTION BAR */}

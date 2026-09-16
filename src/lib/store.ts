@@ -110,24 +110,79 @@ export const listCategories = async (includeInactive = false): Promise<Category[
 };
 
 /** Hard cap so a huge stock table can never freeze the browser / blow up the response. */
-export const PRODUCT_FETCH_LIMIT = 3000;
+export const PRODUCT_FETCH_LIMIT = 100000;
 
 export const listProducts = async (
   opts: { categoryId?: string | null; search?: string; includeInactive?: boolean; limit?: number } = {},
 ) => {
-  const limit = Math.min(opts.limit ?? PRODUCT_FETCH_LIMIT, PRODUCT_FETCH_LIMIT);
-  let q = supabase
-    .from("products")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  // A sold-out card must never stay on the shelf, even if `active` was not flipped.
-  if (!opts.includeInactive) q = q.eq("active", true).or("delivery_type.neq.key,stock.gt.0");
-  if (opts.categoryId) q = q.eq("category_id", opts.categoryId);
-  if (opts.search?.trim()) q = q.ilike("title", `%${opts.search.trim()}%`);
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []).map((p) => ({ ...p, price: num(p.price), compare_at_price: p.compare_at_price == null ? null : num(p.compare_at_price) })) as Product[];
+  const maxLimit = opts.limit ?? PRODUCT_FETCH_LIMIT;
+  const CHUNK_SIZE = 1000;
+
+  const buildQuery = (withCount = false) => {
+    let q = supabase
+      .from("products")
+      .select("*", withCount ? { count: "exact" } : undefined)
+      .order("created_at", { ascending: false });
+    // A sold-out card must never stay on the shelf, even if `active` was not flipped.
+    if (!opts.includeInactive) q = q.eq("active", true).or("delivery_type.neq.key,stock.gt.0");
+    if (opts.categoryId) q = q.eq("category_id", opts.categoryId);
+    if (opts.search?.trim()) q = q.ilike("title", `%${opts.search.trim()}%`);
+    return q;
+  };
+
+  // If a small limit was explicitly specified, do a single range request
+  if (opts.limit && opts.limit <= CHUNK_SIZE) {
+    const { data, error } = await buildQuery().range(0, opts.limit - 1);
+    if (error) throw error;
+    return (data ?? []).map((p) => ({
+      ...p,
+      price: num(p.price),
+      compare_at_price: p.compare_at_price == null ? null : num(p.compare_at_price),
+    })) as Product[];
+  }
+
+  // Fetch initial batch with count so we can load all 5k+ cards
+  const firstRes = await buildQuery(true).range(0, CHUNK_SIZE - 1);
+  if (firstRes.error) throw firstRes.error;
+  const allRows = [...(firstRes.data ?? [])];
+  const totalCount = Math.min(firstRes.count ?? firstRes.data?.length ?? 0, maxLimit);
+
+  if (totalCount > CHUNK_SIZE) {
+    const tasks = [];
+    for (let from = CHUNK_SIZE; from < totalCount; from += CHUNK_SIZE) {
+      const to = Math.min(from + CHUNK_SIZE - 1, totalCount - 1);
+      tasks.push(
+        buildQuery()
+          .range(from, to)
+          .then((r) => {
+            if (r.error) throw r.error;
+            return r.data ?? [];
+          })
+      );
+    }
+    const pages = await Promise.all(tasks);
+    for (const page of pages) {
+      allRows.push(...page);
+    }
+  } else if (firstRes.count == null && firstRes.data && firstRes.data.length === CHUNK_SIZE) {
+    let from = CHUNK_SIZE;
+    while (from < maxLimit) {
+      const to = Math.min(from + CHUNK_SIZE - 1, maxLimit - 1);
+      const r = await buildQuery().range(from, to);
+      if (r.error) throw r.error;
+      const batch = r.data ?? [];
+      if (!batch.length) break;
+      allRows.push(...batch);
+      if (batch.length < CHUNK_SIZE) break;
+      from += CHUNK_SIZE;
+    }
+  }
+
+  return allRows.map((p) => ({
+    ...p,
+    price: num(p.price),
+    compare_at_price: p.compare_at_price == null ? null : num(p.compare_at_price),
+  })) as Product[];
 };
 
 
@@ -849,16 +904,60 @@ export const adminListCards = async (opts: {
   search?: string;
   status?: "all" | "available" | "sold" | "hidden" | "expired";
 } = {}): Promise<AdminCardRow[]> => {
-  let q = supabase
-    .from("products")
-    .select("id, bin, brand, country, price, active, stock, sold_count, exp_month, exp_year, created_at, category_id, base")
-    .order("created_at", { ascending: false })
-    .limit(1000);
-  const s = opts.search?.trim();
-  if (s) q = q.or(`bin.ilike.%${s}%,brand.ilike.%${s}%,country.ilike.%${s}%,title.ilike.%${s}%`);
-  const { data, error } = await q;
-  if (error) throw error;
-  const rows: AdminCardRow[] = (data ?? []).map((p) => ({
+  const CHUNK_SIZE = 1000;
+  const maxLimit = 100000;
+
+  const buildQuery = (withCount = false) => {
+    let q = supabase
+      .from("products")
+      .select(
+        "id, bin, brand, country, price, active, stock, sold_count, exp_month, exp_year, created_at, category_id, base",
+        withCount ? { count: "exact" } : undefined,
+      )
+      .order("created_at", { ascending: false });
+    const s = opts.search?.trim();
+    if (s) q = q.or(`bin.ilike.%${s}%,brand.ilike.%${s}%,country.ilike.%${s}%,title.ilike.%${s}%`);
+    return q;
+  };
+
+  const firstRes = await buildQuery(true).range(0, CHUNK_SIZE - 1);
+  if (firstRes.error) throw firstRes.error;
+
+  const allData = [...(firstRes.data ?? [])];
+  const totalCount = Math.min(firstRes.count ?? firstRes.data?.length ?? 0, maxLimit);
+
+  if (totalCount > CHUNK_SIZE) {
+    const tasks = [];
+    for (let from = CHUNK_SIZE; from < totalCount; from += CHUNK_SIZE) {
+      const to = Math.min(from + CHUNK_SIZE - 1, totalCount - 1);
+      tasks.push(
+        buildQuery()
+          .range(from, to)
+          .then((r) => {
+            if (r.error) throw r.error;
+            return r.data ?? [];
+          })
+      );
+    }
+    const pages = await Promise.all(tasks);
+    for (const page of pages) {
+      allData.push(...page);
+    }
+  } else if (firstRes.count == null && firstRes.data && firstRes.data.length === CHUNK_SIZE) {
+    let from = CHUNK_SIZE;
+    while (from < maxLimit) {
+      const to = Math.min(from + CHUNK_SIZE - 1, maxLimit - 1);
+      const r = await buildQuery().range(from, to);
+      if (r.error) throw r.error;
+      const batch = r.data ?? [];
+      if (!batch.length) break;
+      allData.push(...batch);
+      if (batch.length < CHUNK_SIZE) break;
+      from += CHUNK_SIZE;
+    }
+  }
+
+  const rows: AdminCardRow[] = allData.map((p) => ({
     id: p.id,
     bin: p.bin ?? "—",
     brand: p.brand ?? "—",
