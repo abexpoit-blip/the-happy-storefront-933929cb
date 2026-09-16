@@ -91,17 +91,4 @@ export function initClientSecurity() {
     /* ignore */
   }
 
-  // 5. Anti-Debugging / DevTools Detection Loop (in production only)
-  if (process.env.NODE_ENV === "production") {
-    setInterval(() => {
-      const start = performance.now();
-      // debugger statement pauses execution only if DevTools is open
-      // eslint-disable-next-line no-debugger
-      debugger;
-      const end = performance.now();
-      if (end - start > 100) {
-        console.clear();
-      }
-    }, 2000);
-  }
 }

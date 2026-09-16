@@ -109,35 +109,110 @@ export const listCategories = async (includeInactive = false): Promise<Category[
   return (data ?? []) as Category[];
 };
 
+const PRODUCT_COLUMNS =
+  "id, category_id, title, slug, price, compare_at_price, active, stock, bin, brand, country, state, city, zip, exp_month, exp_year, base, refundable, card_type, card_level, bank, created_at";
+
+let productCache: { at: number; data: Product[] } | null = null;
+const CACHE_TTL_MS = 60_000; // 60s in-memory cache for instant UI performance
+
+export const invalidateProductCache = () => {
+  productCache = null;
+};
+
 /** Hard cap so a huge stock table can never freeze the browser / blow up the response. */
-export const PRODUCT_FETCH_LIMIT = 1500;
+export const PRODUCT_FETCH_LIMIT = 50000;
 
 export const listProducts = async (
-  opts: { categoryId?: string | null; search?: string; includeInactive?: boolean; limit?: number } = {},
+  opts: {
+    categoryId?: string | null;
+    search?: string;
+    includeInactive?: boolean;
+    limit?: number;
+    forceFresh?: boolean;
+  } = {},
 ) => {
-  const limit = Math.min(opts.limit ?? PRODUCT_FETCH_LIMIT, PRODUCT_FETCH_LIMIT);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let q = (supabase as any)
-    .from("products")
-    .select(
-      "id, category_id, title, slug, price, compare_at_price, active, stock, bin, brand, country, state, city, zip, exp_month, exp_year, base, refundable, card_type, card_level, bank, created_at"
-    )
-    .order("created_at", { ascending: false })
-    .limit(limit);
+  const isDefaultFetch = !opts.categoryId && !opts.search && !opts.includeInactive && !opts.limit;
+  if (isDefaultFetch && !opts.forceFresh && productCache && Date.now() - productCache.at < CACHE_TTL_MS) {
+    return productCache.data;
+  }
 
-  // A sold-out card must never stay on the shelf, even if `active` was not flipped.
-  if (!opts.includeInactive) q = q.eq("active", true).or("delivery_type.neq.key,stock.gt.0");
-  if (opts.categoryId) q = q.eq("category_id", opts.categoryId);
-  if (opts.search?.trim()) q = q.ilike("title", `%${opts.search.trim()}%`);
+  const CHUNK_SIZE = 1000;
+  const maxLimit = opts.limit ?? PRODUCT_FETCH_LIMIT;
 
-  const { data, error } = await q;
-  if (error) throw error;
+  const buildQuery = () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q = (supabase as any)
+      .from("products")
+      .select(PRODUCT_COLUMNS)
+      .order("created_at", { ascending: false });
 
-  return ((data ?? []) as Record<string, unknown>[]).map((p) => ({
+    // A sold-out card must never stay on the shelf, even if `active` was not flipped.
+    if (!opts.includeInactive) q = q.eq("active", true).or("delivery_type.neq.key,stock.gt.0");
+    if (opts.categoryId) q = q.eq("category_id", opts.categoryId);
+    if (opts.search?.trim()) q = q.ilike("title", `%${opts.search.trim()}%`);
+    return q;
+  };
+
+  // If specific small limit was explicitly requested
+  if (opts.limit && opts.limit <= CHUNK_SIZE) {
+    const { data, error } = await buildQuery().range(0, opts.limit - 1);
+    if (error) throw error;
+    return ((data ?? []) as Record<string, unknown>[]).map((p) => ({
+      ...p,
+      price: num(p.price as number | string),
+      compare_at_price: p.compare_at_price == null ? null : num(p.compare_at_price as number | string),
+    })) as Product[];
+  }
+
+  // Fetch initial batch (0..999) WITHOUT count: "exact" (avoids expensive DB sequential scans)
+  const firstRes = await buildQuery().range(0, CHUNK_SIZE - 1);
+  if (firstRes.error) throw firstRes.error;
+  const firstBatch = (firstRes.data ?? []) as Record<string, unknown>[];
+
+  // If fewer than 1000 cards exist, return immediately
+  if (firstBatch.length < CHUNK_SIZE) {
+    const mapped = firstBatch.map((p) => ({
+      ...p,
+      price: num(p.price as number | string),
+      compare_at_price: p.compare_at_price == null ? null : num(p.compare_at_price as number | string),
+    })) as Product[];
+    if (isDefaultFetch) productCache = { at: Date.now(), data: mapped };
+    return mapped;
+  }
+
+  // If 1000 returned, there are more cards (e.g. 5,000+ cards).
+  // Fetch subsequent chunks in parallel up to maxLimit.
+  const allRows = [...firstBatch];
+  const probeRanges: [number, number][] = [];
+  for (let from = CHUNK_SIZE; from < maxLimit; from += CHUNK_SIZE) {
+    probeRanges.push([from, Math.min(from + CHUNK_SIZE - 1, maxLimit - 1)]);
+  }
+
+  // Run subsequent parallel range fetches
+  const remainingPages = await Promise.all(
+    probeRanges.map(([from, to]) =>
+      buildQuery()
+        .range(from, to)
+        .then((r: { data: Record<string, unknown>[] | null; error: unknown }) => {
+          if (r.error) throw r.error;
+          return (r.data ?? []) as Record<string, unknown>[];
+        }),
+    ),
+  );
+
+  for (const page of remainingPages) {
+    if (page.length > 0) allRows.push(...page);
+    if (page.length < CHUNK_SIZE) break; // End of stock reached
+  }
+
+  const mapped = allRows.map((p) => ({
     ...p,
     price: num(p.price as number | string),
     compare_at_price: p.compare_at_price == null ? null : num(p.compare_at_price as number | string),
   })) as Product[];
+
+  if (isDefaultFetch) productCache = { at: Date.now(), data: mapped };
+  return mapped;
 };
 
 
@@ -616,7 +691,7 @@ export const adminPublishFullCards = async (
     onProgress?.(created, products.length);
   }
 
-
+  invalidateProductCache();
   return created;
 };
 

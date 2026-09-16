@@ -22,18 +22,7 @@ export const lookupBin = async (raw: string): Promise<BinInfo | null> => {
   if (cached) return cached;
 
   const offline = detectOfflineBin(bin);
-  try {
-    const res = await fetch(`/api/public/bin/${bin}`);
-    if (res.ok) {
-      const data = (await res.json()) as BinInfo;
-      memo.set(bin, data);
-      return data;
-    }
-  } catch {
-    // ignore
-  }
-
-  const fallback: BinInfo = {
+  const result: BinInfo = {
     bin,
     brand: offline.brand,
     type: offline.type,
@@ -44,6 +33,7 @@ export const lookupBin = async (raw: string): Promise<BinInfo | null> => {
     currency: null,
     source: "offline_intelligence",
   };
-  memo.set(bin, fallback);
-  return fallback;
+
+  memo.set(bin, result);
+  return result;
 };
