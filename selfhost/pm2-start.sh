@@ -46,6 +46,9 @@ done
 # self-hosted guard: refuse to boot against hosted supabase.co
 bash "$APP_DIR/selfhost/check-env.sh" "$APP_DIR/.env"
 
+# Automatically apply any pending database table migrations
+[ -f "$APP_DIR/selfhost/auto-migrate.sh" ] && bash "$APP_DIR/selfhost/auto-migrate.sh" || true
+
 
 # Recreate instead of restart so removed/rotated values cannot survive in PM2.
 pm2 delete "$APP_NAME" >/dev/null 2>&1 || true
