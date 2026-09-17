@@ -119,7 +119,6 @@ async function sendTelegramBroadcast(baseName, count, brand, country, price) {
     `📦 <b>Base:</b> <code>${cleanBase}</code>`,
     `🏷 <b>Brand:</b> ${brand || "VISA/MC"}`,
     `🌍 <b>Country:</b> ${country || "MIX"}`,
-    `💰 <b>Price:</b> $${Number(price || 1.5).toFixed(2)}`,
     `⚡ <b>Delivery:</b> Instant Automated Delivery`,
     ``,
     `🛒 <b>Shop Now:</b> <a href="https://zoru.cc/shop">zoru.cc/shop</a>`,
