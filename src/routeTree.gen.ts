@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
+import { Route as ApiPublicBinTrackRouteImport } from './routes/api/public/bin-track'
 import { Route as ApiPublicDepositCallbackRouteImport } from './routes/api/public/deposit-callback'
 import { Route as ApiPublicBinBinRouteImport } from './routes/api/public/bin.$bin'
 import { Route as ApiPublicBotActionRouteImport } from './routes/api/public/bot/$action'
@@ -27,6 +28,11 @@ const IndexRoute = IndexRouteImport.update({
 const SplatRoute = SplatRouteImport.update({
   id: '/$',
   path: '/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicBinTrackRoute = ApiPublicBinTrackRouteImport.update({
+  id: '/api/public/bin-track',
+  path: '/api/public/bin-track',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicDepositCallbackRoute =
@@ -69,6 +75,7 @@ const ApiPublicCheckerResultRoute = ApiPublicCheckerResultRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/api/public/bin-track': typeof ApiPublicBinTrackRoute
   '/api/public/deposit-callback': typeof ApiPublicDepositCallbackRoute
   '/api/public/bin/$bin': typeof ApiPublicBinBinRoute
   '/api/public/bot/$action': typeof ApiPublicBotActionRoute
@@ -80,6 +87,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/api/public/bin-track': typeof ApiPublicBinTrackRoute
   '/api/public/deposit-callback': typeof ApiPublicDepositCallbackRoute
   '/api/public/bin/$bin': typeof ApiPublicBinBinRoute
   '/api/public/bot/$action': typeof ApiPublicBotActionRoute
@@ -92,6 +100,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/api/public/bin-track': typeof ApiPublicBinTrackRoute
   '/api/public/deposit-callback': typeof ApiPublicDepositCallbackRoute
   '/api/public/bin/$bin': typeof ApiPublicBinBinRoute
   '/api/public/bot/$action': typeof ApiPublicBotActionRoute
@@ -105,6 +114,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$'
+    | '/api/public/bin-track'
     | '/api/public/deposit-callback'
     | '/api/public/bin/$bin'
     | '/api/public/bot/$action'
@@ -116,6 +126,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/$'
+    | '/api/public/bin-track'
     | '/api/public/deposit-callback'
     | '/api/public/bin/$bin'
     | '/api/public/bot/$action'
@@ -127,6 +138,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/$'
+    | '/api/public/bin-track'
     | '/api/public/deposit-callback'
     | '/api/public/bin/$bin'
     | '/api/public/bot/$action'
@@ -139,6 +151,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
+  ApiPublicBinTrackRoute: typeof ApiPublicBinTrackRoute
   ApiPublicDepositCallbackRoute: typeof ApiPublicDepositCallbackRoute
   ApiPublicBinBinRoute: typeof ApiPublicBinBinRoute
   ApiPublicBotActionRoute: typeof ApiPublicBotActionRoute
@@ -162,6 +175,13 @@ declare module '@tanstack/react-router' {
       path: '/$'
       fullPath: '/$'
       preLoaderRoute: typeof SplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/bin-track': {
+      id: '/api/public/bin-track'
+      path: '/api/public/bin-track'
+      fullPath: '/api/public/bin-track'
+      preLoaderRoute: typeof ApiPublicBinTrackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/deposit-callback': {
@@ -219,6 +239,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
+  ApiPublicBinTrackRoute: ApiPublicBinTrackRoute,
   ApiPublicDepositCallbackRoute: ApiPublicDepositCallbackRoute,
   ApiPublicBinBinRoute: ApiPublicBinBinRoute,
   ApiPublicBotActionRoute: ApiPublicBotActionRoute,

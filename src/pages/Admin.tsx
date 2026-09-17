@@ -19,10 +19,13 @@ import {
   TrendingUp, DollarSign, ShoppingCart, Package, FileText, Upload,
   Search, LogIn, Activity, ArrowUpRight, ArrowDownRight, Plus,
   Trash2, Wand2, Newspaper, Send, Eye, UserPlus, BarChart3,
-  Calendar, Sparkles,
+  Calendar, Sparkles, Flame, AlertTriangle,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { BackdateCardUploadDialog } from "@/components/BackdateCardUploadDialog";
 import { broadcastChannelAlert } from "@/lib/cardAutomation.functions";
+import { getBinDemandStats, type BinDemandItem } from "@/lib/binDemand.functions";
+import { flagEmoji } from "@/lib/countries";
 import { useAuth } from "@/hooks/useAuth";
 
 interface Profile {
@@ -88,6 +91,9 @@ const Admin = () => {
   // Active tab
   const [tab, setTab] = useState<"overview" | "users" | "cards" | "broadcast">("overview");
 
+  // Top Demanded BINs
+  const [topDemandedBins, setTopDemandedBins] = useState<BinDemandItem[]>([]);
+
   // Manual balance modal
   const [balanceUser, setBalanceUser] = useState<Profile | null>(null);
   const [balanceAmount, setBalanceAmount] = useState("");
@@ -114,12 +120,13 @@ const Admin = () => {
 
   const load = async () => {
     try {
-      const [s, u, d, n, catRes] = await Promise.allSettled([
+      const [s, u, d, n, catRes, demandRes] = await Promise.allSettled([
         adminOverview(),
         loadUsers(userSearch),
         adminListDeposits(),
         listAnnouncements(),
         listCategories(true),
+        getBinDemandStats({ data: { limit: 6 } }),
       ]);
       if (s.status === "fulfilled") setStats(s.value as unknown as Record<string, unknown>);
       if (u.status === "fulfilled") setUsers(u.value as Profile[]);
@@ -130,6 +137,7 @@ const Admin = () => {
         })) as unknown as NewsItem[]);
       }
       if (catRes.status === "fulfilled") setCategories(catRes.value);
+      if (demandRes.status === "fulfilled") setTopDemandedBins(demandRes.value.items ?? []);
       setPayouts([]);
     } catch { /* ignore */ }
   };
@@ -440,6 +448,87 @@ const Admin = () => {
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground py-8 text-center">No sales data yet.</p>
+              )}
+            </Section>
+
+            {/* Customer BIN Demand Section */}
+            <Section icon={Flame} title="CUSTOMER DEMAND · MOST SEARCHED BINS">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <p className="text-xs text-muted-foreground">
+                  Real-time analytics of which BINs public users are searching for most in your store.
+                </p>
+                <Link
+                  to="/admin/bins"
+                  className="text-xs text-primary-glow hover:underline font-semibold flex items-center gap-1"
+                >
+                  Open Full BIN Demand Analytics →
+                </Link>
+              </div>
+
+              {topDemandedBins.length === 0 ? (
+                <div className="py-6 text-center text-muted-foreground text-sm">
+                  <Flame className="h-6 w-6 mx-auto mb-1 text-muted-foreground/40" />
+                  No customer BIN searches recorded yet.
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {topDemandedBins.map((b) => (
+                    <div
+                      key={b.bin}
+                      className={`rounded-xl border p-3.5 flex flex-col justify-between transition-all ${
+                        b.in_stock === 0
+                          ? "border-amber-500/30 bg-amber-500/[0.04]"
+                          : "border-border/40 bg-card/40"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="font-mono text-base font-extrabold text-foreground tracking-wider">
+                            {b.bin}
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                            <Flame className="h-3 w-3 fill-amber-400" />
+                            {b.search_count} {b.search_count === 1 ? "search" : "searches"}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                          <span className="font-semibold text-foreground">{b.brand || "CARD"}</span>
+                          <span>·</span>
+                          <span>{b.card_type || "CREDIT"}</span>
+                          {b.country && (
+                            <>
+                              <span>·</span>
+                              <span>{flagEmoji(b.country)} {b.country}</span>
+                            </>
+                          )}
+                        </div>
+                        {b.bank && (
+                          <div className="text-[11px] text-muted-foreground truncate mt-1" title={b.bank}>
+                            {b.bank}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-3 pt-2.5 border-t border-border/40 flex items-center justify-between">
+                        {b.in_stock === 0 ? (
+                          <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3 shrink-0" /> 0 in stock (HIGH NEED)
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                            <Check className="h-3 w-3 shrink-0" /> {b.in_stock} in stock
+                          </span>
+                        )}
+                        <button
+                          onClick={() => setTab("cards")}
+                          className="text-xs text-primary-glow hover:underline font-semibold"
+                        >
+                          Upload +
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </Section>
 

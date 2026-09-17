@@ -13,6 +13,7 @@ import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode, countryName
 import { sortBasesLatestFirst } from "@/lib/baseLabel";
 import { allCountries, flagEmoji, resolveCountryCode, resolveCountryName } from "@/lib/countries";
 import { lookupBin } from "@/lib/bin";
+import { trackBinSearch } from "@/lib/binTracking";
 
 type CardMeta = { type: string | null; level: string | null; bank: string | null };
 
@@ -159,6 +160,9 @@ const Shop = () => {
     setLastBin(bin);
     setSearched(true);
     setSelected(new Set());
+    if (bin.trim().length >= 6) {
+      trackBinSearch(bin.trim());
+    }
   };
 
   const reset = () => {
@@ -170,7 +174,12 @@ const Shop = () => {
 
   useEffect(() => {
     if (bin.length >= 6) {
-      const t = setTimeout(() => { setQ({ bin, base, country, zip, refund }); setLastBin(bin); setSearched(true); }, 350);
+      const t = setTimeout(() => {
+        setQ({ bin, base, country, zip, refund });
+        setLastBin(bin);
+        setSearched(true);
+        trackBinSearch(bin);
+      }, 350);
       return () => clearTimeout(t);
     }
   }, [bin]); // eslint-disable-line react-hooks/exhaustive-deps
