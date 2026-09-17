@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import Seo from "@/components/Seo";
 import { toast } from "sonner";
-import { Search, RotateCcw, Loader2, Copy, CheckCircle2, X, ShoppingCart, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, RotateCcw, Loader2, Copy, CheckCircle2, X, ShoppingCart, ChevronLeft, ChevronRight, Lock, AlertTriangle, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listProducts, type Product } from "@/lib/store";
 import { addToCart, cartCount, onCartChange } from "@/lib/cart";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { publicBase } from "@/lib/baseLabel";
 import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode, countryName } from "@/lib/brands";
 import { sortBasesLatestFirst } from "@/lib/baseLabel";
@@ -38,6 +40,55 @@ const PAGE_SIZES = [10, 20, 50, 100];
 
 const Shop = () => {
   const { profile } = useAuth();
+  const navigate = useNavigate();
+  const [hasDeposited, setHasDeposited] = useState<boolean | null>(null);
+  const [showDepositWarning, setShowDepositWarning] = useState(false);
+
+  // Users can only use the BIN filter/search after making their first deposit (or if admin)
+  useEffect(() => {
+    if (!profile) {
+      setHasDeposited(false);
+      return;
+    }
+    if (profile.role === "admin" || Number(profile.balance ?? 0) > 0) {
+      setHasDeposited(true);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { count, error } = await supabase
+          .from("deposits")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", profile.id)
+          .eq("status", "approved");
+        if (!cancelled) {
+          if (!error && (count ?? 0) > 0) {
+            setHasDeposited(true);
+          } else {
+            setHasDeposited(false);
+          }
+        }
+      } catch {
+        if (!cancelled) setHasDeposited(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.id, profile?.role, profile?.balance]);
+
+  const handleBinAttempt = () => {
+    toast.warning("Deposit first to get access", {
+      description: "Please make your first deposit to unlock BIN filtering and search access.",
+      action: {
+        label: "Deposit Now",
+        onClick: () => navigate("/recharge"),
+      },
+    });
+    setShowDepositWarning(true);
+  };
+
   const [all, setAll] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searched, setSearched] = useState(true);
@@ -114,12 +165,16 @@ const Shop = () => {
         setQ((s) => ({ ...s, base: matched }));
       }
       if (binParam) {
-        setBin(binParam);
-        setQ((s) => ({ ...s, bin: binParam }));
+        if (hasDeposited === false) {
+          handleBinAttempt();
+        } else if (hasDeposited === true) {
+          setBin(binParam);
+          setQ((s) => ({ ...s, bin: binParam }));
+        }
       }
       setSearched(true);
     }
-  }, [searchParams, bases]);
+  }, [searchParams, bases, hasDeposited]);
 
   // Countries actually in stock (with counts), plus the full ISO list below it.
   const stockCountries = useMemo(() => {
@@ -161,11 +216,18 @@ const Shop = () => {
   );
 
   const runSearch = () => {
-    setQ({ bin, base, country, zip, refund });
-    setLastBin(bin);
+    if (bin.trim() && !hasDeposited) {
+      handleBinAttempt();
+      setBin("");
+      setQ({ bin: "", base, country, zip, refund });
+      return;
+    }
+    const effectiveBin = hasDeposited ? bin : "";
+    setQ({ bin: effectiveBin, base, country, zip, refund });
+    setLastBin(effectiveBin);
     setSearched(true);
     setSelected(new Set());
-    if (bin.trim().length >= 6) {
+    if (hasDeposited && bin.trim().length >= 6) {
       trackBinSearch(bin.trim());
     }
   };
@@ -179,6 +241,11 @@ const Shop = () => {
 
   useEffect(() => {
     if (bin.length >= 6) {
+      if (!hasDeposited) {
+        handleBinAttempt();
+        setBin("");
+        return;
+      }
       const t = setTimeout(() => {
         setQ({ bin, base, country, zip, refund });
         setLastBin(bin);
@@ -187,7 +254,7 @@ const Shop = () => {
       }, 350);
       return () => clearTimeout(t);
     }
-  }, [bin]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bin, hasDeposited]);
 
   // TYPE / BANK / LEVEL: stored on the product when the admin filled it in,
   // otherwise resolved from the BIN lookup service for the visible rows only.
@@ -259,19 +326,58 @@ const Shop = () => {
       {/* FILTER BAR */}
       <div className="rounded-xl bg-white border border-[#e6e6e6] shadow-[0_10px_30px_-18px_rgba(31,45,61,0.55)] px-3 sm:px-4 py-3 grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center gap-x-6 gap-y-3 text-[13px]">
         <Field label="BIN">
-          <input
-            list="shop-bins-datalist"
-            value={bin}
-            onChange={(e) => {
-              const v = e.target.value.replace(/\D/g, "").slice(0, 16);
-              setBin(v);
-              setQ((s) => ({ ...s, bin: v }));
-              setSearched(true);
-            }}
-            onKeyDown={(e) => e.key === "Enter" && runSearch()}
-            placeholder={base !== "all" ? "Filter BIN in base..." : "Enter BIN / card number"}
-            className="h-8 w-full min-w-0 lg:w-[180px] rounded-md border border-[#dcdcdc] px-2 text-[13px] font-mono outline-none focus:border-[#2196f3] focus:ring-2 focus:ring-[#2196f3]/15 transition"
-          />
+          <div className="relative w-full min-w-0 lg:w-[190px]">
+            <input
+              list={hasDeposited ? "shop-bins-datalist" : undefined}
+              value={hasDeposited ? bin : ""}
+              readOnly={!hasDeposited}
+              onClick={() => {
+                if (!hasDeposited) handleBinAttempt();
+              }}
+              onFocus={() => {
+                if (!hasDeposited) handleBinAttempt();
+              }}
+              onChange={(e) => {
+                if (!hasDeposited) {
+                  handleBinAttempt();
+                  return;
+                }
+                const v = e.target.value.replace(/\D/g, "").slice(0, 16);
+                setBin(v);
+                setQ((s) => ({ ...s, bin: v }));
+                setSearched(true);
+              }}
+              onKeyDown={(e) => {
+                if (!hasDeposited) {
+                  if (e.key === "Enter") handleBinAttempt();
+                  return;
+                }
+                if (e.key === "Enter") runSearch();
+              }}
+              placeholder={
+                hasDeposited
+                  ? base !== "all"
+                    ? "Filter BIN in base..."
+                    : "Enter BIN / card number"
+                  : "🔒 Deposit first to filter"
+              }
+              className={`h-8 w-full min-w-0 rounded-md border px-2 text-[13px] font-mono outline-none transition ${
+                !hasDeposited
+                  ? "cursor-pointer border-amber-300 bg-amber-50/50 text-amber-800 placeholder:text-amber-600/80 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 pr-7"
+                  : "border-[#dcdcdc] focus:border-[#2196f3] focus:ring-2 focus:ring-[#2196f3]/15"
+              }`}
+            />
+            {!hasDeposited && (
+              <button
+                type="button"
+                onClick={handleBinAttempt}
+                title="Deposit first to get access"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-amber-600 hover:text-amber-700 p-0.5"
+              >
+                <Lock className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </Field>
         <Field label="BASE">
           <select
@@ -652,6 +758,52 @@ const Shop = () => {
           </div>
         </div>
       )}
+
+      {/* DEPOSIT REQUIRED FOR BIN FILTER MODAL */}
+      <Dialog open={showDepositWarning} onOpenChange={setShowDepositWarning}>
+        <DialogContent className="sm:max-w-md bg-white border border-[#e6e6e6] shadow-2xl">
+          <DialogHeader className="flex flex-col items-center text-center sm:text-center">
+            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+              <Lock className="h-6 w-6" />
+            </div>
+            <DialogTitle className="text-[17px] font-bold text-gray-900">
+              Deposit First to Get Access
+            </DialogTitle>
+            <DialogDescription className="mt-1 text-[13px] text-gray-600 leading-relaxed">
+              BIN filtering and specific card searching are restricted to active buyers.
+              Please make your first deposit to instantly unlock full BIN filtering and search access.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="my-2 rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-[12.5px] text-amber-900 flex items-start gap-2.5">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <strong>Notice:</strong> General browsing and other filters remain available. Depositing unlocks BIN search permanently.
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowDepositWarning(false)}
+              className="h-9 px-4 text-[13px] text-gray-600 border-gray-300 hover:bg-gray-50"
+            >
+              Close
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setShowDepositWarning(false);
+                navigate("/recharge");
+              }}
+              className="h-9 px-4 text-[13px] font-semibold bg-gradient-to-b from-[#2196f3] to-[#1565c0] hover:from-[#1e88e5] hover:to-[#0d47a1] text-white shadow-md inline-flex items-center gap-1.5"
+            >
+              <Wallet className="h-4 w-4" /> Deposit Now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 };
