@@ -7,10 +7,19 @@ import { startOrderCardCheck, pollOrderCardCheck, CHECK_WINDOW_MS } from "@/lib/
 import { lookupBin, type BinInfo } from "@/lib/bin";
 import {
   Search, RotateCcw, ChevronLeft, ChevronRight, Package, Receipt, CreditCard,
-  Copy, Download, RefreshCw, Loader2, ShieldCheck, ArrowLeft,
+  Copy, Download, RefreshCw, Loader2, ShieldCheck, ArrowLeft, AlertTriangle, Clock,
 } from "lucide-react";
 import { PageHero, StatCard } from "@/components/PageHero";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 /* ────────────────────────── types & parsing ────────────────────────── */
 
@@ -390,6 +399,8 @@ const OrderDetail = ({
   const refundTotal = refundable.reduce((s, p) => s + Number(p.check?.refunded ?? 0), 0);
   const avg = cards.length ? cards.reduce((s, c) => s + c.price, 0) / cards.length : 0;
 
+  const [expiredWarningOpen, setExpiredWarningOpen] = useState(false);
+
   const runCheck = async (checkId: string) => {
     setBusy(checkId);
     try {
@@ -411,9 +422,12 @@ const OrderDetail = ({
       toast.info("Still checking — press CHECK again in a minute");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("check_window_expired")) {
+        setExpiredWarningOpen(true);
+      }
       toast.error(
         msg.includes("insufficient_balance") ? "Not enough balance for the check fee"
-        : msg.includes("check_window_expired") ? "Time expired — the 2 minute refund check window is over"
+        : msg.includes("check_window_expired") ? "Time expired — the 1-minute refund check window is over"
         : msg.includes("already_checked") ? "This card was already checked"
         : msg.includes("no_card_data") ? "Card data unavailable for this check"
         : msg,
@@ -597,9 +611,14 @@ const OrderDetail = ({
                         </button>
                       )}
                       {check && status === "pending" && leftMs(check.created_at) === 0 && (
-                        <span className="rounded-md border border-[#c62828]/40 bg-[#c62828]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[#ff8a80]">
+                        <button
+                          onClick={() => setExpiredWarningOpen(true)}
+                          className="rounded-md border border-[#c62828]/40 bg-[#c62828]/10 hover:bg-[#c62828]/20 px-2.5 py-1 text-[11.5px] font-semibold text-[#ff8a80] inline-flex items-center gap-1 transition"
+                          title="1-minute refund check window has expired"
+                        >
+                          <Clock className="h-3 w-3 text-[#ff8a80]" />
                           Time expired
-                        </span>
+                        </button>
                       )}
                     </div>
                   </td>
@@ -614,10 +633,37 @@ const OrderDetail = ({
       </div>
 
       <p className="mt-3 text-[12px] text-[#777]">
-        Only refund cards show a CHECK button, and only for 2 minutes after the purchase. Checking always costs the
-        per-card fee: DEAD is refunded to your balance, LIVE stays charged. After 2 minutes the button turns into
-        “Time expired” and no refund is possible. The stand-alone Checker page only shows LIVE/DEAD — it never refunds.
+        Only refund cards show a CHECK button, and only for 1 minute (60 seconds) after the purchase. Checking costs the
+        per-card fee: DEAD is refunded to your balance, LIVE stays charged. After 1 minute the refund window expires,
+        the button shows “Time expired”, and no refunds can be issued under any circumstances.
       </p>
+
+      {/* 1-Minute Refund Window Expired Warning Modal */}
+      <Dialog open={expiredWarningOpen} onOpenChange={setExpiredWarningOpen}>
+        <DialogContent className="max-w-md bg-[#0c1430] border border-rose-500/30 text-white shadow-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="rounded-full bg-rose-500/20 p-2.5 border border-rose-500/40 text-rose-400">
+                <AlertTriangle className="h-6 w-6 text-rose-400" />
+              </div>
+              <DialogTitle className="text-lg font-bold text-white">Refund Window Expired</DialogTitle>
+            </div>
+            <DialogDescription className="mt-3 text-slate-300 text-[13.5px] leading-relaxed">
+              The <strong className="text-rose-400">1-minute (60 seconds)</strong> refund check window for this card has expired.
+              <br /><br />
+              According to store rules, even if this card is dead or inactive upon checking, <strong className="text-white">no refund or replacement will be granted</strong>. The automated refund policy is strictly enforced within 60 seconds from purchase.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-5 sm:justify-end">
+            <Button
+              className="bg-rose-600 hover:bg-rose-500 text-white font-semibold"
+              onClick={() => setExpiredWarningOpen(false)}
+            >
+              I Understand
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

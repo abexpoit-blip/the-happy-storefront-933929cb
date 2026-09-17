@@ -4,8 +4,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const digits = (s: string) => s.replace(/\D/g, "");
 
-/** Buyers can only run the refund check for 2 minutes after the purchase. */
-export const CHECK_WINDOW_MS = 2 * 60 * 1000;
+/** Buyers can only run the refund check for 1 minute (60 seconds) after the purchase. */
+export const CHECK_WINDOW_MS = 1 * 60 * 1000;
 
 /** Turn a stored card line (pipe format) into `PAN|MM|YYYY|CVV`. */
 function toCardLine(content: string): { line: string; pan: string } | null {

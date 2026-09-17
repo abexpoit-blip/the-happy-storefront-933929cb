@@ -120,7 +120,11 @@ async function labelMaps(db: any, tasks: any[]) {
 export const adminCheckerLogs = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
-    z.object({ day: z.string().optional(), search: z.string().optional() }).parse(input ?? {}),
+    z.object({
+      day: z.string().optional(),
+      search: z.string().optional(),
+      source: z.enum(["all", "web", "bot", "api"]).optional().default("all"),
+    }).parse(input ?? {}),
   )
   .handler(async ({ data, context }): Promise<AdminCheckRun[]> => {
     await assertAdmin(context);
@@ -129,13 +133,19 @@ export const adminCheckerLogs = createServerFn({ method: "POST" })
     const db = supabaseAdmin as any;
     const { from, to } = dayBounds(data.day);
 
-    const { data: rowsRaw } = await db
+    let query = db
       .from("self_checks")
       .select(SELECT)
       .gte("created_at", from)
       .lt("created_at", to)
       .order("created_at", { ascending: false })
       .limit(1000);
+
+    if (data.source && data.source !== "all") {
+      query = query.eq("source", data.source);
+    }
+
+    const { data: rowsRaw } = await query;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tasks = (rowsRaw ?? []) as any[];
@@ -160,6 +170,7 @@ export const adminCheckerExport = createServerFn({ method: "POST" })
         liveOnly: z.boolean().default(false),
         format: z.enum(["txt", "csv"]).default("txt"),
         search: z.string().optional(),
+        source: z.enum(["all", "web", "bot", "api"]).optional().default("all"),
       })
       .parse(input ?? {}),
   )
@@ -172,13 +183,19 @@ export const adminCheckerExport = createServerFn({ method: "POST" })
     const start = data.from ? dayBounds(data.from).from : dayBounds().from;
     const end = data.to ? dayBounds(data.to).to : dayBounds(data.from).to;
 
-    const { data: rowsRaw } = await db
+    let query = db
       .from("self_checks")
       .select(SELECT)
       .gte("created_at", start)
       .lt("created_at", end)
       .order("created_at", { ascending: true })
       .limit(5000);
+
+    if (data.source && data.source !== "all") {
+      query = query.eq("source", data.source);
+    }
+
+    const { data: rowsRaw } = await query;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tasks = (rowsRaw ?? []) as any[];

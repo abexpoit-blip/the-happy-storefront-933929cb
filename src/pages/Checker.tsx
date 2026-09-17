@@ -67,14 +67,22 @@ const Checker = () => {
   const [credit, setCredit] = useState<{ credit: number; ok: boolean; error?: string } | null>(null);
   const [history, setHistory] = useState<{ taskId: string; total: number; status: string; rows: SelfCheckTaskRow[]; createdAt: string }[]>([]);
   const [expected, setExpected] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
   const boxRef = useRef<HTMLDivElement>(null);
   const watching = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!busy) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [busy]);
 
   /** Poll a task until the gateway says it is finished. Gateway needs >=10s between polls. */
   const watch = useCallback(async (id: string) => {
     if (watching.current === id) return;
     watching.current = id;
     setBusy(true);
+    setStartedAt((s) => s ?? Date.now());
     setTaskId(id);
     try {
       for (let i = 0; i < 120; i++) {
@@ -385,8 +393,16 @@ const Checker = () => {
               </div>
 
               <dl className="mt-3 space-y-1.5 text-[12px]">
-                 <div className="flex justify-between"><dt className="text-white/45">Progress</dt><dd className="font-mono text-white/80">{finishedRows.length}/{total}</dd></div>
-                <div className="flex justify-between"><dt className="text-white/45">ETA</dt><dd className="font-mono text-white/80">{eta}</dd></div>
+                <div className="flex justify-between"><dt className="text-white/45">Progress</dt><dd className="font-mono text-white/80">{finishedRows.length}/{total}</dd></div>
+                {busy && startedAt && (
+                  <div className="flex justify-between">
+                    <dt className="text-white/45">Elapsed time</dt>
+                    <dd className="font-mono text-[#5ac8fa]">
+                      {Math.floor((now - startedAt) / 1000)}s
+                    </dd>
+                  </div>
+                )}
+                <div className="flex justify-between"><dt className="text-white/45">ETA countdown</dt><dd className="font-mono text-white/80">{eta}</dd></div>
                 <div className="flex justify-between"><dt className="text-white/45">Hit rate</dt><dd className="font-mono text-[#7ee08a]">{hitRate}%</dd></div>
                 <div className="flex justify-between"><dt className="text-white/45">Reserved</dt><dd className="font-mono text-white/80">{expected * creditCost} cr</dd></div>
               </dl>

