@@ -40,8 +40,8 @@ CREATE POLICY "Admins manage referrals" ON public.referrals
 CREATE INDEX IF NOT EXISTS referrals_referrer_idx ON public.referrals (referrer_id);
 
 INSERT INTO public.site_settings (key, value)
-VALUES ('referral_bonus', '0.10')
-ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
+VALUES ('referral_bonus', '5')
+ON CONFLICT (key) DO NOTHING;
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger
@@ -103,8 +103,8 @@ BEGIN
   IF _referrer IS NULL OR _referrer = _user_id THEN RETURN false; END IF;
   IF EXISTS (SELECT 1 FROM public.referrals WHERE referee_id = _user_id) THEN RETURN false; END IF;
 
-  SELECT COALESCE(NULLIF(value,'')::numeric, 0.10) INTO _bonus FROM public.site_settings WHERE key = 'referral_bonus';
-  _bonus := COALESCE(_bonus, 0.10);
+  SELECT COALESCE(NULLIF(value,'')::numeric, 5) INTO _bonus FROM public.site_settings WHERE key = 'referral_bonus';
+  _bonus := COALESCE(_bonus, 5);
   IF _bonus <= 0 THEN RETURN false; END IF;
 
   INSERT INTO public.referrals (referrer_id, referee_id, bonus_amount)

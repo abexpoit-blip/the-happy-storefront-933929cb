@@ -592,6 +592,20 @@ const AdminBotControl = () => {
                 </p>
               </div>
 
+              {/* Referral Bonus */}
+              <div>
+                <Label className="text-[10px] uppercase font-bold tracking-widest text-[#38bdf8]">Referral bonus ($)</Label>
+                <Input
+                  type="number" step="0.01" min="0"
+                  value={settings.referral_bonus ?? 5}
+                  onChange={(e) => setS("referral_bonus", Number(e.target.value))}
+                  className="mt-1.5 bg-[#131f40] border-slate-600 text-white font-medium"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  One-time bonus credited after invited user makes their first deposit.
+                </p>
+              </div>
+
               {/* Admin Contact URL */}
               <div>
                 <Label className="text-[10px] uppercase font-bold tracking-widest text-[#38bdf8]">Contact Admin URL / Telegram</Label>

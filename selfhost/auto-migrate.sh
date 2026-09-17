@@ -15,6 +15,7 @@ if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' | grep -
 
   MIGRATIONS=(
     "schema.sql"
+    "referrals.sql"
     "bin-searches.sql"
     "credits.sql"
     "bot-accounts.sql"
@@ -33,6 +34,9 @@ if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' | grep -
     fi
   done
 
+  # Fix legacy 0.10 referral bonus to 5
+  docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -c "UPDATE public.site_settings SET value = '5' WHERE key = 'referral_bonus' AND (value = '0.10' OR value = '0.1');" >/dev/null 2>&1 || true
+
   echo "==> Database migrations applied successfully!"
 else
   if [ -d "$DOCKER_DIR" ] && command -v docker >/dev/null 2>&1; then
@@ -41,6 +45,7 @@ else
     if [ -f "$MIGRATION_DIR/bin-searches.sql" ]; then
       docker compose exec -T db psql -U postgres -d postgres < "$MIGRATION_DIR/bin-searches.sql" >/dev/null 2>&1 || true
     fi
+    docker compose exec -T db psql -U postgres -d postgres -c "UPDATE public.site_settings SET value = '5' WHERE key = 'referral_bonus' AND (value = '0.10' OR value = '0.1');" >/dev/null 2>&1 || true
     echo "==> Database migrations completed via compose!"
   else
     echo "WARN: Docker database container not active. Migrations will run when database starts."

@@ -186,7 +186,7 @@ export async function botAccountSnapshot(account: BotAccount) {
     referral_code: profile?.referral_code ?? null,
     referral_count: referralRows.length,
     referral_earned: referralRows.reduce((s, r) => s + Number(r.bonus_amount ?? 0), 0),
-    referral_bonus: Number(map["referral_bonus"] ?? 0.1) || 0.1,
+    referral_bonus: Number(map["referral_bonus"] ?? 5) || 5,
     orders: Number(orderCount ?? 0),
     price_per_card: Math.round((creditCost / creditsPerUsd) * 10000) / 10000,
     api_fee: Number(map["api_access_fee"] ?? 100) || 100,
