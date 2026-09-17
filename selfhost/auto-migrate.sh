@@ -15,7 +15,9 @@ if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' | grep -
 
   MIGRATIONS=(
     "schema.sql"
+    "bonus-and-check-fee.sql"
     "referrals.sql"
+    "cart-order.sql"
     "bin-searches.sql"
     "credits.sql"
     "bot-accounts.sql"
@@ -34,8 +36,10 @@ if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' | grep -
     fi
   done
 
-  # Fix legacy 0.10 referral bonus to 5
-  docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -c "UPDATE public.site_settings SET value = '5' WHERE key = 'referral_bonus' AND (value = '0.10' OR value = '0.1');" >/dev/null 2>&1 || true
+  # Ensure bonus_balance exists and fix legacy 0.10 referral bonus to 5 on web, 0.10 on bot
+  docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -c "ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bonus_balance numeric NOT NULL DEFAULT 0;" >/dev/null 2>&1 || true
+  docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -c "UPDATE public.site_settings SET value = '5' WHERE key = 'referral_bonus' AND (value = '0.10' OR value = '0.1' OR value = '0.1000');" >/dev/null 2>&1 || true
+  docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -c "INSERT INTO public.site_settings (key, value) VALUES ('bot_referral_bonus', '0.10') ON CONFLICT (key) DO NOTHING;" >/dev/null 2>&1 || true
 
   echo "==> Database migrations applied successfully!"
 else
@@ -45,7 +49,9 @@ else
     if [ -f "$MIGRATION_DIR/bin-searches.sql" ]; then
       docker compose exec -T db psql -U postgres -d postgres < "$MIGRATION_DIR/bin-searches.sql" >/dev/null 2>&1 || true
     fi
-    docker compose exec -T db psql -U postgres -d postgres -c "UPDATE public.site_settings SET value = '5' WHERE key = 'referral_bonus' AND (value = '0.10' OR value = '0.1');" >/dev/null 2>&1 || true
+    docker compose exec -T db psql -U postgres -d postgres -c "ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bonus_balance numeric NOT NULL DEFAULT 0;" >/dev/null 2>&1 || true
+    docker compose exec -T db psql -U postgres -d postgres -c "UPDATE public.site_settings SET value = '5' WHERE key = 'referral_bonus' AND (value = '0.10' OR value = '0.1' OR value = '0.1000');" >/dev/null 2>&1 || true
+    docker compose exec -T db psql -U postgres -d postgres -c "INSERT INTO public.site_settings (key, value) VALUES ('bot_referral_bonus', '0.10') ON CONFLICT (key) DO NOTHING;" >/dev/null 2>&1 || true
     echo "==> Database migrations completed via compose!"
   else
     echo "WARN: Docker database container not active. Migrations will run when database starts."

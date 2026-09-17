@@ -151,6 +151,7 @@ export async function botAccountSnapshot(account: BotAccount) {
         .maybeSingle(),
       db.from("site_settings").select("key, value").in("key", [
         "api_access_fee",
+        "bot_referral_bonus",
         "referral_bonus",
         "check_credit_cost",
         "credits_per_usd",
@@ -186,7 +187,7 @@ export async function botAccountSnapshot(account: BotAccount) {
     referral_code: profile?.referral_code ?? null,
     referral_count: referralRows.length,
     referral_earned: referralRows.reduce((s, r) => s + Number(r.bonus_amount ?? 0), 0),
-    referral_bonus: Number(map["referral_bonus"] ?? 5) || 5,
+    referral_bonus: Number(map["bot_referral_bonus"] ?? 0.10) || 0.10,
     orders: Number(orderCount ?? 0),
     price_per_card: Math.round((creditCost / creditsPerUsd) * 10000) / 10000,
     api_fee: Number(map["api_access_fee"] ?? 100) || 100,

@@ -39,7 +39,7 @@ const Referrals = () => {
     }
   };
 
-  const bonus = data?.bonus ?? 5;
+  const bonus = (data?.bonus && data.bonus >= 1) ? data.bonus : 5;
 
   return (
     <AppShell>

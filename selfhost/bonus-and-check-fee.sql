@@ -48,7 +48,7 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.award_referral_bonus(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.award_referral_bonus(uuid) TO authenticated, service_role;
 
 -- ---------- purchase: bonus balance first, then main balance, plus check fee ----------
 CREATE OR REPLACE FUNCTION public.purchase_product(_product_id uuid, _quantity integer DEFAULT 1)

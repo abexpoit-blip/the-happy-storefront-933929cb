@@ -26,9 +26,9 @@ ALTER TABLE public.telegram_accounts ENABLE ROW LEVEL SECURITY;
 
 CREATE INDEX IF NOT EXISTS telegram_accounts_user_idx ON public.telegram_accounts (user_id);
 
--- ---------- referral bonus default ($5) per successful referred deposit ----------
+-- ---------- bot referral bonus default ($0.10) per successful referred deposit ----------
 INSERT INTO public.site_settings (key, value)
-VALUES ('referral_bonus', '5')
+VALUES ('bot_referral_bonus', '0.10')
 ON CONFLICT (key) DO NOTHING;
 
 -- ---------- charge / refund a bot check straight from the USD balance ----------

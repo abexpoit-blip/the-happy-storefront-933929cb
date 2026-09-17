@@ -592,17 +592,17 @@ const AdminBotControl = () => {
                 </p>
               </div>
 
-              {/* Referral Bonus */}
+              {/* Telegram Bot Referral Bonus */}
               <div>
-                <Label className="text-[10px] uppercase font-bold tracking-widest text-[#38bdf8]">Referral bonus ($)</Label>
+                <Label className="text-[10px] uppercase font-bold tracking-widest text-[#38bdf8]">Telegram Bot referral bonus ($)</Label>
                 <Input
                   type="number" step="0.01" min="0"
-                  value={settings.referral_bonus ?? 5}
+                  value={settings.referral_bonus ?? 0.10}
                   onChange={(e) => setS("referral_bonus", Number(e.target.value))}
                   className="mt-1.5 bg-[#131f40] border-slate-600 text-white font-medium"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">
-                  One-time bonus credited after invited user makes their first deposit.
+                  Affiliate commission for Telegram bot users (default $0.10 per approved deposit).
                 </p>
               </div>
 

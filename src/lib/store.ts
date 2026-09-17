@@ -1240,7 +1240,10 @@ export const getMyReferralSummary = async (): Promise<ReferralSummary> => {
 
   return {
     code: String((prof as { referral_code?: string } | null)?.referral_code ?? ""),
-    bonus: num((setting as { value?: string } | null)?.value ?? 5) || 5,
+    bonus: (() => {
+      const v = num((setting as { value?: string } | null)?.value);
+      return v && v >= 1 ? v : 5;
+    })(),
     paidCount: rows.length,
     earned,
     pendingCount: Math.max(0, (invited ?? 0) - rows.length),
