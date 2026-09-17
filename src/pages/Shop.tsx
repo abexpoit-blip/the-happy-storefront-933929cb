@@ -67,7 +67,12 @@ const Shop = () => {
     // Two silent retries — flaky first requests were showing "try again" to users.
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const rows = await listProducts();
+        const rows = await listProducts({
+          onBatchProgress: (batch) => {
+            setAll(batch);
+            setLoading(false);
+          },
+        });
         setAll(rows);
         setLoadError(null);
         setLoading(false);

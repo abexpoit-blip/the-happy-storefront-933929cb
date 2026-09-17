@@ -136,12 +136,14 @@ export const listProducts = async (
     includeInactive?: boolean;
     limit?: number;
     forceFresh?: boolean;
+    onBatchProgress?: (batch: Product[], isFinal: boolean) => void;
   } = {},
 ) => {
   const isDefaultFetch = !opts.categoryId && !opts.search && !opts.includeInactive && !opts.limit;
   
   // 1. Fast in-memory cache check (0ms)
   if (isDefaultFetch && !opts.forceFresh && productCache && Date.now() - productCache.at < CACHE_TTL_MS) {
+    opts.onBatchProgress?.(productCache.data, true);
     return productCache.data;
   }
 
@@ -153,6 +155,7 @@ export const listProducts = async (
         const parsed = JSON.parse(raw);
         if (parsed?.at && Date.now() - parsed.at < CACHE_TTL_MS && Array.isArray(parsed?.data)) {
           productCache = parsed;
+          opts.onBatchProgress?.(parsed.data, true);
           return parsed.data;
         }
       }
@@ -182,11 +185,13 @@ export const listProducts = async (
   if (opts.limit && opts.limit <= CHUNK_SIZE) {
     const { data, error } = await buildQuery().range(0, opts.limit - 1);
     if (error) throw error;
-    return ((data ?? []) as Record<string, unknown>[]).map((p) => ({
+    const mapped = ((data ?? []) as Record<string, unknown>[]).map((p) => ({
       ...p,
       price: num(p.price as number | string),
       compare_at_price: p.compare_at_price == null ? null : num(p.compare_at_price as number | string),
     })) as Product[];
+    opts.onBatchProgress?.(mapped, true);
+    return mapped;
   }
 
   // Fetch initial batch (0..999) WITH count: "exact" on the first request only
@@ -195,26 +200,31 @@ export const listProducts = async (
   if (firstRes.error) throw firstRes.error;
   const firstBatch = (firstRes.data ?? []) as Record<string, unknown>[];
 
+  const firstMapped = firstBatch.map((p) => ({
+    ...p,
+    price: num(p.price as number | string),
+    compare_at_price: p.compare_at_price == null ? null : num(p.compare_at_price as number | string),
+  })) as Product[];
+
+  // Stream first batch immediately to UI so user sees products in <100ms!
+  const isFinal = firstBatch.length < CHUNK_SIZE || (firstRes.count != null && firstRes.count <= CHUNK_SIZE);
+  opts.onBatchProgress?.(firstMapped, isFinal);
+
   // If 1000 or fewer cards exist, return immediately
-  if (firstBatch.length < CHUNK_SIZE || (firstRes.count != null && firstRes.count <= CHUNK_SIZE)) {
-    const mapped = firstBatch.map((p) => ({
-      ...p,
-      price: num(p.price as number | string),
-      compare_at_price: p.compare_at_price == null ? null : num(p.compare_at_price as number | string),
-    })) as Product[];
+  if (isFinal) {
     if (isDefaultFetch) {
-      productCache = { at: Date.now(), data: mapped };
+      productCache = { at: Date.now(), data: firstMapped };
       if (typeof window !== "undefined") {
         try { sessionStorage.setItem("zoru_product_cache", JSON.stringify(productCache)); } catch { /* ignore */ }
       }
     }
-    return mapped;
+    return firstMapped;
   }
 
   // If more cards exist (e.g. 5,000 cards):
   // Calculate EXACTLY how many remaining chunks we need based on the database count!
   const totalCount = Math.min(firstRes.count ?? maxLimit, maxLimit);
-  const allRows = [...firstBatch];
+  const allRows = [...firstMapped];
   const probeRanges: [number, number][] = [];
 
   for (let from = CHUNK_SIZE; from < totalCount; from += CHUNK_SIZE) {
@@ -235,23 +245,27 @@ export const listProducts = async (
     );
 
     for (const page of remainingPages) {
-      if (page.length > 0) allRows.push(...page);
+      if (page.length > 0) {
+        const pageMapped = page.map((p: Record<string, unknown>) => ({
+          ...p,
+          price: num(p.price as number | string),
+          compare_at_price: p.compare_at_price == null ? null : num(p.compare_at_price as number | string),
+        })) as Product[];
+        allRows.push(...pageMapped);
+      }
     }
   }
 
-  const mapped = allRows.map((p) => ({
-    ...p,
-    price: num(p.price as number | string),
-    compare_at_price: p.compare_at_price == null ? null : num(p.compare_at_price as number | string),
-  })) as Product[];
+  const finalMapped = allRows as Product[];
+  opts.onBatchProgress?.(finalMapped, true);
 
   if (isDefaultFetch) {
-    productCache = { at: Date.now(), data: mapped };
+    productCache = { at: Date.now(), data: finalMapped };
     if (typeof window !== "undefined") {
       try { sessionStorage.setItem("zoru_product_cache", JSON.stringify(productCache)); } catch { /* ignore */ }
     }
   }
-  return mapped;
+  return finalMapped;
 };
 
 
