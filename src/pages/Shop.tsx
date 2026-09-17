@@ -680,7 +680,7 @@ const Shop = () => {
         </table>
       </div>
 
-      {/* PAGINATION */}
+      {/* PAGINATION (Last page hidden from buyers) */}
       {!loading && cards.length > 0 && (
         <nav aria-label="Shop pages" className="mt-4 mb-2 flex w-full flex-wrap items-center justify-center gap-2 text-[13px]">
           <Button
@@ -688,45 +688,41 @@ const Shop = () => {
             variant="outline"
             size="sm"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
+            disabled={page <= 1}
             className="h-9 min-w-[92px] border-[#dcdcdc] bg-white text-[#37474f] hover:bg-[#f2f8ff]"
           >
             <ChevronLeft className="h-4 w-4" /> Prev
           </Button>
-          {pageNumbers(page, totalPages).map((n, i) =>
-            n === "…" ? (
-              <span key={`e${i}`} className="px-2 text-[#aaa]">…</span>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                key={n}
-                onClick={() => setPage(n as number)}
-                aria-current={n === page ? "page" : undefined}
-                aria-label={`Page ${n}`}
-                className={`h-9 w-9 rounded-md border transition ${
-                  n === page
-                    ? "border-[#1976d2] bg-gradient-to-b from-[#42a5f5] to-[#1976d2] text-white shadow-[0_4px_10px_-5px_rgba(25,118,210,0.9)]"
-                    : "border-[#dcdcdc] bg-white text-[#555] hover:bg-[#f7f7f7]"
-                }`}
-              >
-                {n}
-              </Button>
-            ),
-          )}
+          {slidingPageNumbers(page, totalPages).map((n) => (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              key={n}
+              onClick={() => setPage(n)}
+              aria-current={n === page ? "page" : undefined}
+              aria-label={`Page ${n}`}
+              className={`h-9 w-9 rounded-md border transition ${
+                n === page
+                  ? "border-[#1976d2] bg-gradient-to-b from-[#42a5f5] to-[#1976d2] text-white shadow-[0_4px_10px_-5px_rgba(25,118,210,0.9)]"
+                  : "border-[#dcdcdc] bg-white text-[#555] hover:bg-[#f7f7f7]"
+              }`}
+            >
+              {n}
+            </Button>
+          ))}
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
+            disabled={page >= totalPages}
             className="h-9 min-w-[92px] border-[#dcdcdc] bg-white text-[#37474f] hover:bg-[#f2f8ff]"
           >
             Next <ChevronRight className="h-4 w-4" />
           </Button>
           <span className="basis-full text-center text-[12px] text-[#777]">
-            Page {page} of {totalPages}
+            Page {page}
           </span>
         </nav>
       )}
@@ -808,16 +804,15 @@ const Shop = () => {
   );
 };
 
-function pageNumbers(page: number, total: number): (number | "…")[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  const out: (number | "…")[] = [1];
-  const start = Math.max(2, page - 1);
-  const end = Math.min(total - 1, page + 1);
-  if (start > 2) out.push("…");
-  for (let i = start; i <= end; i++) out.push(i);
-  if (end < total - 1) out.push("…");
-  out.push(total);
-  return out;
+function slidingPageNumbers(page: number, maxAvailable: number): number[] {
+  // Show a rolling window of adjacent pages without ever revealing the final page number
+  const start = Math.max(1, page - 1);
+  const end = Math.min(maxAvailable, page + 2);
+  const list: number[] = [];
+  for (let i = start; i <= end; i++) {
+    list.push(i);
+  }
+  return list;
 }
 
 function InfoChip({ children }: { children: React.ReactNode }) {

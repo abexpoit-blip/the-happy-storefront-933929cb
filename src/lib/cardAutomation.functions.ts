@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { publicBase } from "@/lib/baseLabel";
 import { detectOfflineBin } from "@/lib/binDetection";
+import { calculateCardPrice } from "@/lib/cardPricing";
 import fs from "node:fs";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,6 +40,9 @@ export interface DripQueueRow {
   name: string;
   per_day: number;
   price: number;
+  pricing_mode?: "fixed" | "dynamic_level";
+  min_price?: number;
+  max_price?: number;
   refundable: boolean;
   category_id: string | null;
   status: "active" | "paused" | "completed";
@@ -190,7 +194,10 @@ export const createDripQueue = createServerFn({ method: "POST" })
       .object({
         name: z.string().min(1).max(100),
         per_day: z.number().int().min(1).max(1000),
-        price: z.number().min(0.1).max(1000),
+        price: z.number().min(0.01).max(1000),
+        pricing_mode: z.enum(["fixed", "dynamic_level"]).optional(),
+        min_price: z.number().min(0.01).optional(),
+        max_price: z.number().min(0.01).optional(),
         refundable: z.boolean(),
         category_id: z.string().nullable().optional(),
         auto_announce: z.boolean(),
@@ -233,6 +240,9 @@ export const createDripQueue = createServerFn({ method: "POST" })
         name: data.name,
         per_day: data.per_day,
         price: data.price,
+        pricing_mode: data.pricing_mode || "fixed",
+        min_price: data.min_price || 0.20,
+        max_price: data.max_price || 10.00,
         refundable: data.refundable,
         category_id: data.category_id || null,
         status: "active",
@@ -374,12 +384,28 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
           : binInfo.refundable;
       const cardCountry = clean(c.country) || binInfo.country || null;
       const brand = c.brand || binInfo.brand || primaryBrand;
+      const cardPrice = calculateCardPrice(
+        {
+          cc: c.cc || undefined,
+          brand: brand,
+          card_level: binInfo.level,
+          card_type: binInfo.type,
+          refundable: isRef,
+        },
+        {
+          mode: (queue.pricing_mode as "fixed" | "dynamic_level") || "fixed",
+          fixedPrice: Number(queue.price || 1.50),
+          minPrice: Number(queue.min_price || 0.20),
+          maxPrice: Number(queue.max_price || 10.00),
+          randomVariation: true,
+        }
+      );
 
       return {
         category_id: queue.category_id || null,
         title: `${brand} ${c.bin} · ${clean(c.city) || clean(c.state) || cardCountry || "—"}`,
         slug: `${c.bin}-${stamp}-${i}-${Math.random().toString(36).slice(2, 8)}`,
-        price: queue.price,
+        price: cardPrice,
         delivery_type: "key",
         active: true,
         stock: 1,

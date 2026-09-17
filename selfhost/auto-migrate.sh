@@ -40,6 +40,9 @@ if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' | grep -
   docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -c "ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bonus_balance numeric NOT NULL DEFAULT 0;" >/dev/null 2>&1 || true
   docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -c "UPDATE public.site_settings SET value = '5' WHERE key = 'referral_bonus' AND (value = '0.10' OR value = '0.1' OR value = '0.1000');" >/dev/null 2>&1 || true
   docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -c "INSERT INTO public.site_settings (key, value) VALUES ('bot_referral_bonus', '0.10') ON CONFLICT (key) DO NOTHING;" >/dev/null 2>&1 || true
+  docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -c "ALTER TABLE public.card_drip_queues ADD COLUMN IF NOT EXISTS pricing_mode TEXT NOT NULL DEFAULT 'fixed';" >/dev/null 2>&1 || true
+  docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -c "ALTER TABLE public.card_drip_queues ADD COLUMN IF NOT EXISTS min_price numeric(12,2) NOT NULL DEFAULT 0.20;" >/dev/null 2>&1 || true
+  docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -c "ALTER TABLE public.card_drip_queues ADD COLUMN IF NOT EXISTS max_price numeric(12,2) NOT NULL DEFAULT 10.00;" >/dev/null 2>&1 || true
 
   echo "==> Database migrations applied successfully!"
 else

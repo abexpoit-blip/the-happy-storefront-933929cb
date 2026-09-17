@@ -163,9 +163,30 @@ async function sendTelegramBroadcast(baseName, count, brand, country, price) {
   }
 }
 
+function getDhakaDateAndHour(date = new Date()) {
+  const dhakaStr = date.toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+  const d = new Date(dhakaStr);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hour = d.getHours();
+  const minute = d.getMinutes();
+  return {
+    dateStr: `${yyyy}-${mm}-${dd}`,
+    hour,
+    minute,
+  };
+}
+
 async function processActiveQueues() {
   const now = new Date();
-  console.log(`[Drip Worker] Checking queues at ${now.toISOString()}...`);
+  const dhakaNow = getDhakaDateAndHour(now);
+  console.log(
+    `[Drip Worker] Checking queues at ${now.toISOString()} (Dhaka local: ${dhakaNow.dateStr} ${String(dhakaNow.hour).padStart(2, "0")}:${String(dhakaNow.minute).padStart(2, "0")})...`
+  );
+
+  // Target release hour: 10:00 AM Asia/Dhaka time (04:00 AM UTC)
+  const TARGET_RELEASE_HOUR_DHAKA = 10;
 
   // Queues with status = active and remaining > 0
   const { data: queues, error: qErr } = await db
@@ -185,17 +206,24 @@ async function processActiveQueues() {
   }
 
   for (const queue of queues) {
-    // Check if 20 hours passed since last_run_at
+    // 1. Check if queue has already released today in Asia/Dhaka date
     if (queue.last_run_at) {
-      const lastRun = new Date(queue.last_run_at);
-      const hoursDiff = (now.getTime() - lastRun.getTime()) / (1000 * 60 * 60);
-      if (hoursDiff < 20) {
-        console.log(`[Drip Worker] Queue '${queue.name}' (${queue.id}) ran ${hoursDiff.toFixed(1)}h ago. Skipping for today.`);
+      const lastRunDhaka = getDhakaDateAndHour(new Date(queue.last_run_at)).dateStr;
+      if (lastRunDhaka === dhakaNow.dateStr) {
+        console.log(`[Drip Worker] Queue '${queue.name}' (${queue.id}) already released for today (${dhakaNow.dateStr}) in Dhaka timezone. Skipping.`);
         continue;
       }
     }
 
-    console.log(`[Drip Worker] Releasing batch for queue '${queue.name}' (${queue.id})...`);
+    // 2. Check if current time in Asia/Dhaka has reached 10:00 AM
+    if (dhakaNow.hour < TARGET_RELEASE_HOUR_DHAKA) {
+      console.log(
+        `[Drip Worker] Queue '${queue.name}' scheduled for 10:00 AM Asia/Dhaka (current Dhaka time: ${String(dhakaNow.hour).padStart(2, "0")}:${String(dhakaNow.minute).padStart(2, "0")}). Waiting.`
+      );
+      continue;
+    }
+
+    console.log(`[Drip Worker] Triggering 10:00 AM daily release for queue '${queue.name}' (${queue.id}) on Dhaka date ${dhakaNow.dateStr}...`);
     const countToRelease = Math.min(queue.per_day, queue.cards_remaining);
 
     const { data: items, error: iErr } = await db
@@ -225,11 +253,31 @@ async function processActiveQueues() {
       const meta = detectBinMeta(c.cc || c.bin);
       const isRef = queue.refundable === true ? true : meta.refundable;
       const cardCountry = clean(c.country) || meta.country || null;
+
+      // Smart pricing: level & value based or fixed queue price
+      let cardPrice = Number(queue.price || 1.50);
+      if (queue.pricing_mode === "dynamic_level" || (queue.min_price && queue.max_price)) {
+        const minP = Number(queue.min_price || 0.20);
+        const maxP = Number(queue.max_price || 10.00);
+        const range = Math.max(0.1, maxP - minP);
+        let weight = 0.15;
+        const lvl = (meta.level || "").toUpperCase();
+        if (lvl.includes("INFINITE") || lvl.includes("WORLD ELITE") || lvl.includes("BLACK") || lvl.includes("CENTURION")) weight = 0.95;
+        else if (lvl.includes("SIGNATURE") || lvl.includes("WORLD") || lvl.includes("BUSINESS") || lvl.includes("CORPORATE")) weight = 0.78;
+        else if (lvl.includes("PLATINUM") || lvl.includes("TITANIUM")) weight = 0.58;
+        else if (lvl.includes("GOLD") || lvl.includes("PREPAID")) weight = 0.35;
+
+        const boost = (isRef ? range * 0.06 : 0) + (meta.type === "CREDIT" ? range * 0.04 : 0);
+        const seed = parseInt(String(c.cc || "5555").replace(/\D/g, "").slice(-4) || "5555", 10) % 100;
+        const variance = ((seed - 50) / 100) * (range * 0.12);
+        cardPrice = Math.round(Math.max(minP, Math.min(maxP, minP + range * weight + variance + boost)) * 100) / 100;
+      }
+
       return {
         category_id: queue.category_id || null,
         title: `${c.brand || meta.brand} ${c.bin} · ${clean(c.city) || clean(c.state) || cardCountry || "—"}`,
         slug: `${c.bin}-${stamp}-${idx}-${Math.random().toString(36).slice(2, 8)}`,
-        price: queue.price,
+        price: cardPrice,
         delivery_type: "key",
         active: true,
         stock: 1,
@@ -325,7 +373,7 @@ if (runOnce) {
     process.exit(0);
   });
 } else {
-  console.log("[Drip Worker] Starting daemon loop (interval: 15 minutes)...");
+  console.log("[Drip Worker] Starting daemon loop (interval: 3 minutes, daily target: 10:00 AM Asia/Dhaka)...");
   processActiveQueues();
-  setInterval(processActiveQueues, 15 * 60 * 1000);
+  setInterval(processActiveQueues, 3 * 60 * 1000);
 }

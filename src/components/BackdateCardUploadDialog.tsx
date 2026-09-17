@@ -51,6 +51,11 @@ import {
   triggerDripRelease,
   type DripQueueRow,
 } from "@/lib/cardAutomation.functions";
+import {
+  calculateCardPrice,
+  getPricingSummary,
+  type PricingMode,
+} from "@/lib/cardPricing";
 
 interface Props {
   open: boolean;
@@ -79,7 +84,10 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
   }, []);
   const [startDate, setStartDate] = useState(defaultSixMonthsAgo);
   const [cardsPerDay, setCardsPerDay] = useState("20");
+  const [backdatePricingMode, setBackdatePricingMode] = useState<PricingMode>("fixed");
   const [backdatePrice, setBackdatePrice] = useState("1.50");
+  const [backdateMinPrice, setBackdateMinPrice] = useState("0.20");
+  const [backdateMaxPrice, setBackdateMaxPrice] = useState("10.00");
   const [backdateRefundable, setBackdateRefundable] = useState<"yes" | "no" | "mixed">("mixed");
   const [backdateCategoryId, setBackdateCategoryId] = useState<string>("");
   const [postAnnouncements, setPostAnnouncements] = useState(true);
@@ -142,13 +150,36 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
     };
   }, [backdateRaw, cardsPerDay, startDate, defaultSixMonthsAgo]);
 
+  // Live pricing distribution preview
+  const pricingSummary = useMemo(() => {
+    if (!backdatePreview || backdatePreview.cards.length === 0) return null;
+    return getPricingSummary(
+      backdatePreview.cards.map((c) => {
+        const binInfo = detectOfflineBin(c.cc);
+        return {
+          cc: c.cc,
+          brand: detectBrand(c.cc) || binInfo.brand,
+          card_level: binInfo.level,
+          card_type: binInfo.type,
+          refundable: backdateRefundable === "yes" ? true : backdateRefundable === "no" ? false : binInfo.refundable,
+        };
+      }),
+      {
+        mode: backdatePricingMode,
+        fixedPrice: parseFloat(backdatePrice) || 1.5,
+        minPrice: parseFloat(backdateMinPrice) || 0.20,
+        maxPrice: parseFloat(backdateMaxPrice) || 10.00,
+        randomVariation: true,
+      }
+    );
+  }, [backdatePreview, backdatePricingMode, backdatePrice, backdateMinPrice, backdateMaxPrice, backdateRefundable]);
+
   // Execute Back-Date Upload
   const runBackdateUpload = async () => {
     if (!backdatePreview || backdatePreview.valid === 0) {
       return toast.error("No valid cards to upload");
     }
     const perDay = Math.max(1, parseInt(cardsPerDay, 10) || 20);
-    const price = parseFloat(backdatePrice) || 1.5;
     const allCards = backdatePreview.cards;
     const totalDays = Math.ceil(allCards.length / perDay);
 
@@ -208,6 +239,23 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                 ? c.country.toUpperCase()
                 : binInfo.country;
 
+            const cardCalculatedPrice = calculateCardPrice(
+              {
+                cc: c.cc,
+                brand: brand || binInfo.brand,
+                card_level: binInfo.level,
+                card_type: binInfo.type,
+                refundable: isRef,
+              },
+              {
+                mode: backdatePricingMode,
+                fixedPrice: parseFloat(backdatePrice) || 1.5,
+                minPrice: parseFloat(backdateMinPrice) || 0.20,
+                maxPrice: parseFloat(backdateMaxPrice) || 10.00,
+                randomVariation: true,
+              }
+            );
+
             return {
               cc: c.cc,
               month: c.month,
@@ -224,7 +272,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
               brand: brand || binInfo.brand,
               bin: c.cc.replace(/\D/g, "").slice(0, 6),
               base: baseName,
-              price: price,
+              price: cardCalculatedPrice,
               refundable: isRef,
               card_type: binInfo.type,
               card_level: binInfo.level,
@@ -260,7 +308,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
               count: latestBaseCount,
               brand: latestBrand,
               country: latestCountries.slice(0, 3).join(", ") || "MIX",
-              price: price,
+              price: backdatePricingMode === "fixed" ? parseFloat(backdatePrice) || 1.5 : pricingSummary?.avg || 2.0,
               customNote: `Back-date upload of ${uploadedCount} cards completed successfully.`,
             },
           });
@@ -288,7 +336,10 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
   const [dripRaw, setDripRaw] = useState("");
   const [dripName, setDripName] = useState("Daily Drip Queue");
   const [dripPerDay, setDripPerDay] = useState("20");
+  const [dripPricingMode, setDripPricingMode] = useState<PricingMode>("fixed");
   const [dripPrice, setDripPrice] = useState("1.50");
+  const [dripMinPrice, setDripMinPrice] = useState("0.20");
+  const [dripMaxPrice, setDripMaxPrice] = useState("10.00");
   const [dripRefundable, setDripRefundable] = useState<"yes" | "no" | "mixed">("mixed");
   const [dripCategoryId, setDripCategoryId] = useState("");
   const [dripAutoAnnounce, setDripAutoAnnounce] = useState(true);
@@ -372,6 +423,9 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
           name: dripName.trim() || `Drip Queue ${new Date().toLocaleDateString()}`,
           per_day: Math.max(1, parseInt(dripPerDay, 10) || 20),
           price: parseFloat(dripPrice) || 1.5,
+          pricing_mode: dripPricingMode,
+          min_price: parseFloat(dripMinPrice) || 0.20,
+          max_price: parseFloat(dripMaxPrice) || 10.00,
           refundable: dripRefundable === "yes",
           category_id: dripCategoryId || null,
           auto_announce: dripAutoAnnounce,
@@ -507,18 +561,98 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                 </span>
               </div>
 
-              <div>
-                <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Default Card Price ($)</Label>
-                <Input
-                  type="number"
-                  step="0.10"
-                  min="0.1"
-                  value={backdatePrice}
-                  onChange={(e) => setBackdatePrice(e.target.value)}
-                  placeholder="1.50"
-                  className="bg-[#121c3b] border-slate-700 text-white font-mono font-medium text-xs rounded-lg h-10 px-3 focus:border-[#38bdf8] shadow-inner"
-                />
-                <span className="text-[11px] text-slate-400 mt-1 block">Default: $1.50 / card</span>
+              {/* Pricing Structure Box */}
+              <div className="md:col-span-3 p-3.5 rounded-xl bg-[#0e1633] border border-cyan-500/30 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-emerald-400" />
+                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                      Pricing Structure / মূল্য নির্ধারণ
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-[#162348] p-1 rounded-lg border border-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => setBackdatePricingMode("fixed")}
+                      className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
+                        backdatePricingMode === "fixed"
+                          ? "bg-[#38bdf8] text-slate-950 shadow-sm"
+                          : "text-slate-300 hover:text-white"
+                      }`}
+                    >
+                      Fixed Price (একই দাম)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBackdatePricingMode("dynamic_level")}
+                      className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
+                        backdatePricingMode === "dynamic_level"
+                          ? "bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 shadow-sm"
+                          : "text-slate-300 hover:text-white"
+                      }`}
+                    >
+                      Smart Level & Value ($0.20 - $10)
+                    </button>
+                  </div>
+                </div>
+
+                {backdatePricingMode === "fixed" ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">
+                        Single Unified Price for All Cards ($)
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.05"
+                        min="0.05"
+                        value={backdatePrice}
+                        onChange={(e) => setBackdatePrice(e.target.value)}
+                        placeholder="1.50"
+                        className="bg-[#162348] border-slate-700 text-white font-mono font-medium text-xs rounded-lg h-10 px-3 focus:border-[#38bdf8] shadow-inner"
+                      />
+                    </div>
+                    <div className="flex items-center text-[11px] text-slate-300 bg-slate-800/50 p-2.5 rounded-lg border border-slate-700/60 leading-relaxed">
+                      ✓ Every item in this upload will be set to this exact same fixed price (e.g. ${parseFloat(backdatePrice) || 1.50}).
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">
+                          Min Price / সর্বনিম্ন দাম ($)
+                        </Label>
+                        <Input
+                          type="number"
+                          step="0.05"
+                          min="0.05"
+                          value={backdateMinPrice}
+                          onChange={(e) => setBackdateMinPrice(e.target.value)}
+                          placeholder="0.20"
+                          className="bg-[#162348] border-slate-700 text-white font-mono font-medium text-xs rounded-lg h-10 px-3 focus:border-[#38bdf8] shadow-inner"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">
+                          Max Price / সর্বোচ্চ দাম ($)
+                        </Label>
+                        <Input
+                          type="number"
+                          step="0.10"
+                          min="0.10"
+                          value={backdateMaxPrice}
+                          onChange={(e) => setBackdateMaxPrice(e.target.value)}
+                          placeholder="10.00"
+                          className="bg-[#162348] border-slate-700 text-white font-mono font-medium text-xs rounded-lg h-10 px-3 focus:border-[#38bdf8] shadow-inner"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-[11.5px] text-emerald-300 bg-emerald-950/40 p-2.5 rounded-lg border border-emerald-500/30 leading-relaxed">
+                      ⚡ <strong>Smart Level Pricing Active:</strong> Prices automatically distribute across items based on detected Card Level & Value (Classic: ~${((parseFloat(backdateMinPrice) || 0.2) + ((parseFloat(backdateMaxPrice) || 10) - (parseFloat(backdateMinPrice) || 0.2)) * 0.15).toFixed(2)}, Gold: ~${((parseFloat(backdateMinPrice) || 0.2) + ((parseFloat(backdateMaxPrice) || 10) - (parseFloat(backdateMinPrice) || 0.2)) * 0.35).toFixed(2)}, Platinum: ~${((parseFloat(backdateMinPrice) || 0.2) + ((parseFloat(backdateMaxPrice) || 10) - (parseFloat(backdateMinPrice) || 0.2)) * 0.58).toFixed(2)}, Signature: ~${((parseFloat(backdateMinPrice) || 0.2) + ((parseFloat(backdateMaxPrice) || 10) - (parseFloat(backdateMinPrice) || 0.2)) * 0.78).toFixed(2)}, Infinite: ~${((parseFloat(backdateMinPrice) || 0.2) + ((parseFloat(backdateMaxPrice) || 10) - (parseFloat(backdateMinPrice) || 0.2)) * 0.95).toFixed(2)}) with natural variance.
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -647,13 +781,31 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                       {backdatePreview.startDateFormatted} <ArrowRight className="inline h-3 w-3 mx-1 text-[#38bdf8]" /> {backdatePreview.endDateFormatted}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-bold">DAILY PACE:</span>
-                    <span className="font-mono text-xs text-white font-bold">
-                      {cardsPerDay} cards / base per day
-                    </span>
-                  </div>
                 </div>
+
+                {/* Pricing Breakdown Preview */}
+                {pricingSummary && (
+                  <div className="p-3 rounded-lg bg-[#0c1430] border border-emerald-500/40 text-xs space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2 text-[11px]">
+                      <span className="font-bold text-emerald-300 flex items-center gap-1.5">
+                        <DollarSign className="h-3.5 w-3.5 text-emerald-400" />
+                        {backdatePricingMode === "fixed" ? "FIXED UNIFIED PRICING:" : "SMART LEVEL PRICING BREAKDOWN:"}
+                      </span>
+                      <span className="font-mono text-slate-300">
+                        Min: <b className="text-white">${pricingSummary.min.toFixed(2)}</b> · Avg: <b className="text-emerald-400">${pricingSummary.avg.toFixed(2)}</b> · Max: <b className="text-white">${pricingSummary.max.toFixed(2)}</b>
+                      </span>
+                    </div>
+                    {Object.keys(pricingSummary.tierCounts).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {Object.entries(pricingSummary.tierCounts).map(([tier, stat]) => (
+                          <span key={tier} className="text-[10.5px] bg-[#162348] border border-slate-700 px-2.5 py-0.5 rounded text-slate-200 font-mono">
+                            <span className="text-slate-400">{tier}:</span> <b className="text-emerald-300">{stat.count} pcs</b> (~${stat.avgPrice.toFixed(2)})
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -710,18 +862,18 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
           {/* TAB 2: DAILY AUTO-DRIP SCHEDULER */}
           {/* ========================================================= */}
           <TabsContent value="drip" className="space-y-6">
-            <div className="p-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-xs text-slate-300 flex items-start gap-3 shadow-md">
-              <Clock className="h-5 w-5 text-[#38bdf8] flex-shrink-0 mt-0.5" />
+            {/* Asia/Dhaka Fixed 10:00 AM Schedule Highlight */}
+            <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border border-amber-500/40 text-xs text-amber-200 flex items-start gap-3 shadow-md">
+              <Clock className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold text-[#38bdf8] mb-1">
-                  How Daily Auto-Drip Scheduler Works:
+                <p className="font-bold text-amber-300 mb-1 text-sm flex items-center gap-2">
+                  <span>⏰ Fixed Daily Release Schedule: 10:00 AM (Asia/Dhaka timezone)</span>
+                  <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px]">
+                    Active Daemon
+                  </Badge>
                 </p>
-                <p className="leading-relaxed">
-                  Upload your bulk cards here. They are saved in a staged staging queue.
-                  Every day, the system automatically cuts the exact daily batch (e.g. 20 cards),
-                  publishes them to the store with today's date base, updates the stock ticker and news,
-                  and broadcasts an automated announcement directly to the <b>@zorushop</b> Telegram channel!
-                  You can also click <b>"Release Today's Batch Now"</b> at any time for instant manual dispatch.
+                <p className="text-slate-300 leading-relaxed text-xs">
+                  The automated background drip engine monitors active queues and triggers card releases every single morning at <b>10:00 AM Dhaka time (UTC+6)</b>. The daily batch is automatically minted with today's base, published to the shop, and broadcasted to Telegram.
                 </p>
               </div>
             </div>
@@ -735,7 +887,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                 </h3>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Queue Name</Label>
                   <Input
@@ -746,7 +898,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                   />
                 </div>
                 <div>
-                  <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Release Per Day</Label>
+                  <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Release Per Day (10:00 AM Dhaka)</Label>
                   <Input
                     type="number"
                     min="1"
@@ -756,17 +908,100 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                     className="bg-[#162348] border-slate-700 text-white font-mono font-medium text-xs rounded-lg h-10 px-3 focus:border-[#38bdf8] shadow-inner"
                   />
                 </div>
-                <div>
-                  <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Price Per Card ($)</Label>
-                  <Input
-                    type="number"
-                    step="0.10"
-                    value={dripPrice}
-                    onChange={(e) => setDripPrice(e.target.value)}
-                    placeholder="1.50"
-                    className="bg-[#162348] border-slate-700 text-white font-mono font-medium text-xs rounded-lg h-10 px-3 focus:border-[#38bdf8] shadow-inner"
-                  />
+              </div>
+
+              {/* Drip Pricing Structure Box */}
+              <div className="p-3.5 rounded-xl bg-[#0e1633] border border-cyan-500/30 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-emerald-400" />
+                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                      Queue Pricing Mode / মূল্য নির্ধারণ
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-[#162348] p-1 rounded-lg border border-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => setDripPricingMode("fixed")}
+                      className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
+                        dripPricingMode === "fixed"
+                          ? "bg-[#38bdf8] text-slate-950 shadow-sm"
+                          : "text-slate-300 hover:text-white"
+                      }`}
+                    >
+                      Fixed Price (একই দাম)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDripPricingMode("dynamic_level")}
+                      className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
+                        dripPricingMode === "dynamic_level"
+                          ? "bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 shadow-sm"
+                          : "text-slate-300 hover:text-white"
+                      }`}
+                    >
+                      Smart Level & Value ($0.20 - $10)
+                    </button>
+                  </div>
                 </div>
+
+                {dripPricingMode === "fixed" ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">
+                        Fixed Price for All Cards in Queue ($)
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.05"
+                        min="0.05"
+                        value={dripPrice}
+                        onChange={(e) => setDripPrice(e.target.value)}
+                        placeholder="1.50"
+                        className="bg-[#162348] border-slate-700 text-white font-mono font-medium text-xs rounded-lg h-10 px-3 focus:border-[#38bdf8] shadow-inner"
+                      />
+                    </div>
+                    <div className="flex items-center text-[11px] text-slate-300 bg-slate-800/50 p-2.5 rounded-lg border border-slate-700/60 leading-relaxed">
+                      ✓ All cards released from this queue will have this exact same price.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">
+                          Min Price / সর্বনিম্ন দাম ($)
+                        </Label>
+                        <Input
+                          type="number"
+                          step="0.05"
+                          min="0.05"
+                          value={dripMinPrice}
+                          onChange={(e) => setDripMinPrice(e.target.value)}
+                          placeholder="0.20"
+                          className="bg-[#162348] border-slate-700 text-white font-mono font-medium text-xs rounded-lg h-10 px-3 focus:border-[#38bdf8] shadow-inner"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">
+                          Max Price / সর্বোচ্চ দাম ($)
+                        </Label>
+                        <Input
+                          type="number"
+                          step="0.10"
+                          min="0.10"
+                          value={dripMaxPrice}
+                          onChange={(e) => setDripMaxPrice(e.target.value)}
+                          placeholder="10.00"
+                          className="bg-[#162348] border-slate-700 text-white font-mono font-medium text-xs rounded-lg h-10 px-3 focus:border-[#38bdf8] shadow-inner"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-[11.5px] text-emerald-300 bg-emerald-950/40 p-2.5 rounded-lg border border-emerald-500/30 leading-relaxed">
+                      ⚡ <strong>Smart Dynamic Pricing:</strong> Items in queue will be priced automatically based on detected Card Level & Value upon daily release at 10:00 AM Dhaka.
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">

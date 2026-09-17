@@ -15,9 +15,16 @@ CREATE TABLE IF NOT EXISTS public.card_drip_queues (
   auto_announce BOOLEAN NOT NULL DEFAULT true,
   telegram_broadcast BOOLEAN NOT NULL DEFAULT true,
   last_run_at TIMESTAMPTZ,
+  pricing_mode TEXT NOT NULL DEFAULT 'fixed', -- 'fixed' or 'dynamic_level'
+  min_price NUMERIC(12, 2) NOT NULL DEFAULT 0.20,
+  max_price NUMERIC(12, 2) NOT NULL DEFAULT 10.00,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE public.card_drip_queues ADD COLUMN IF NOT EXISTS pricing_mode TEXT NOT NULL DEFAULT 'fixed';
+ALTER TABLE public.card_drip_queues ADD COLUMN IF NOT EXISTS min_price NUMERIC(12, 2) NOT NULL DEFAULT 0.20;
+ALTER TABLE public.card_drip_queues ADD COLUMN IF NOT EXISTS max_price NUMERIC(12, 2) NOT NULL DEFAULT 10.00;
 
 CREATE TABLE IF NOT EXISTS public.card_drip_items (
   id UUID NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),

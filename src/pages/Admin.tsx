@@ -27,6 +27,7 @@ import { broadcastChannelAlert } from "@/lib/cardAutomation.functions";
 import { getBinDemandStats, type BinDemandItem } from "@/lib/binDemand.functions";
 import { flagEmoji } from "@/lib/countries";
 import { useAuth } from "@/hooks/useAuth";
+import { calculateCardPrice, type PricingMode } from "@/lib/cardPricing";
 
 interface Profile {
   id: string; username: string; email?: string; balance: number;
@@ -56,6 +57,9 @@ const Admin = () => {
   // Card upload state
   const [cardRaw, setCardRaw] = useState("");
   const [cardPrice, setCardPrice] = useState("1.50");
+  const [cardPricingMode, setCardPricingMode] = useState<PricingMode>("fixed");
+  const [cardMinPrice, setCardMinPrice] = useState("0.20");
+  const [cardMaxPrice, setCardMaxPrice] = useState("10.00");
   const [cardRefundable, setCardRefundable] = useState<"yes" | "no" | "mixed">("mixed");
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
@@ -241,7 +245,17 @@ const Admin = () => {
       const { unique, dropped } = dedupe(lines);
       if (unique.length === 0) { toast.error("No valid cards parsed"); setUploadBusy(false); return; }
 
-      const price = Number(cardPrice) || 1.5;
+      const fixedPriceVal = Number(cardPrice) || 1.5;
+      const minPriceVal = Number(cardMinPrice) || 0.20;
+      const maxPriceVal = Number(cardMaxPrice) || 10.00;
+      const pricingConfig = {
+        mode: cardPricingMode,
+        fixedPrice: fixedPriceVal,
+        minPrice: minPriceVal,
+        maxPrice: maxPriceVal,
+        randomVariation: true,
+      };
+
       const rows = unique.map((p) => {
         const binInfo = detectOfflineBin(p.cc);
         const brand = detectBrand(p.cc) || binInfo.brand;
@@ -252,6 +266,17 @@ const Admin = () => {
             : cardRefundable === "no"
             ? false
             : binInfo.refundable;
+
+        const calculatedPrice = calculateCardPrice(
+          {
+            cc: p.cc,
+            brand,
+            card_level: binInfo.level,
+            card_type: binInfo.type,
+            refundable: isRefundable,
+          },
+          pricingConfig
+        );
 
         return {
           cc: p.cc,
@@ -269,7 +294,7 @@ const Admin = () => {
           brand,
           bin: p.cc.slice(0, 6),
           base: `ADMIN_${new Date().toISOString().slice(0, 10).replace(/-/g, "_")}_${brand}`,
-          price,
+          price: calculatedPrice,
           refundable: isRefundable,
           card_type: binInfo.type,
           card_level: binInfo.level,
@@ -298,7 +323,7 @@ const Admin = () => {
               count,
               brand: sample.brand,
               country: countries || "MIX",
-              price,
+              price: sample.price ?? fixedPriceVal,
             },
           });
           toast.info("Sent restock alert to Telegram channel @zorushop!");
@@ -788,9 +813,52 @@ const Admin = () => {
               {/* SETTINGS + DROPZONE */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
                 <div className="space-y-3">
-                  <div>
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Default Price ($)</label>
-                    <Input type="number" step="0.01" value={cardPrice} onChange={e => setCardPrice(e.target.value)} className="bg-input/60 mt-1" />
+                  <div className="p-2.5 rounded-xl bg-secondary/40 border border-border/40 space-y-2">
+                    <div className="flex items-center justify-between gap-1 flex-wrap">
+                      <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1">
+                        <DollarSign className="h-3 w-3 text-emerald-400" />
+                        Pricing Mode
+                      </label>
+                      <div className="flex items-center gap-1 bg-background/60 p-0.5 rounded-lg border border-border/40 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setCardPricingMode("fixed")}
+                          className={`px-2 py-0.5 rounded transition ${cardPricingMode === "fixed" ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:text-white"}`}
+                        >
+                          Fixed
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCardPricingMode("dynamic_level")}
+                          className={`px-2 py-0.5 rounded transition ${cardPricingMode === "dynamic_level" ? "bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-semibold" : "text-muted-foreground hover:text-white"}`}
+                        >
+                          Smart Level ($0.20-$10)
+                        </button>
+                      </div>
+                    </div>
+
+                    {cardPricingMode === "fixed" ? (
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Fixed Price ($)</label>
+                        <Input type="number" step="0.01" value={cardPrice} onChange={e => setCardPrice(e.target.value)} className="bg-input/60 mt-1 h-8 text-xs font-mono" />
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Min ($)</label>
+                            <Input type="number" step="0.05" min="0.05" value={cardMinPrice} onChange={e => setCardMinPrice(e.target.value)} className="bg-input/60 mt-1 h-8 text-xs font-mono" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Max ($)</label>
+                            <Input type="number" step="0.10" min="0.10" value={cardMaxPrice} onChange={e => setCardMaxPrice(e.target.value)} className="bg-input/60 mt-1 h-8 text-xs font-mono" />
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-emerald-400/90 leading-tight">
+                          ✨ Dynamic: Classic 15%, Gold 35%, Platinum 58%, Signature 78%, Infinite 95%
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Refund Policy</label>
@@ -901,25 +969,47 @@ const Admin = () => {
                     <table className="w-full min-w-[720px] text-xs">
                       <thead className="text-[10px] uppercase tracking-wider text-muted-foreground bg-secondary/40">
                         <tr>
-                          {["Brand", "BIN", "EXP", "CVV", "Name", "City", "State", "ZIP", "Country"].map(h => (
+                          {["Brand", "BIN", "Price", "Level", "EXP", "CVV", "Name", "City", "State", "ZIP", "Country"].map(h => (
                             <th key={h} className="p-2 text-left font-normal">{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {formatPreview.cards.slice(0, 6).map((c, i) => (
-                          <tr key={`${c.cc}-${i}`} className="border-t border-border/30">
-                            <td className="p-2"><BrandLogo brand={detectBrand(c.cc) || detectBrandFromBin(c.cc.slice(0, 6))} className="h-5 w-8" /></td>
-                            <td className="p-2 font-mono text-primary-glow">{c.cc.slice(0, 6)}••••{c.cc.slice(-4)}</td>
-                            <td className="p-2 font-mono">{c.month}/{c.year}</td>
-                            <td className="p-2 font-mono">{c.cvv}</td>
-                            <td className="p-2">{c.name}</td>
-                            <td className="p-2">{c.city}</td>
-                            <td className="p-2">{c.state}</td>
-                            <td className="p-2 font-mono">{c.zip}</td>
-                            <td className="p-2">{c.country}</td>
-                          </tr>
-                        ))}
+                        {formatPreview.cards.slice(0, 6).map((c, i) => {
+                          const binInfo = detectOfflineBin(c.cc);
+                          const isRef = cardRefundable === "yes" ? true : cardRefundable === "no" ? false : binInfo.refundable;
+                          const calculatedPrice = calculateCardPrice(
+                            {
+                              cc: c.cc,
+                              brand: detectBrand(c.cc) || binInfo.brand,
+                              card_level: binInfo.level,
+                              card_type: binInfo.type,
+                              refundable: isRef,
+                            },
+                            {
+                              mode: cardPricingMode,
+                              fixedPrice: Number(cardPrice) || 1.5,
+                              minPrice: Number(cardMinPrice) || 0.20,
+                              maxPrice: Number(cardMaxPrice) || 10.00,
+                              randomVariation: true,
+                            }
+                          );
+                          return (
+                            <tr key={`${c.cc}-${i}`} className="border-t border-border/30">
+                              <td className="p-2"><BrandLogo brand={detectBrand(c.cc) || detectBrandFromBin(c.cc.slice(0, 6))} className="h-5 w-8" /></td>
+                              <td className="p-2 font-mono text-primary-glow">{c.cc.slice(0, 6)}••••{c.cc.slice(-4)}</td>
+                              <td className="p-2 font-mono font-bold text-emerald-400">${calculatedPrice.toFixed(2)}</td>
+                              <td className="p-2 text-[10px] font-mono text-slate-400">{binInfo.level || binInfo.type || "CLASSIC"}</td>
+                              <td className="p-2 font-mono">{c.month}/{c.year}</td>
+                              <td className="p-2 font-mono">{c.cvv}</td>
+                              <td className="p-2">{c.name}</td>
+                              <td className="p-2">{c.city}</td>
+                              <td className="p-2">{c.state}</td>
+                              <td className="p-2 font-mono">{c.zip}</td>
+                              <td className="p-2">{c.country}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

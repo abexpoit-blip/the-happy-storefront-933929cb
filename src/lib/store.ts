@@ -113,21 +113,14 @@ const PRODUCT_COLUMNS =
   "id, category_id, title, slug, price, compare_at_price, active, stock, bin, brand, country, state, city, zip, exp_month, exp_year, base, refundable, card_type, card_level, bank, created_at";
 
 let productCache: { at: number; data: Product[] } | null = null;
-const CACHE_TTL_MS = 60_000; // 60s in-memory cache for instant UI performance
+const CACHE_TTL_MS = 15_000; // 15s short RAM cache (prevents duplicate queries on tab switches without showing stale data)
 
 export const invalidateProductCache = () => {
   productCache = null;
-  if (typeof window !== "undefined") {
-    try {
-      sessionStorage.removeItem("zoru_product_cache");
-    } catch {
-      /* ignore */
-    }
-  }
 };
 
-/** High performance cap for client memory safety (keeps browser silky smooth even with 50M DB cards) */
-export const PRODUCT_FETCH_LIMIT = 10000;
+/** Performance cap: keeps client and Supabase DB snappy and resilient even under huge traffic */
+export const PRODUCT_FETCH_LIMIT = 3000;
 
 export const listProducts = async (
   opts: {
@@ -141,27 +134,10 @@ export const listProducts = async (
 ) => {
   const isDefaultFetch = !opts.categoryId && !opts.search && !opts.includeInactive && !opts.limit;
   
-  // 1. Fast in-memory cache check (0ms)
+  // Fast in-memory cache check (0ms) - only if not forced fresh
   if (isDefaultFetch && !opts.forceFresh && productCache && Date.now() - productCache.at < CACHE_TTL_MS) {
     opts.onBatchProgress?.(productCache.data, true);
     return productCache.data;
-  }
-
-  // 2. Fast sessionStorage cache check (0ms)
-  if (isDefaultFetch && !opts.forceFresh && typeof window !== "undefined") {
-    try {
-      const raw = sessionStorage.getItem("zoru_product_cache");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed?.at && Date.now() - parsed.at < CACHE_TTL_MS && Array.isArray(parsed?.data)) {
-          productCache = parsed;
-          opts.onBatchProgress?.(parsed.data, true);
-          return parsed.data;
-        }
-      }
-    } catch {
-      /* ignore */
-    }
   }
 
   const CHUNK_SIZE = 1000;
@@ -194,8 +170,7 @@ export const listProducts = async (
     return mapped;
   }
 
-  // Fetch initial batch (0..999) WITH count: "exact" on the first request only
-  // This tells us the EXACT stock count so we NEVER make blind empty queries!
+  // Fetch initial batch (0..999) WITH count on the first request only
   const firstRes = await buildQuery(true).range(0, CHUNK_SIZE - 1);
   if (firstRes.error) throw firstRes.error;
   const firstBatch = (firstRes.data ?? []) as Record<string, unknown>[];
@@ -214,15 +189,11 @@ export const listProducts = async (
   if (isFinal) {
     if (isDefaultFetch) {
       productCache = { at: Date.now(), data: firstMapped };
-      if (typeof window !== "undefined") {
-        try { sessionStorage.setItem("zoru_product_cache", JSON.stringify(productCache)); } catch { /* ignore */ }
-      }
     }
     return firstMapped;
   }
 
-  // If more cards exist (e.g. 5,000 cards):
-  // Calculate EXACTLY how many remaining chunks we need based on the database count!
+  // If more cards exist, fetch up to maxLimit in minimal parallel chunks
   const totalCount = Math.min(firstRes.count ?? maxLimit, maxLimit);
   const allRows = [...firstMapped];
   const probeRanges: [number, number][] = [];
@@ -231,7 +202,6 @@ export const listProducts = async (
     probeRanges.push([from, Math.min(from + CHUNK_SIZE - 1, totalCount - 1)]);
   }
 
-  // Run only the exact required chunks in parallel (e.g. 4 requests for 5k cards instead of 49)
   if (probeRanges.length > 0) {
     const remainingPages = await Promise.all(
       probeRanges.map(([from, to]) =>
@@ -261,9 +231,6 @@ export const listProducts = async (
 
   if (isDefaultFetch) {
     productCache = { at: Date.now(), data: finalMapped };
-    if (typeof window !== "undefined") {
-      try { sessionStorage.setItem("zoru_product_cache", JSON.stringify(productCache)); } catch { /* ignore */ }
-    }
   }
   return finalMapped;
 };
