@@ -862,18 +862,18 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
           {/* TAB 2: DAILY AUTO-DRIP SCHEDULER */}
           {/* ========================================================= */}
           <TabsContent value="drip" className="space-y-6">
-            {/* Asia/Dhaka Fixed 10:00 AM Schedule Highlight */}
+            {/* Fixed 10:00 AM Schedule Highlight */}
             <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border border-amber-500/40 text-xs text-amber-200 flex items-start gap-3 shadow-md">
               <Clock className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold text-amber-300 mb-1 text-sm flex items-center gap-2">
-                  <span>⏰ Fixed Daily Release Schedule: 10:00 AM (Asia/Dhaka timezone)</span>
+                  <span>⏰ Fixed Daily Release Schedule: 10:00 AM</span>
                   <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px]">
                     Active Daemon
                   </Badge>
                 </p>
                 <p className="text-slate-300 leading-relaxed text-xs">
-                  The automated background drip engine monitors active queues and triggers card releases every single morning at <b>10:00 AM Dhaka time (UTC+6)</b>. The daily batch is automatically minted with today's base, published to the shop, and broadcasted to Telegram.
+                  The automated background drip engine monitors active queues and triggers card releases every single morning at <b>10:00 AM</b>. The daily batch is automatically minted with today's base, published to the shop, and broadcasted to Telegram.
                 </p>
               </div>
             </div>
@@ -898,7 +898,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                   />
                 </div>
                 <div>
-                  <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Release Per Day (10:00 AM Dhaka)</Label>
+                  <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Release Per Day (10:00 AM Daily)</Label>
                   <Input
                     type="number"
                     min="1"
@@ -998,7 +998,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                       </div>
                     </div>
                     <div className="text-[11.5px] text-emerald-300 bg-emerald-950/40 p-2.5 rounded-lg border border-emerald-500/30 leading-relaxed">
-                      ⚡ <strong>Smart Dynamic Pricing:</strong> Items in queue will be priced automatically based on detected Card Level & Value upon daily release at 10:00 AM Dhaka.
+                      ⚡ <strong>Smart Dynamic Pricing:</strong> Items in queue will be priced automatically based on detected Card Level & Value upon daily release.
                     </div>
                   </div>
                 )}
