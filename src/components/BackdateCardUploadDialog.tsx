@@ -104,6 +104,8 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
 
   // File drag & drop ref
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const dripFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [dripDragOver, setDripDragOver] = useState(false);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, target: "backdate" | "drip") => {
     const file = e.target.files?.[0];
@@ -550,7 +552,6 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                 <Input
                   type="number"
                   min="1"
-                  max="500"
                   value={cardsPerDay}
                   onChange={(e) => setCardsPerDay(e.target.value)}
                   placeholder="20"
@@ -1052,16 +1053,78 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
               </div>
 
               <div>
-                <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">
-                  Paste Cards or Upload .txt File:
-                </Label>
-                <Textarea
-                  rows={4}
-                  value={dripRaw}
-                  onChange={(e) => setDripRaw(e.target.value)}
-                  placeholder="Paste raw cards here to enqueue for daily automatic release..."
-                  className="font-mono text-xs bg-[#080d1e] border-slate-700 text-slate-100 placeholder:text-slate-500 rounded-xl p-3 focus:border-[#38bdf8] shadow-inner"
-                />
+                <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+                  <Label className="text-xs font-semibold text-slate-200">
+                    Paste Cards or Upload .txt File (Auto-formatting applies automatically):
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      ref={dripFileInputRef}
+                      onChange={(e) => handleFileUpload(e, "drip")}
+                      accept=".txt,.csv"
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => dripFileInputRef.current?.click()}
+                      className="h-8 px-3 text-xs bg-[#1e293b] hover:bg-[#334155] border border-[#38bdf8]/50 text-[#38bdf8] font-bold rounded-lg transition"
+                    >
+                      <Upload className="h-3.5 w-3.5 mr-1 text-[#38bdf8]" />
+                      Load .txt File
+                    </Button>
+                    {dripRaw && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setDripRaw("")}
+                        className="h-8 px-2 text-xs text-slate-400 hover:text-white"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDripDragOver(true);
+                  }}
+                  onDragLeave={() => setDripDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDripDragOver(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) {
+                      file.text().then((text) => {
+                        setDripRaw((prev) => (prev.trim() ? prev.replace(/\s*$/, "\n") + text : text));
+                        toast.success(`Loaded ${file.name} (${text.length} chars)`);
+                      });
+                    }
+                  }}
+                  className={`relative rounded-xl transition ${
+                    dripDragOver ? "ring-2 ring-[#38bdf8] bg-[#38bdf8]/10" : ""
+                  }`}
+                >
+                  <Textarea
+                    rows={5}
+                    value={dripRaw}
+                    onChange={(e) => setDripRaw(e.target.value)}
+                    placeholder="Drop .txt/.csv file here or paste raw cards to enqueue for daily automatic release..."
+                    className="font-mono text-xs bg-[#080d1e] border-slate-700 text-slate-100 placeholder:text-slate-500 rounded-xl p-3 focus:border-[#38bdf8] shadow-inner"
+                  />
+                  {dripDragOver && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-[#080d1e]/90 rounded-xl border-2 border-dashed border-[#38bdf8] pointer-events-none">
+                      <p className="text-sm font-bold text-[#38bdf8] flex items-center gap-2">
+                        <Upload className="h-5 w-5" /> Drop .txt or .csv card file here
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {dripPreview && (

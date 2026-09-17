@@ -193,7 +193,7 @@ export const createDripQueue = createServerFn({ method: "POST" })
     z
       .object({
         name: z.string().min(1).max(100),
-        per_day: z.number().int().min(1).max(1000),
+        per_day: z.number().int().min(1).max(500000),
         price: z.number().min(0.01).max(1000),
         pricing_mode: z.enum(["fixed", "dynamic_level"]).optional(),
         min_price: z.number().min(0.01).optional(),
