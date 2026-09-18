@@ -88,11 +88,11 @@ export const broadcastChannelAlert = createServerFn({ method: "POST" })
     z
       .object({
         baseName: z.string().min(1),
-        count: z.number().optional(),
-        brand: z.string().optional(),
-        country: z.string().optional(),
-        price: z.number().optional(),
-        customNote: z.string().optional(),
+        count: z.number().nullable().optional(),
+        brand: z.string().nullable().optional(),
+        country: z.string().nullable().optional(),
+        price: z.number().nullable().optional(),
+        customNote: z.string().nullable().optional(),
       })
       .parse(input)
   )
@@ -160,6 +160,88 @@ export const broadcastChannelAlert = createServerFn({ method: "POST" })
       return { ok: true };
     } catch (e: unknown) {
       return { ok: false, error: e instanceof Error ? e.message : "Failed to broadcast to Telegram" };
+    }
+  });
+
+/**
+ * Diagnostic test: verifies bot token and sends a test ping to channel (@zorushop)
+ */
+export const testTelegramAlert = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context);
+    const token = getTelegramBotToken();
+    if (!token) {
+      return { ok: false, error: "TELEGRAM_BOT_TOKEN is missing on server in /etc/zoru/telegram.env" };
+    }
+    const channelId = getTelegramChannelId();
+
+    // 1. Verify Bot identity
+    let botUser = "unknown";
+    try {
+      const meRes = await fetch(`https://api.telegram.org/bot${token}/getMe`, { signal: AbortSignal.timeout(8000) });
+      const meJson = await meRes.json();
+      if (!meJson.ok) {
+        return { ok: false, error: `Invalid bot token: ${meJson.description || "Unknown error"}` };
+      }
+      botUser = meJson.result.username;
+    } catch (err: unknown) {
+      return { ok: false, error: `Failed to connect to Telegram API: ${err instanceof Error ? err.message : String(err)}` };
+    }
+
+    // 2. Try sending test message to channel
+    const text = [
+      `⚡ <b>ZORU SHOP — BOT ALERT DIAGNOSTIC</b> ⚡`,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+      `✅ <b>Status:</b> Alert system is active & functioning!`,
+      `🤖 <b>Bot:</b> @${botUser}`,
+      `📢 <b>Channel:</b> ${channelId}`,
+      `🕒 <b>Time:</b> ${new Date().toUTCString()}`,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+    ].join("\n");
+
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: channelId,
+          text,
+          parse_mode: "HTML",
+          disable_web_page_preview: true,
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        const desc = json.description || `HTTP ${res.status}`;
+        let hint = "";
+        if (json.error_code === 400 || json.error_code === 403) {
+          hint = `Make sure the bot @${botUser} has been added to channel ${channelId} as an Administrator with "Post Messages" permission!`;
+        }
+        return {
+          ok: false,
+          botUser,
+          channelId,
+          error: desc,
+          hint,
+        };
+      }
+
+      return {
+        ok: true,
+        botUser,
+        channelId,
+        messageId: json.result?.message_id,
+      };
+    } catch (e: unknown) {
+      return {
+        ok: false,
+        botUser,
+        channelId,
+        error: e instanceof Error ? e.message : "Failed to send message to Telegram",
+      };
     }
   });
 

@@ -45,6 +45,7 @@ import { parseAndFormat, dedupe, detectBrand, toPipeFormat } from "@/lib/cardFor
 import { detectOfflineBin } from "@/lib/binDetection";
 import {
   broadcastChannelAlert,
+  testTelegramAlert,
   createDripQueue,
   appendDripItems,
   listDripQueues,
@@ -352,6 +353,26 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
   const [dripQueues, setDripQueues] = useState<DripQueueRow[]>([]);
   const [loadingQueues, setLoadingQueues] = useState(false);
   const [releasingQueueId, setReleasingQueueId] = useState<string | null>(null);
+  const [testingTg, setTestingTg] = useState(false);
+
+  const handleTestTelegram = async () => {
+    setTestingTg(true);
+    try {
+      const res = await testTelegramAlert();
+      if (res.ok) {
+        toast.success(`✔ Live test alert posted to ${res.channelId} via @${res.botUser}!`);
+      } else {
+        toast.error(`❌ Telegram Alert Error: ${res.error}`);
+        if (res.hint) {
+          toast.warning(res.hint, { duration: 12000 });
+        }
+      }
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to test telegram alert");
+    } finally {
+      setTestingTg(false);
+    }
+  };
 
   // Parsing preview for drip
   const dripPreview = useMemo(() => {
@@ -716,7 +737,17 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#162348] border border-slate-700/80">
                 <div>
                   <div className="font-semibold text-xs text-white">Notify TG Channel</div>
-                  <div className="text-[11px] text-slate-400">Alert @zorushop channel</div>
+                  <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                    <span>Alert @zorushop</span>
+                    <button
+                      type="button"
+                      disabled={testingTg}
+                      onClick={handleTestTelegram}
+                      className="text-[10px] text-[#38bdf8] hover:underline font-semibold"
+                    >
+                      {testingTg ? "Testing..." : "· Click to Test Live"}
+                    </button>
+                  </div>
                 </div>
                 <Switch checked={notifyTelegramLatest} onCheckedChange={setNotifyTelegramLatest} />
               </div>
@@ -1063,7 +1094,17 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                 <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#162348] border border-slate-700/80">
                   <div>
                     <div className="font-semibold text-xs text-white">Telegram Broadcast</div>
-                    <div className="text-[11px] text-slate-400">Alert @zorushop daily</div>
+                    <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                      <span>Alert @zorushop daily</span>
+                      <button
+                        type="button"
+                        disabled={testingTg}
+                        onClick={handleTestTelegram}
+                        className="text-[10px] text-[#38bdf8] hover:underline font-semibold"
+                      >
+                        {testingTg ? "Testing..." : "· Click to Test Live"}
+                      </button>
+                    </div>
                   </div>
                   <Switch checked={dripTgBroadcast} onCheckedChange={setDripTgBroadcast} />
                 </div>
