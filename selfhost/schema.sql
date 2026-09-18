@@ -170,7 +170,7 @@ CREATE TABLE public.announcements (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   title text NOT NULL,
   body text,
-  kind text NOT NULL DEFAULT 'info' CHECK (kind IN ('info','warning','promo','success')),
+  kind text NOT NULL DEFAULT 'info' CHECK (kind IN ('info','warning','promo','success','update','alert','maintenance')),
   active boolean NOT NULL DEFAULT true,
   pinned boolean NOT NULL DEFAULT false,
   sort_order integer NOT NULL DEFAULT 0,

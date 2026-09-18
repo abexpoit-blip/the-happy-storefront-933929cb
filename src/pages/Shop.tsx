@@ -149,10 +149,15 @@ const Shop = () => {
   }, []);
 
   // Newest base first — buyers want the latest upload date on top.
-  const bases = useMemo(
-    () => sortBasesLatestFirst([...new Set(all.map((p) => p.base).filter(Boolean) as string[])]),
-    [all],
-  );
+  const bases = useMemo(() => {
+    const rawSet = new Set<string>();
+    for (const p of all) {
+      if (p.base) rawSet.add(publicBase(p.base));
+    }
+    const bParam = searchParams.get("base");
+    if (bParam && bParam !== "all") rawSet.add(publicBase(bParam));
+    return sortBasesLatestFirst(Array.from(rawSet));
+  }, [all, searchParams]);
 
   // Sync with URL query params (?base=... & ?bin=...)
   useEffect(() => {
@@ -160,9 +165,9 @@ const Shop = () => {
     const binParam = searchParams.get("bin");
     if (bParam || binParam) {
       if (bParam) {
-        const matched = bases.find((x) => x === bParam || publicBase(x) === bParam) || bParam;
-        setBase(matched);
-        setQ((s) => ({ ...s, base: matched }));
+        const normBase = publicBase(bParam);
+        setBase(normBase);
+        setQ((s) => ({ ...s, base: normBase }));
       }
       if (binParam) {
         if (hasDeposited === false) {
@@ -174,7 +179,7 @@ const Shop = () => {
       }
       setSearched(true);
     }
-  }, [searchParams, bases, hasDeposited]);
+  }, [searchParams, hasDeposited]);
 
   // Countries actually in stock (with counts), plus the full ISO list below it.
   const stockCountries = useMemo(() => {
@@ -196,7 +201,11 @@ const Shop = () => {
       const sec = `${(p as { section?: string }).section ?? "card"}`.toLowerCase();
       if (sec === "bin" || sec === "dump") return false;
       if (q.bin && !(p.bin ?? "").startsWith(q.bin)) return false;
-      if (q.base !== "all" && (p.base ?? "") !== q.base) return false;
+      if (q.base && q.base !== "all") {
+        const cardBase = publicBase(p.base ?? "");
+        const queryBase = publicBase(q.base);
+        if (cardBase !== queryBase && (p.base ?? "") !== q.base) return false;
+      }
       if (q.country && resolveCountryCode(p.country) !== q.country) return false;
       if (q.zip && !(p.zip ?? "").startsWith(q.zip)) return false;
       if (q.refund === "yes" && !p.refundable) return false;

@@ -26,6 +26,7 @@ if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' | grep -
     "checker-admin-api.sql"
     "card-drip.sql"
     "mixed-refundable-drip.sql"
+    "announcements-update.sql"
   )
 
   for file in "${MIGRATIONS[@]}"; do
@@ -43,6 +44,8 @@ if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' | grep -
   docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -c "ALTER TABLE public.card_drip_queues ADD COLUMN IF NOT EXISTS pricing_mode TEXT NOT NULL DEFAULT 'fixed';" >/dev/null 2>&1 || true
   docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -c "ALTER TABLE public.card_drip_queues ADD COLUMN IF NOT EXISTS min_price numeric(12,2) NOT NULL DEFAULT 0.20;" >/dev/null 2>&1 || true
   docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -c "ALTER TABLE public.card_drip_queues ADD COLUMN IF NOT EXISTS max_price numeric(12,2) NOT NULL DEFAULT 10.00;" >/dev/null 2>&1 || true
+  docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -c "ALTER TABLE public.announcements DROP CONSTRAINT IF EXISTS announcements_kind_check;" >/dev/null 2>&1 || true
+  docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -c "ALTER TABLE public.announcements ADD CONSTRAINT announcements_kind_check CHECK (kind IN ('info','warning','promo','success','update','alert','maintenance'));" >/dev/null 2>&1 || true
 
   echo "==> Database migrations applied successfully!"
 else

@@ -5,7 +5,7 @@ import Seo from "@/components/Seo";
 import { BuildBotBanner } from "@/components/BuildBotBanner";
 import { listAnnouncements, type Announcement } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
-import { publicBase } from "@/lib/baseLabel";
+import { publicBase, sortBasesLatestFirst } from "@/lib/baseLabel";
 import { Send, ShieldCheck, MessageCircle, Bot } from "lucide-react";
 
 /**
@@ -29,24 +29,57 @@ const Index = () => {
           .select("id, title, stock, base, created_at")
           .eq("active", true)
           .order("created_at", { ascending: false })
-          .limit(60),
+          .limit(300),
       ]);
-      if (annRes.status === "fulfilled" && annRes.value) {
-        setAnns(annRes.value);
-      }
-      if (prodRes.status === "fulfilled" && prodRes.value.data) {
-        const map = new Map<string, { id: string; label: string; count: number }>();
-        for (const p of prodRes.value.data) {
-          const label = p.base ? publicBase(p.base) : p.title;
-          const cur = map.get(label);
-          if (cur) {
-            cur.count += Number(p.stock || 1);
+
+      const baseCandidates: { id: string; label: string; count: number }[] = [];
+      const promoAnns: Announcement[] = [];
+
+      if (annRes.status === "fulfilled" && Array.isArray(annRes.value)) {
+        for (const a of annRes.value) {
+          const isBaseUpdate =
+            a.kind === "update" ||
+            /^base update:/i.test(a.title.trim()) ||
+            /^\d{4}[_\-]\d{2}[_\-]\d{2}/i.test(a.title.trim());
+
+          if (isBaseUpdate) {
+            const rawBase = a.title.replace(/^base update:\s*/i, "").trim();
+            const label = publicBase(rawBase);
+            if (label) {
+              baseCandidates.push({ id: a.id, label, count: 0 });
+            }
           } else {
-            map.set(label, { id: p.id, label, count: Number(p.stock || 1) });
+            promoAnns.push(a);
           }
         }
-        setNews(Array.from(map.values()).slice(0, 15));
+        setAnns(promoAnns);
       }
+
+      if (prodRes.status === "fulfilled" && prodRes.value.data) {
+        for (const p of prodRes.value.data) {
+          const label = p.base ? publicBase(p.base) : p.title;
+          if (label) {
+            baseCandidates.push({ id: p.id, label, count: Number(p.stock || 1) });
+          }
+        }
+      }
+
+      // Deduplicate by normalized label
+      const map = new Map<string, { id: string; label: string; count: number }>();
+      for (const b of baseCandidates) {
+        const norm = publicBase(b.label);
+        const existing = map.get(norm);
+        if (existing) {
+          existing.count += b.count;
+        } else {
+          map.set(norm, { id: b.id, label: norm, count: b.count });
+        }
+      }
+
+      // Sort newest base first (covers full 6 months history)
+      const sortedKeys = sortBasesLatestFirst(Array.from(map.keys()));
+      const sortedList = sortedKeys.map((k) => map.get(k)!).filter(Boolean);
+      setNews(sortedList.slice(0, 50));
     } catch {
       /* ignore */
     } finally {
