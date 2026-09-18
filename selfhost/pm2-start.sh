@@ -53,6 +53,13 @@ bash "$APP_DIR/selfhost/check-env.sh" "$APP_DIR/.env"
 # Recreate instead of restart so removed/rotated values cannot survive in PM2.
 pm2 delete "$APP_NAME" >/dev/null 2>&1 || true
 pm2 start .output/server/index.mjs --name "$APP_NAME" --update-env
+
+# Start or restart the automated drip scheduler worker daemon (daily 10:00 AM Asia/Dhaka)
+if [ -f "$APP_DIR/selfhost/drip-worker.mjs" ]; then
+  pm2 delete "zoru-drip" >/dev/null 2>&1 || true
+  pm2 start "$APP_DIR/selfhost/drip-worker.mjs" --name "zoru-drip" --update-env
+fi
+
 pm2 save
 
-echo "OK: $APP_NAME restarted on port $PORT with env from .env"
+echo "OK: $APP_NAME and zoru-drip restarted on port $PORT with env from .env"

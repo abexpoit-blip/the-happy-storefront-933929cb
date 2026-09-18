@@ -46,6 +46,7 @@ import { detectOfflineBin } from "@/lib/binDetection";
 import {
   broadcastChannelAlert,
   createDripQueue,
+  appendDripItems,
   listDripQueues,
   updateDripQueue,
   triggerDripRelease,
@@ -280,7 +281,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
               card_level: binInfo.level,
               bank: binInfo.bank,
               category_id: backdateCategoryId || null,
-              created_at: curDate.toISOString(),
+              created_at: new Date().toISOString(),
             };
           });
 
@@ -420,6 +421,9 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
         };
       });
 
+      const BATCH_SIZE = 500;
+      const firstBatch = items.slice(0, BATCH_SIZE);
+
       const res = await createDripQueue({
         data: {
           name: dripName.trim() || `Drip Queue ${new Date().toLocaleDateString()}`,
@@ -432,11 +436,24 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
           category_id: dripCategoryId || null,
           auto_announce: dripAutoAnnounce,
           telegram_broadcast: dripTgBroadcast,
-          items,
+          items: firstBatch,
         },
       });
 
-      toast.success(`Drip queue created with ${res.total_cards} cards!`);
+      if (items.length > BATCH_SIZE) {
+        for (let i = BATCH_SIZE; i < items.length; i += BATCH_SIZE) {
+          const slice = items.slice(i, i + BATCH_SIZE);
+          await appendDripItems({
+            data: {
+              queue_id: res.queue_id,
+              items: slice,
+            },
+          });
+          toast.info(`Staged ${Math.min(i + BATCH_SIZE, items.length)} / ${items.length} cards...`);
+        }
+      }
+
+      toast.success(`Drip queue created with ${items.length} cards!`);
       setDripRaw("");
       loadQueues();
     } catch (e: unknown) {

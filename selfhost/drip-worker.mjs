@@ -163,13 +163,25 @@ async function sendTelegramBroadcast(baseName, count, brand, country, price) {
 }
 
 function getDhakaDateAndHour(date = new Date()) {
-  const dhakaStr = date.toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
-  const d = new Date(dhakaStr);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const hour = d.getHours();
-  const minute = d.getMinutes();
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Dhaka",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  const getPart = (type) => parts.find((p) => p.type === type)?.value || "";
+  const yyyy = getPart("year");
+  const mm = getPart("month");
+  const dd = getPart("day");
+  const hourStr = getPart("hour");
+  const minStr = getPart("minute");
+  let hour = parseInt(hourStr, 10);
+  if (hour === 24) hour = 0;
+  const minute = parseInt(minStr, 10);
   return {
     dateStr: `${yyyy}-${mm}-${dd}`,
     hour,

@@ -88,7 +88,7 @@ export const broadcastChannelAlert = createServerFn({ method: "POST" })
     z
       .object({
         baseName: z.string().min(1),
-        count: z.number().int().min(1),
+        count: z.number().optional(),
         brand: z.string().optional(),
         country: z.string().optional(),
         price: z.number().optional(),
@@ -207,17 +207,17 @@ export const createDripQueue = createServerFn({ method: "POST" })
             cc: z.string(),
             brand: z.string(),
             bin: z.string(),
-            country: z.string().optional(),
-            state: z.string().optional(),
-            city: z.string().optional(),
-            zip: z.string().optional(),
-            month: z.string().optional(),
-            year: z.string().optional(),
-            cvv: z.string().optional(),
-            name: z.string().optional(),
-            addr: z.string().optional(),
-            tel: z.string().optional(),
-            email: z.string().optional(),
+            country: z.string().nullable().optional(),
+            state: z.string().nullable().optional(),
+            city: z.string().nullable().optional(),
+            zip: z.string().nullable().optional(),
+            month: z.string().nullable().optional(),
+            year: z.string().nullable().optional(),
+            cvv: z.string().nullable().optional(),
+            name: z.string().nullable().optional(),
+            addr: z.string().nullable().optional(),
+            tel: z.string().nullable().optional(),
+            email: z.string().nullable().optional(),
           })
         ),
       })
@@ -284,6 +284,89 @@ export const createDripQueue = createServerFn({ method: "POST" })
     }
 
     return { queue_id: queueId, total_cards: total };
+  });
+
+/**
+ * Append additional staged items to an existing Drip Queue (in safe chunks)
+ */
+export const appendDripItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        queue_id: z.string().uuid(),
+        items: z.array(
+          z.object({
+            card_line: z.string(),
+            cc: z.string(),
+            brand: z.string(),
+            bin: z.string(),
+            country: z.string().nullable().optional(),
+            state: z.string().nullable().optional(),
+            city: z.string().nullable().optional(),
+            zip: z.string().nullable().optional(),
+            month: z.string().nullable().optional(),
+            year: z.string().nullable().optional(),
+            cvv: z.string().nullable().optional(),
+            name: z.string().nullable().optional(),
+            addr: z.string().nullable().optional(),
+            tel: z.string().nullable().optional(),
+            email: z.string().nullable().optional(),
+          })
+        ),
+      })
+      .parse(input)
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabaseAdmin as any;
+
+    const CHUNK = 200;
+    for (let i = 0; i < data.items.length; i += CHUNK) {
+      const slice = data.items.slice(i, i + CHUNK).map((item) => ({
+        queue_id: data.queue_id,
+        card_line: item.card_line,
+        cc: item.cc,
+        brand: item.brand,
+        bin: item.bin,
+        country: item.country || null,
+        state: item.state || null,
+        city: item.city || null,
+        zip: item.zip || null,
+        month: item.month || null,
+        year: item.year || null,
+        cvv: item.cvv || null,
+        name: item.name || null,
+        addr: item.addr || null,
+        tel: item.tel || null,
+        email: item.email || null,
+        status: "pending",
+      }));
+
+      const { error: insErr } = await db.from("card_drip_items").insert(slice);
+      if (insErr) throw new Error(insErr.message);
+    }
+
+    const countAdded = data.items.length;
+    const { data: q } = await db
+      .from("card_drip_queues")
+      .select("total_cards, cards_remaining")
+      .eq("id", data.queue_id)
+      .single();
+    if (q) {
+      await db
+        .from("card_drip_queues")
+        .update({
+          total_cards: (q.total_cards || 0) + countAdded,
+          cards_remaining: (q.cards_remaining || 0) + countAdded,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", data.queue_id);
+    }
+
+    return { added: countAdded };
   });
 
 /**
