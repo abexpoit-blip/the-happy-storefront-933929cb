@@ -217,160 +217,166 @@ async function processActiveQueues() {
   }
 
   for (const queue of queues) {
-    // 1. Check if queue has already released today in Asia/Dhaka date
-    if (queue.last_run_at) {
-      const lastRunDhaka = getDhakaDateAndHour(new Date(queue.last_run_at)).dateStr;
-      if (lastRunDhaka === dhakaNow.dateStr) {
-        console.log(`[Drip Worker] Queue '${queue.name}' (${queue.id}) already released for today (${dhakaNow.dateStr}) in Dhaka timezone. Skipping.`);
+    try {
+      // 1. Check if queue has already released today in Asia/Dhaka date
+      if (queue.last_run_at) {
+        const lastRunDhaka = getDhakaDateAndHour(new Date(queue.last_run_at)).dateStr;
+        if (lastRunDhaka === dhakaNow.dateStr) {
+          console.log(`[Drip Worker] Queue '${queue.name}' (${queue.id}) already released for today (${dhakaNow.dateStr}) in Dhaka timezone. Skipping.`);
+          continue;
+        }
+      }
+
+      // 2. Check if current time in Asia/Dhaka has reached 10:00 AM
+      if (dhakaNow.hour < TARGET_RELEASE_HOUR_DHAKA) {
+        console.log(
+          `[Drip Worker] Queue '${queue.name}' scheduled for 10:00 AM Asia/Dhaka (current Dhaka time: ${String(dhakaNow.hour).padStart(2, "0")}:${String(dhakaNow.minute).padStart(2, "0")}). Waiting.`
+        );
         continue;
       }
-    }
 
-    // 2. Check if current time in Asia/Dhaka has reached 10:00 AM
-    if (dhakaNow.hour < TARGET_RELEASE_HOUR_DHAKA) {
-      console.log(
-        `[Drip Worker] Queue '${queue.name}' scheduled for 10:00 AM Asia/Dhaka (current Dhaka time: ${String(dhakaNow.hour).padStart(2, "0")}:${String(dhakaNow.minute).padStart(2, "0")}). Waiting.`
-      );
-      continue;
-    }
+      console.log(`[Drip Worker] Triggering 10:00 AM daily release for queue '${queue.name}' (${queue.id}) on Dhaka date ${dhakaNow.dateStr}...`);
+      const countToRelease = Math.min(queue.per_day, queue.cards_remaining);
 
-    console.log(`[Drip Worker] Triggering 10:00 AM daily release for queue '${queue.name}' (${queue.id}) on Dhaka date ${dhakaNow.dateStr}...`);
-    const countToRelease = Math.min(queue.per_day, queue.cards_remaining);
+      const { data: items, error: iErr } = await db
+        .from("card_drip_items")
+        .select("*")
+        .eq("queue_id", queue.id)
+        .eq("status", "pending")
+        .order("created_at", { ascending: true })
+        .limit(countToRelease);
 
-    const { data: items, error: iErr } = await db
-      .from("card_drip_items")
-      .select("*")
-      .eq("queue_id", queue.id)
-      .eq("status", "pending")
-      .order("created_at", { ascending: true })
-      .limit(countToRelease);
-
-    if (iErr || !items || items.length === 0) {
-      console.error(`[Drip Worker] No pending items for queue ${queue.id}:`, iErr?.message);
-      continue;
-    }
-
-    // Format today's base
-    const yyyy = now.getUTCFullYear();
-    const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
-    const dd = String(now.getUTCDate()).padStart(2, "0");
-    const primaryBrand = items[0]?.brand || "CARD";
-    const baseName = `ADMIN_${yyyy}_${mm}_${dd}_${primaryBrand}`;
-    const stamp = Date.now().toString(36);
-
-    const clean = (s) => (!s || String(s).toLowerCase() === "null" ? "" : s);
-
-    const products = items.map((c, idx) => {
-      const meta = detectBinMeta(c.cc || c.bin);
-      const isRef = queue.refundable === true ? true : meta.refundable;
-      const cardCountry = clean(c.country) || meta.country || null;
-
-      // Smart pricing: level & value based or fixed queue price
-      let cardPrice = Number(queue.price || 1.50);
-      if (queue.pricing_mode === "dynamic_level" || (queue.min_price && queue.max_price)) {
-        const minP = Number(queue.min_price || 0.20);
-        const maxP = Number(queue.max_price || 10.00);
-        const range = Math.max(0.1, maxP - minP);
-        let weight = 0.15;
-        const lvl = (meta.level || "").toUpperCase();
-        if (lvl.includes("INFINITE") || lvl.includes("WORLD ELITE") || lvl.includes("BLACK") || lvl.includes("CENTURION")) weight = 0.95;
-        else if (lvl.includes("SIGNATURE") || lvl.includes("WORLD") || lvl.includes("BUSINESS") || lvl.includes("CORPORATE")) weight = 0.78;
-        else if (lvl.includes("PLATINUM") || lvl.includes("TITANIUM")) weight = 0.58;
-        else if (lvl.includes("GOLD") || lvl.includes("PREPAID")) weight = 0.35;
-
-        const boost = (isRef ? range * 0.06 : 0) + (meta.type === "CREDIT" ? range * 0.04 : 0);
-        const seed = parseInt(String(c.cc || "5555").replace(/\D/g, "").slice(-4) || "5555", 10) % 100;
-        const variance = ((seed - 50) / 100) * (range * 0.12);
-        cardPrice = Math.round(Math.max(minP, Math.min(maxP, minP + range * weight + variance + boost)) * 100) / 100;
+      if (iErr || !items || items.length === 0) {
+        console.log(`[Drip Worker] No pending items left for queue ${queue.id}. Marking completed.`);
+        await db
+          .from("card_drip_queues")
+          .update({ status: "completed", cards_remaining: 0, updated_at: now.toISOString() })
+          .eq("id", queue.id);
+        continue;
       }
 
-      return {
-        category_id: queue.category_id || null,
-        title: `${c.brand || meta.brand} ${c.bin} · ${clean(c.city) || clean(c.state) || cardCountry || "—"}`,
-        slug: `${c.bin}-${stamp}-${idx}-${Math.random().toString(36).slice(2, 8)}`,
-        price: cardPrice,
-        delivery_type: "key",
-        active: true,
-        stock: 1,
-        bin: c.bin,
-        brand: c.brand || meta.brand || null,
-        country: cardCountry,
-        state: clean(c.state) || null,
-        city: clean(c.city) || null,
-        zip: clean(c.zip) || null,
-        exp_month: clean(c.month) || null,
-        exp_year: clean(c.year) || null,
-        base: baseName,
-        refundable: isRef,
-        card_type: meta.type,
-        card_level: meta.level,
-        bank: meta.bank,
-        last_digits: (c.cc || "").replace(/\D/g, "").slice(-3) || null,
-        has_phone: !!clean(c.tel),
-        has_email: !!clean(c.email),
-        created_at: now.toISOString(),
-      };
-    });
+      // Format today's base with Dhaka local date (e.g. ADMIN_2026_09_19_VISA)
+      const baseDateStr = dhakaNow.dateStr.replace(/-/g, "_");
+      const primaryBrand = items[0]?.brand || "CARD";
+      const baseName = `ADMIN_${baseDateStr}_${primaryBrand}`;
+      const stamp = Date.now().toString(36);
 
-    const { data: inserted, error: pErr } = await db
-      .from("products")
-      .insert(products)
-      .select("id, slug");
+      const clean = (s) => (!s || String(s).toLowerCase() === "null" ? "" : s);
 
-    if (pErr) {
-      console.error(`[Drip Worker] Failed to insert products for queue ${queue.id}:`, pErr.message);
-      continue;
-    }
+      const products = items.map((c, idx) => {
+        const meta = detectBinMeta(c.cc || c.bin);
+        const isRef = queue.refundable === true ? true : meta.refundable;
+        const cardCountry = clean(c.country) || meta.country || null;
 
-    // Insert keys
-    const keys = (inserted ?? []).map((prod, idx) => ({
-      product_id: prod.id,
-      content: items[idx].card_line,
-    }));
-    const { error: kErr } = await db.from("product_keys").insert(keys);
-    if (kErr) {
-      console.error(`[Drip Worker] Failed to insert keys:`, kErr.message);
-    }
+        // Smart pricing: level & value based or fixed queue price
+        let cardPrice = Number(queue.price || 1.50);
+        if (queue.pricing_mode === "dynamic_level" || (queue.min_price && queue.max_price)) {
+          const minP = Number(queue.min_price || 0.20);
+          const maxP = Number(queue.max_price || 10.00);
+          const range = Math.max(0.1, maxP - minP);
+          let weight = 0.15;
+          const lvl = (meta.level || "").toUpperCase();
+          if (lvl.includes("INFINITE") || lvl.includes("WORLD ELITE") || lvl.includes("BLACK") || lvl.includes("CENTURION")) weight = 0.95;
+          else if (lvl.includes("SIGNATURE") || lvl.includes("WORLD") || lvl.includes("BUSINESS") || lvl.includes("CORPORATE")) weight = 0.78;
+          else if (lvl.includes("PLATINUM") || lvl.includes("TITANIUM")) weight = 0.58;
+          else if (lvl.includes("GOLD") || lvl.includes("PREPAID")) weight = 0.35;
 
-    // Mark items as released
-    const releasedIds = items.map((it) => it.id);
-    await db
-      .from("card_drip_items")
-      .update({
-        status: "released",
-        released_at: now.toISOString(),
-      })
-      .in("id", releasedIds);
+          const boost = (isRef ? range * 0.06 : 0) + (meta.type === "CREDIT" ? range * 0.04 : 0);
+          const seed = parseInt(String(c.cc || "5555").replace(/\D/g, "").slice(-4) || "5555", 10) % 100;
+          const variance = ((seed - 50) / 100) * (range * 0.12);
+          cardPrice = Math.round(Math.max(minP, Math.min(maxP, minP + range * weight + variance + boost)) * 100) / 100;
+        }
 
-    // Update queue stats
-    const remainingAfter = Math.max(0, queue.cards_remaining - items.length);
-    await db
-      .from("card_drip_queues")
-      .update({
-        cards_remaining: remainingAfter,
-        last_run_at: now.toISOString(),
-        status: remainingAfter === 0 ? "completed" : queue.status,
-        updated_at: now.toISOString(),
-      })
-      .eq("id", queue.id);
+        return {
+          category_id: queue.category_id || null,
+          title: `${c.brand || meta.brand} ${c.bin} · ${clean(c.city) || clean(c.state) || cardCountry || "—"}`,
+          slug: `${c.bin}-${stamp}-${idx}-${Math.random().toString(36).slice(2, 8)}`,
+          price: cardPrice,
+          delivery_type: "key",
+          active: true,
+          stock: 1,
+          bin: c.bin,
+          brand: c.brand || meta.brand || null,
+          country: cardCountry,
+          state: clean(c.state) || null,
+          city: clean(c.city) || null,
+          zip: clean(c.zip) || null,
+          exp_month: clean(c.month) || null,
+          exp_year: clean(c.year) || null,
+          base: baseName,
+          refundable: isRef,
+          card_type: meta.type,
+          card_level: meta.level,
+          bank: meta.bank,
+          last_digits: (c.cc || "").replace(/\D/g, "").slice(-3) || null,
+          has_phone: !!clean(c.tel),
+          has_email: !!clean(c.email),
+          created_at: now.toISOString(),
+        };
+      });
 
-    console.log(`[Drip Worker] Successfully released ${items.length} cards for '${queue.name}'! (${remainingAfter} left)`);
+      const { data: inserted, error: pErr } = await db
+        .from("products")
+        .insert(products)
+        .select("id, slug");
 
-    // Announcements
-    if (queue.auto_announce) {
-      const pub = baseName.replace(/^\s*(admin|seller)[\s_\-.:]+/i, "");
-      await db.from("announcements").insert({
-        title: `Base Update: ${pub}`,
-        body: `Fresh batch of verified cards added for base ${pub}. Available in shop now.`,
-        kind: "update",
-        created_at: now.toISOString(),
-      }).catch((e) => console.error("Announcement insert error:", e.message));
-    }
+      if (pErr) {
+        console.error(`[Drip Worker] Failed to insert products for queue ${queue.id}:`, pErr.message);
+        continue;
+      }
 
-    // Telegram Broadcast
-    if (queue.telegram_broadcast) {
-      const countries = [...new Set(items.map((it) => it.country).filter(Boolean))].join(", ") || "MIX";
-      await sendTelegramBroadcast(baseName, items.length, primaryBrand, countries, queue.price);
+      // Insert keys
+      const keys = (inserted ?? []).map((prod, idx) => ({
+        product_id: prod.id,
+        content: items[idx].card_line,
+      }));
+      const { error: kErr } = await db.from("product_keys").insert(keys);
+      if (kErr) {
+        console.error(`[Drip Worker] Failed to insert keys:`, kErr.message);
+      }
+
+      // Mark items as released
+      const releasedIds = items.map((it) => it.id);
+      await db
+        .from("card_drip_items")
+        .update({
+          status: "released",
+          released_at: now.toISOString(),
+        })
+        .in("id", releasedIds);
+
+      // Update queue stats
+      const remainingAfter = Math.max(0, queue.cards_remaining - items.length);
+      await db
+        .from("card_drip_queues")
+        .update({
+          cards_remaining: remainingAfter,
+          last_run_at: now.toISOString(),
+          status: remainingAfter === 0 ? "completed" : queue.status,
+          updated_at: now.toISOString(),
+        })
+        .eq("id", queue.id);
+
+      console.log(`[Drip Worker] Successfully released ${items.length} cards for '${queue.name}'! (${remainingAfter} left)`);
+
+      // Announcements
+      if (queue.auto_announce) {
+        const pub = baseName.replace(/^\s*(admin|seller)[\s_\-.:]+/i, "");
+        await db.from("announcements").insert({
+          title: `Base Update: ${pub}`,
+          body: `Fresh batch of verified cards added for base ${pub}. Available in shop now.`,
+          kind: "update",
+          created_at: now.toISOString(),
+        }).catch((e) => console.error("Announcement insert error:", e.message));
+      }
+
+      // Telegram Broadcast
+      if (queue.telegram_broadcast) {
+        const countries = [...new Set(items.map((it) => it.country).filter(Boolean))].join(", ") || "MIX";
+        await sendTelegramBroadcast(baseName, items.length, primaryBrand, countries, queue.price);
+      }
+    } catch (qErr) {
+      console.error(`[Drip Worker] Error processing queue '${queue.name}' (${queue.id}):`, qErr.message);
     }
   }
 }

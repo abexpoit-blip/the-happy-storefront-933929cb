@@ -1324,6 +1324,27 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                               {q.last_run_at ? new Date(q.last_run_at).toLocaleString() : "Not run yet"}
                             </b>
                           </span>
+                          {q.status === "active" && q.cards_remaining > 0 && (
+                            <span className="text-emerald-300 font-semibold flex items-center gap-1">
+                              <Clock className="h-3 w-3 text-emerald-400" /> Next Drop:{" "}
+                              <b className="text-[#38bdf8] font-bold">
+                                {(() => {
+                                  if (!q.last_run_at) return "Today 10:00 AM";
+                                  const f = (date: Date) =>
+                                    new Intl.DateTimeFormat("en-US", {
+                                      timeZone: "Asia/Dhaka",
+                                      year: "numeric",
+                                      month: "2-digit",
+                                      day: "2-digit",
+                                    }).format(date);
+                                  return f(new Date(q.last_run_at)) === f(new Date())
+                                    ? "Tomorrow 10:00 AM"
+                                    : "Today 10:00 AM";
+                                })()}
+                              </b>{" "}
+                              ({Math.ceil(q.cards_remaining / Math.max(1, q.per_day))} days left)
+                            </span>
+                          )}
                           {q.telegram_broadcast && (
                             <span className="text-[#38bdf8] font-semibold flex items-center gap-1">
                               <Send className="h-3 w-3" /> TG Broadcast Active (@zorushop)
