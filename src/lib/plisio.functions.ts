@@ -14,7 +14,11 @@ export const createCryptoInvoice = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { credit, fee, charged } = withFee(data.amount);
-    const origin = getRequestUrl().origin;
+    const rawOrigin = getRequestUrl().origin;
+    const origin =
+      rawOrigin && !rawOrigin.includes("localhost") && !rawOrigin.includes("127.0.0.1") && !rawOrigin.includes("0.0.0.0")
+        ? rawOrigin
+        : (process.env.SITE_URL?.trim() || "https://zoru.cc");
     const claimEmail = typeof context.claims.email === "string" ? context.claims.email : undefined;
 
     // clean up anything stale first
@@ -88,12 +92,12 @@ export const checkDepositStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({ deposit_id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { getOperation, mapStatus } = await import("@/lib/plisio.server");
+    const { getOperation, mapStatus, checkLtcBlockchain } = await import("@/lib/plisio.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: dep } = await supabaseAdmin
       .from("deposits")
-      .select("id, user_id, amount, status, invoice_id, confirmations, expires_at")
+      .select("id, user_id, amount, status, invoice_id, confirmations, expires_at, wallet_address, crypto_amount")
       .eq("id", data.deposit_id)
       .maybeSingle();
     if (!dep || dep.user_id !== context.userId) throw new Error("not_found");
@@ -106,15 +110,30 @@ export const checkDepositStatus = createServerFn({ method: "POST" })
     let confirmations = dep.confirmations ?? 0;
     let txUrl: string | null = null;
     let received: string | null = null;
+
+    // 1. Check Plisio API
     try {
       const op = await getOperation(dep.invoice_id);
       rawStatus = (op.status || "").toLowerCase();
-      status = mapStatus(op.status);
+      status = mapStatus(op.status, op.amount, dep.crypto_amount, Number(op.confirmations ?? 0));
       confirmations = Number(op.confirmations ?? confirmations) || confirmations;
       txUrl = op.tx_url ?? null;
       received = op.amount ?? null;
     } catch {
-      return { status: "pending" as const, confirmations, amount: dep.amount };
+      /* continue to blockchain verification */
+    }
+
+    // 2. Direct Blockchain Verification (instant fallback if gateway has lag or mismatch)
+    if (status !== "approved" && dep.wallet_address) {
+      try {
+        const bc = await checkLtcBlockchain(dep.wallet_address);
+        if (bc.confirmed) {
+          status = "approved";
+          confirmations = Math.max(confirmations, bc.confirmations || 1);
+        }
+      } catch {
+        /* ignore */
+      }
     }
 
     const expired = !!dep.expires_at && Date.parse(dep.expires_at) < Date.now();
@@ -138,6 +157,14 @@ export const checkDepositStatus = createServerFn({ method: "POST" })
       _confirmations: confirmations,
       _txid: txUrl ?? undefined,
     });
+
+    if (settled === "approved") {
+      try {
+        await supabaseAdmin.rpc("award_referral_bonus", { _user_id: context.userId });
+      } catch {
+        // ignore
+      }
+    }
 
     return {
       status: ((settled as string) ?? status) as string,

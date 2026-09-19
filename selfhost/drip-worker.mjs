@@ -560,16 +560,192 @@ async function processActiveQueues() {
   }
 }
 
+// ----------------------------------------------------
+// Automatic Crypto Deposit Reconciler
+// ----------------------------------------------------
+async function checkLtcBlockchainWorker(address) {
+  if (!address || typeof address !== "string") return { confirmed: false, count: 0, txid: null, satoshis: 0 };
+  const clean = address.trim();
+  try {
+    const res = await fetch(`https://litecoinspace.org/api/address/${clean}/txs`, {
+      headers: { Accept: "application/json", "User-Agent": "zoru-worker/1.0" },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (res.ok) {
+      const txs = await res.json();
+      if (Array.isArray(txs) && txs.length > 0) {
+        let totalSatoshis = 0;
+        let bestTxid = null;
+        let isConfirmed = false;
+        for (const tx of txs) {
+          if (tx && Array.isArray(tx.vout)) {
+            for (const out of tx.vout) {
+              if (out.scriptpubkey_address === clean) {
+                totalSatoshis += out.value || 0;
+                if (!bestTxid) bestTxid = tx.txid;
+                if (tx.status && tx.status.confirmed) isConfirmed = true;
+              }
+            }
+          }
+        }
+        if (totalSatoshis > 0) {
+          return { confirmed: isConfirmed, count: txs.length, txid: bestTxid, satoshis: totalSatoshis };
+        }
+      }
+    }
+  } catch {
+    try {
+      const bcRes = await fetch(`https://api.blockcypher.com/v1/ltc/main/addrs/${clean}/balance`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (bcRes.ok) {
+        const bcData = await bcRes.json();
+        const total = bcData.total_received ?? 0;
+        if (total > 0) {
+          return {
+            confirmed: (bcData.n_tx ?? 0) > 0,
+            count: bcData.n_tx ?? 1,
+            txid: null,
+            satoshis: total,
+          };
+        }
+      }
+    } catch {}
+  }
+  return { confirmed: false, count: 0, txid: null, satoshis: 0 };
+}
+
+async function reconcilePendingDeposits() {
+  try {
+    const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const { data: pendings, error: pErr } = await db
+      .from("deposits")
+      .select("id, invoice_id, wallet_address, amount, crypto_amount, currency, status, user_id, created_at")
+      .eq("status", "pending")
+      .gt("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(30);
+
+    if (pErr || !pendings || pendings.length === 0) return;
+
+    let plisioApiKey = (process.env.PLISIO_SECRET_KEY || "").trim();
+    if (!plisioApiKey) {
+      const { data: row } = await db.from("site_settings").select("value").eq("key", "plisio_secret_key").maybeSingle();
+      if (row?.value) plisioApiKey = String(row.value).trim();
+    }
+
+    for (const dep of pendings) {
+      let isApproved = false;
+      let matchedTxid = null;
+
+      // 1. Direct Blockchain check (100% decentralized & immediate)
+      if (dep.wallet_address) {
+        const bc = await checkLtcBlockchainWorker(dep.wallet_address);
+        if (bc.confirmed && bc.count > 0) {
+          isApproved = true;
+          matchedTxid = bc.txid;
+        }
+      }
+
+      // 2. Plisio Invoice check
+      if (!isApproved && plisioApiKey && dep.invoice_id) {
+        try {
+          const pRes = await fetch(`https://api.plisio.net/api/v1/operations/${encodeURIComponent(dep.invoice_id)}?api_key=${encodeURIComponent(plisioApiKey)}`, {
+            signal: AbortSignal.timeout(6000),
+          });
+          if (pRes.ok) {
+            const pData = await pRes.json();
+            const op = pData?.data;
+            if (op) {
+              const st = String(op.status || "").toLowerCase();
+              const rec = Number(op.actual_fee ? op.received_amount : op.amount_received ?? op.received_amount ?? 0);
+              const confs = Number(op.confirmations ?? 0);
+              if (
+                st.includes("completed") ||
+                st === "paid" ||
+                st === "confirmed" ||
+                st === "success" ||
+                st.includes("pending internal") ||
+                (st === "mismatch" && (rec > 0 || confs >= 1))
+              ) {
+                isApproved = true;
+                matchedTxid = op.tx_url || op.txn_id || null;
+              }
+            }
+          }
+        } catch {}
+      }
+
+      if (isApproved) {
+        console.log(`[Deposit Reconciler] Settling approved deposit ${dep.id} (user: ${dep.user_id}, amount: $${dep.amount})`);
+        const { data: settleResult, error: sErr } = await db.rpc("settle_crypto_deposit", {
+          _invoice_id: dep.invoice_id || dep.id,
+          _status: "approved",
+          _confirmations: 1,
+          _txid: matchedTxid,
+        });
+
+        if (sErr) {
+          console.error(`[Deposit Reconciler] Settle error:`, sErr.message);
+          continue;
+        }
+
+        if (settleResult === "approved") {
+          console.log(`[Deposit Reconciler] Successfully credited $${dep.amount} to user ${dep.user_id}!`);
+          await db.rpc("award_referral_bonus", { _referee_id: dep.user_id }).catch(() => {});
+
+          // Fetch user's updated balance & notify Telegram if linked
+          try {
+            const { data: prof } = await db.from("profiles").select("balance").eq("id", dep.user_id).maybeSingle();
+            const bal = prof?.balance != null ? Number(prof.balance).toFixed(2) : "0.00";
+
+            const { data: tgAcct } = await db.from("telegram_accounts").select("telegram_id").eq("user_id", dep.user_id).maybeSingle();
+            if (telegramToken && tgAcct?.telegram_id) {
+              await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: tgAcct.telegram_id,
+                  text: [
+                    `━━━━━━━━━━━━━━━━━━━`,
+                    `🎉 <b>DEPOSIT CONFIRMED!</b>`,
+                    `━━━━━━━━━━━━━━━━━━━`,
+                    `Your cryptocurrency recharge has been verified!`,
+                    ``,
+                    `💵 <b>Credited:</b> <code>$${Number(dep.amount).toFixed(2)}</code>`,
+                    `💰 <b>Current Balance:</b> <code>$${bal}</code>`,
+                    ``,
+                    `⚡ <i>Your funds are ready for use immediately!</i>`,
+                    `━━━━━━━━━━━━━━━━━━━`,
+                  ].join("\n"),
+                  parse_mode: "HTML",
+                }),
+              }).catch(() => {});
+            }
+          } catch (notifErr) {
+            console.error(`[Deposit Reconciler] Notif error:`, notifErr.message);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`[Deposit Reconciler] Error:`, err.message);
+  }
+}
+
 // Main execution loop
 const runOnce = process.argv.includes("--once");
 
 if (runOnce) {
-  processActiveQueues().then(() => {
+  Promise.all([processActiveQueues(), reconcilePendingDeposits()]).then(() => {
     console.log("[Drip Worker] Single run completed.");
     process.exit(0);
   });
 } else {
   console.log("[Drip Worker] Starting daemon loop (interval: 3 minutes, daily target: 10:00 AM Asia/Dhaka)...");
   processActiveQueues();
+  reconcilePendingDeposits();
   setInterval(processActiveQueues, 3 * 60 * 1000);
+  // Scan pending crypto deposits every 45 seconds
+  setInterval(reconcilePendingDeposits, 45 * 1000);
 }

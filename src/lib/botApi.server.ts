@@ -314,8 +314,12 @@ export function siteOrigin(request: Request): string {
   const configured = process.env.SITE_URL?.trim();
   if (configured) return configured.replace(/\/+$/, "");
   try {
-    return new URL(request.url).origin;
+    const origin = new URL(request.url).origin;
+    if (origin && !origin.includes("localhost") && !origin.includes("127.0.0.1") && !origin.includes("0.0.0.0")) {
+      return origin;
+    }
   } catch {
-    return "https://zoru.cc";
+    /* fallback to production */
   }
+  return "https://zoru.cc";
 }

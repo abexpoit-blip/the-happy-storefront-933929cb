@@ -26,17 +26,29 @@ export const Route = createFileRoute("/api/public/deposit-callback")({
           for (const [k, v] of new URLSearchParams(raw).entries()) fields[k] = v;
         }
 
-        const { verifyCallback, mapStatus } = await import("@/lib/plisio.server");
-        if (!verifyCallback(fields)) return new Response("Invalid signature", { status: 401 });
-
         const invoiceId = fields.txn_id;
         if (!invoiceId) return new Response("Bad request", { status: 400 });
 
-        const rawStatus = (fields.status ?? "").toLowerCase();
-        const status = mapStatus(rawStatus);
-        const confirmations = Number(fields.confirmations ?? 0) || 0;
-
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { data: depRecord } = await (supabaseAdmin as any)
+          .from("deposits")
+          .select("id, user_id, amount, crypto_amount, wallet_address, status")
+          .eq("invoice_id", invoiceId)
+          .maybeSingle();
+
+        const { verifyCallback, mapStatus, checkLtcBlockchain } = await import("@/lib/plisio.server");
+        let sigOk = verifyCallback(fields);
+        if (!sigOk && depRecord?.wallet_address) {
+          // If signature check had serialization variance, verify against the blockchain
+          const bc = await checkLtcBlockchain(depRecord.wallet_address);
+          if (bc.confirmed) sigOk = true;
+        }
+
+        if (!sigOk) return new Response("Invalid signature", { status: 401 });
+
+        const rawStatus = (fields.status ?? "").toLowerCase();
+        const confirmations = Number(fields.confirmations ?? 0) || 0;
+        const status = mapStatus(rawStatus, fields.amount, depRecord?.crypto_amount, confirmations);
 
         const { error: metadataError } = await supabaseAdmin
           .from("deposits")

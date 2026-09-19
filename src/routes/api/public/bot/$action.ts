@@ -96,8 +96,50 @@ export const Route = createFileRoute("/api/public/bot/$action")({
         try {
           switch (action) {
             /* ---------------- account ---------------- */
-            case "session":
+            case "session": {
+              // Auto-check any recent pending crypto deposits for this user
+              try {
+                const { data: pendingDeps } = await db
+                  .from("deposits")
+                  .select("id, invoice_id, wallet_address, amount, status")
+                  .eq("user_id", account.userId)
+                  .eq("status", "pending")
+                  .order("created_at", { ascending: false })
+                  .limit(3);
+
+                if (pendingDeps && pendingDeps.length > 0) {
+                  for (const dep of pendingDeps) {
+                    if (dep.wallet_address) {
+                      const { checkLtcBlockchain } = await import("@/lib/plisio.server");
+                      const bc = await checkLtcBlockchain(dep.wallet_address);
+                      if (bc.confirmed && bc.receivedLtc > 0) {
+                        const { data: res } = await db.rpc("settle_crypto_deposit", {
+                          _invoice_id: dep.invoice_id || dep.id,
+                          _status: "approved",
+                          _confirmations: 1,
+                          _txid: bc.txid ?? null,
+                        });
+                        if (res === "approved") {
+                          try {
+                            await db.rpc("award_referral_bonus", { _user_id: account.userId });
+                          } catch {
+                            // ignore
+                          }
+                        }
+                      }
+                    }
+                  }
+                  // Refresh balance
+                  const { data: prof } = await db.from("profiles").select("balance").eq("id", account.userId).maybeSingle();
+                  if (prof && typeof prof.balance === "number") {
+                    snapshot.balance = prof.balance;
+                  }
+                }
+              } catch {
+                /* non-blocking inline reconciliation */
+              }
               return json({ status: "success", account: snapshot });
+            }
 
             /* ---------------- gates ---------------- */
             case "gates": {
@@ -444,7 +486,7 @@ export const Route = createFileRoute("/api/public/bot/$action")({
 
               let query = db
                 .from("deposits")
-                .select("id, amount, status, crypto_amount, invoice_url, created_at, expires_at, charged_amount, invoice_id")
+                .select("id, amount, status, crypto_amount, invoice_url, created_at, expires_at, charged_amount, invoice_id, wallet_address")
                 .eq("user_id", account.userId);
               if (depositId) query = query.eq("id", depositId);
               else query = query.eq("invoice_id", invoiceId);
@@ -452,67 +494,92 @@ export const Route = createFileRoute("/api/public/bot/$action")({
               if (depErr) return json({ status: "error", message: "deposit_lookup_failed" }, 500);
               if (!dep) return json({ status: "error", message: "deposit_not_found" }, 404);
 
-              // If still pending, actively check Plisio API in case webhook was delayed or pending
-              if (dep.status === "pending" && dep.invoice_id) {
-                try {
-                  const { getOperation, mapStatus } = await import("@/lib/plisio.server");
-                  const op = await getOperation(dep.invoice_id);
-                  if (op && op.status) {
-                    const mapped = mapStatus(op.status);
-                    if (mapped === "approved") {
-                      const { data: settleRes } = await db.rpc("settle_crypto_deposit", {
-                        _invoice_id: dep.invoice_id,
-                        _status: "approved",
-                        _confirmations: Number(op.confirmations ?? 1) || 1,
-                        _txid: op.tx_url || undefined,
-                      });
-                      if (settleRes === "approved") {
-                        await db.rpc("award_referral_bonus", { _user_id: account.userId }).catch(() => {});
-                        dep.status = "approved";
+              // If still pending, actively check Plisio API & direct blockchain verification
+              if (dep.status === "pending") {
+                let approved = false;
+                let txUrl = "";
+                let confs = 1;
 
-                        // Notify user in Telegram
-                        const TOKEN = (process.env.TELEGRAM_BOT_TOKEN ?? "").trim();
-                        if (TOKEN && base.telegram_id) {
-                          const { data: prof } = await db
-                            .from("profiles")
-                            .select("balance")
-                            .eq("id", account.userId)
-                            .maybeSingle();
-                          const bal = Number(prof?.balance ?? 0).toFixed(2);
-                          await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              chat_id: base.telegram_id,
-                              text: [
-                                `━━━━━━━━━━━━━━━━━━━`,
-                                `🎉 <b>DEPOSIT CONFIRMED!</b>`,
-                                `━━━━━━━━━━━━━━━━━━━`,
-                                `Your cryptocurrency recharge has been verified!`,
-                                ``,
-                                `💵 <b>Credited:</b> <code>$${Number(dep.amount).toFixed(2)}</code>`,
-                                `💰 <b>Current Balance:</b> <code>$${bal}</code>`,
-                                ``,
-                                `⚡ <i>Your funds are ready for use immediately!</i>`,
-                                `━━━━━━━━━━━━━━━━━━━`,
-                              ].join("\n"),
-                              parse_mode: "HTML",
-                            }),
-                          }).catch(() => {});
-                        }
-                      } else if (settleRes === "already_approved") {
-                        dep.status = "approved";
+                // 1. Try Plisio API
+                if (dep.invoice_id) {
+                  try {
+                    const { getOperation, mapStatus } = await import("@/lib/plisio.server");
+                    const op = await getOperation(dep.invoice_id);
+                    if (op && op.status) {
+                      const mapped = mapStatus(op.status, op.amount, dep.crypto_amount, Number(op.confirmations ?? 0));
+                      if (mapped === "approved") {
+                        approved = true;
+                        txUrl = op.tx_url || "";
+                        confs = Number(op.confirmations ?? 1) || 1;
                       }
-                    } else if (mapped === "rejected") {
-                      await db.rpc("settle_crypto_deposit", {
-                        _invoice_id: dep.invoice_id,
-                        _status: "rejected",
-                      });
-                      dep.status = "rejected";
+                    }
+                  } catch {
+                    /* try blockchain check next */
+                  }
+                }
+
+                // 2. Direct Blockchain Verification (bypasses gateway lag or mismatch)
+                if (!approved && dep.wallet_address) {
+                  try {
+                    const { checkLtcBlockchain } = await import("@/lib/plisio.server");
+                    const bc = await checkLtcBlockchain(dep.wallet_address);
+                    if (bc.confirmed) {
+                      approved = true;
+                      confs = bc.confirmations || 1;
+                    }
+                  } catch {
+                    /* fallback to pending */
+                  }
+                }
+
+                // Settle if verified by either gateway or blockchain
+                if (approved) {
+                  const { data: settleRes } = await db.rpc("settle_crypto_deposit", {
+                    _invoice_id: dep.invoice_id || dep.id,
+                    _status: "approved",
+                    _confirmations: confs,
+                    _txid: txUrl || undefined,
+                  });
+
+                  if (settleRes === "approved" || settleRes === "already_approved") {
+                    try {
+                      await db.rpc("award_referral_bonus", { _user_id: account.userId });
+                    } catch {
+                      // ignore
+                    }
+                    dep.status = "approved";
+
+                    // Notify user in Telegram
+                    const TOKEN = (process.env.TELEGRAM_BOT_TOKEN ?? "").trim();
+                    if (TOKEN && base.telegram_id) {
+                      const { data: prof } = await db
+                        .from("profiles")
+                        .select("balance")
+                        .eq("id", account.userId)
+                        .maybeSingle();
+                      const bal = Number(prof?.balance ?? 0).toFixed(2);
+                      await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          chat_id: base.telegram_id,
+                          text: [
+                            `━━━━━━━━━━━━━━━━━━━`,
+                            `🎉 <b>DEPOSIT CONFIRMED!</b>`,
+                            `━━━━━━━━━━━━━━━━━━━`,
+                            `Your cryptocurrency recharge has been verified!`,
+                            ``,
+                            `💵 <b>Credited:</b> <code>$${Number(dep.amount).toFixed(2)}</code>`,
+                            `💰 <b>Current Balance:</b> <code>$${bal}</code>`,
+                            ``,
+                            `⚡ <i>Your funds are ready for use immediately!</i>`,
+                            `━━━━━━━━━━━━━━━━━━━`,
+                          ].join("\n"),
+                          parse_mode: "HTML",
+                        }),
+                      }).catch(() => {});
                     }
                   }
-                } catch {
-                  // Fall back to database status
                 }
               }
 

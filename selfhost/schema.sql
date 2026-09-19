@@ -579,7 +579,7 @@ SET search_path = public
 AS $$
 DECLARE _d RECORD;
 BEGIN
-  SELECT * INTO _d FROM deposits WHERE invoice_id = _invoice_id FOR UPDATE;
+  SELECT * INTO _d FROM deposits WHERE (invoice_id = _invoice_id OR id::text = _invoice_id) FOR UPDATE LIMIT 1;
   IF NOT FOUND THEN RETURN 'not_found'; END IF;
 
   UPDATE deposits
