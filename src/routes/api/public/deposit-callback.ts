@@ -51,13 +51,65 @@ export const Route = createFileRoute("/api/public/deposit-callback")({
           .eq("invoice_id", invoiceId);
         if (metadataError) return new Response("Database error", { status: 500 });
 
-        const { error: settlementError } = await supabaseAdmin.rpc("settle_crypto_deposit", {
+        const { data: settleResult, error: settlementError } = await supabaseAdmin.rpc("settle_crypto_deposit", {
           _invoice_id: invoiceId,
           _status: status,
           _confirmations: confirmations,
           _txid: fields.tx_url || undefined,
         });
         if (settlementError) return new Response("Settlement error", { status: 500 });
+
+        // If newly approved, award referral bonus and notify user in Telegram if applicable
+        if (settleResult === "approved") {
+          const admin = supabaseAdmin as any;
+          const { data: depRecord } = await admin
+            .from("deposits")
+            .select("user_id, amount")
+            .eq("invoice_id", invoiceId)
+            .maybeSingle();
+
+          if (depRecord?.user_id) {
+            await admin.rpc("award_referral_bonus", { _user_id: depRecord.user_id });
+
+            const { data: tgAccount } = await admin
+              .from("telegram_accounts")
+              .select("telegram_id")
+              .eq("user_id", depRecord.user_id)
+              .maybeSingle();
+
+            const TOKEN = (process.env.TELEGRAM_BOT_TOKEN ?? "").trim();
+            if (TOKEN && tgAccount?.telegram_id) {
+              const { data: prof } = await admin
+                .from("profiles")
+                .select("balance")
+                .eq("id", depRecord.user_id)
+                .maybeSingle();
+              const bal = Number(prof?.balance ?? 0).toFixed(2);
+              const text = [
+                `━━━━━━━━━━━━━━━━━━━`,
+                `🎉 <b>DEPOSIT CONFIRMED!</b>`,
+                `━━━━━━━━━━━━━━━━━━━`,
+                `Your cryptocurrency recharge has been verified on the blockchain!`,
+                ``,
+                `💵 <b>Credited:</b> <code>$${Number(depRecord.amount).toFixed(2)}</code>`,
+                `💰 <b>Current Balance:</b> <code>$${bal}</code>`,
+                ``,
+                `⚡ <i>Your funds are ready for use immediately!</i>`,
+                `━━━━━━━━━━━━━━━━━━━`,
+              ].join("\n");
+
+              await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: tgAccount.telegram_id,
+                  text,
+                  parse_mode: "HTML",
+                }),
+              }).catch(() => {});
+            }
+          }
+        }
 
         return new Response("ok");
       },

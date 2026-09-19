@@ -254,19 +254,62 @@ function depositButtons(depositId) {
   };
 }
 
-function startDepositTimer(chat, msgId, depositId, expiresMs) {
+function startDepositTimer(chat, msgId, depositId, expiresMs, from = { id: chat }) {
   // Cancel any existing timer for this chat
   clearDepositTimer(chat);
 
   const tick = async () => {
     const d = pendingDeposits.get(chat);
     if (!d || d.messageId !== msgId) return; // stale
+
+    // Check payment status with server
+    try {
+      const st = await api("deposit_status", from, { deposit_id: depositId });
+      if (st.deposit_status === "approved") {
+        clearDepositTimer(chat);
+        pendingDeposits.delete(chat);
+
+        await edit(chat, msgId, [
+          `━━━━━━━━━━━━━━━━━━━`,
+          `✅ <b>PAYMENT CONFIRMED & CREDITED!</b>`,
+          `━━━━━━━━━━━━━━━━━━━`,
+          `Your cryptocurrency recharge has been verified on the blockchain!`,
+          ``,
+          `💵 <b>Amount Credited:</b> <code>${money(st.amount)}</code>`,
+          ``,
+          `⚡ <i>Funds have been added to your balance and are ready to use immediately!</i>`,
+          `━━━━━━━━━━━━━━━━━━━`,
+        ].join("\n"), {});
+
+        await menu(chat, [
+          `━━━━━━━━━━━━━━━━━━━`,
+          `🎉 <b>DEPOSIT SUCCESSFUL!</b>`,
+          `━━━━━━━━━━━━━━━━━━━`,
+          `Your deposit of <b>${money(st.amount)}</b> has been credited!`,
+          `Thank you for recharging with Zoru.`,
+          `━━━━━━━━━━━━━━━━━━━`,
+        ].join("\n"));
+        return;
+      }
+
+      if (st.deposit_status === "rejected" || st.deposit_status === "expired") {
+        clearDepositTimer(chat);
+        pendingDeposits.delete(chat);
+        await edit(chat, msgId, `⏰ <b>Invoice ${st.deposit_status.toUpperCase()}</b>\nThis deposit invoice has ended.`);
+        return;
+      }
+    } catch {
+      // Ignore transient polling failure
+    }
+
     if (Date.now() >= expiresMs + 30_000) {
-      // Grace period passed — stop ticking
       clearDepositTimer(chat);
+      pendingDeposits.delete(chat);
+      await edit(chat, msgId, `⏰ <b>Invoice Expired</b>\nPlease generate a new recharge invoice if you wish to deposit.`);
       return;
     }
-    // Rebuild card and edit message (ignore edit failures due to "message not modified")
+
+    // Rebuild card and edit message
     const current = pendingDeposits.get(chat);
     if (current) {
       await edit(chat, msgId,
@@ -276,7 +319,8 @@ function startDepositTimer(chat, msgId, depositId, expiresMs) {
     }
   };
 
-  const timerId = setInterval(tick, 60_000);
+  // Check every 30 seconds for fast confirmation
+  const timerId = setInterval(tick, 30_000);
   const existing = pendingDeposits.get(chat);
   if (existing) existing.timerId = timerId;
 }
@@ -400,7 +444,7 @@ async function createDeposit(chat, from, amount) {
     timerId: null,
   });
 
-  startDepositTimer(chat, msg.message_id, d.deposit_id, expiresMs);
+  startDepositTimer(chat, msg.message_id, d.deposit_id, expiresMs, from);
 }
 
 async function checkDepositStatus(chat, from, depositId) {
@@ -409,13 +453,16 @@ async function checkDepositStatus(chat, from, depositId) {
     const status = String(d.deposit_status || "unknown");
     const statusEmoji = { approved: "✅", pending: "⏳", rejected: "❌", expired: "⏰" }[status] || "❓";
     await menu(chat, [
-      `${statusEmoji} <b>Deposit status: ${status.toUpperCase()}</b>`,
-      ``,
+      `━━━━━━━━━━━━━━━━━━━`,
+      `${statusEmoji} <b>DEPOSIT STATUS: ${status.toUpperCase()}</b>`,
+      `━━━━━━━━━━━━━━━━━━━`,
       `Amount: <b>${money(d.amount)}</b>`,
       d.charged_amount ? `Charged: <b>${money(d.charged_amount)}</b>` : "",
       d.crypto_amount ? `Crypto: <code>${esc(d.crypto_amount)} LTC</code>` : "",
-      status === "approved" ? `\n🎉 Your balance has been updated!` : "",
-      status === "pending" ? `\n⏳ Still waiting for payment confirmation.` : "",
+      status === "approved" ? `\n🎉 <b>Your payment is confirmed and balance updated!</b>` : "",
+      status === "pending" ? `\n⏳ <i>Still waiting for blockchain payment confirmation.</i>` : "",
+      status === "expired" ? `\n⏰ <i>This payment window has expired.</i>` : "",
+      `━━━━━━━━━━━━━━━━━━━`,
     ].filter(Boolean).join("\n"));
     if (status === "approved" || status === "rejected" || status === "expired") {
       clearDepositTimer(chat);

@@ -66,6 +66,32 @@ export async function getOrCreateBotAccount(input: {
       })
       .eq("telegram_id", input.telegramId);
     if (updateError) throw new Error(`bot_account_update_failed: ${updateError.message}`);
+
+    // Ensure profile row exists even for existing telegram accounts
+    const { data: profCheck } = await db
+      .from("profiles")
+      .select("id")
+      .eq("id", existing.user_id)
+      .maybeSingle();
+
+    if (!profCheck) {
+      const fallbackUname = existing.username
+        ? `tg_${existing.username}`
+        : `tg_${existing.telegram_id}`;
+      const refCode = randomBytes(4).toString("hex").toUpperCase();
+      await db.from("profiles").upsert(
+        {
+          id: existing.user_id,
+          username: fallbackUname,
+          email: `tg${existing.telegram_id}@bot.zoru.cc`,
+          referral_code: refCode,
+          balance: 0,
+          bonus_balance: 0,
+        },
+        { onConflict: "id" }
+      ).catch(() => {});
+    }
+
     return {
       telegramId: Number(existing.telegram_id),
       userId: String(existing.user_id),
@@ -93,20 +119,84 @@ export async function getOrCreateBotAccount(input: {
   let userId = created?.user?.id as string | undefined;
   if (!userId) {
     // The auth user may already exist from an earlier partial signup.
-    const { data: profile } = await db.from("profiles").select("id").eq("email", email).maybeSingle();
-    userId = profile?.id as string | undefined;
+    try {
+      const { data: listData } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      const match = listData?.users?.find(
+        (u: { email?: string; id?: string }) => u.email?.toLowerCase() === email.toLowerCase()
+      );
+      if (match?.id) userId = match.id;
+    } catch {
+      // ignore
+    }
+
+    if (!userId) {
+      const { data: profile } = await db.from("profiles").select("id").eq("email", email).maybeSingle();
+      userId = profile?.id as string | undefined;
+    }
+
     if (!userId) throw new Error(error?.message || "bot_account_create_failed");
   }
 
-  const { error: linkError } = await db.from("telegram_accounts").insert({
-    telegram_id: input.telegramId,
-    user_id: userId,
-    username: input.username ?? null,
-    first_name: input.firstName ?? null,
-  });
+  // Ensure profile row exists in public.profiles
+  let { data: profileRow } = await db
+    .from("profiles")
+    .select("id, username")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!profileRow) {
+    const baseUname = handle ? `tg_${handle}` : `tg_${input.telegramId}`;
+    let candidateUname = baseUname;
+    const { data: taken } = await db.from("profiles").select("id").eq("username", candidateUname).maybeSingle();
+    if (taken && taken.id !== userId) {
+      candidateUname = `${baseUname}_${input.telegramId.toString().slice(-4)}`;
+    }
+
+    let referrerId: string | null = null;
+    if (input.ref) {
+      const { data: refRow } = await db
+        .from("profiles")
+        .select("id")
+        .eq("referral_code", input.ref.trim().toUpperCase())
+        .maybeSingle();
+      if (refRow?.id && refRow.id !== userId) referrerId = refRow.id;
+    }
+
+    const refCode = randomBytes(4).toString("hex").toUpperCase();
+    await db.from("profiles").upsert(
+      {
+        id: userId,
+        username: candidateUname,
+        email,
+        referral_code: refCode,
+        referred_by: referrerId,
+        balance: 0,
+        bonus_balance: 0,
+      },
+      { onConflict: "id" }
+    ).catch(() => {});
+
+    await db.from("user_roles").upsert(
+      {
+        user_id: userId,
+        role: "buyer",
+      },
+      { onConflict: "user_id,role" }
+    ).catch(() => {});
+  }
+
+  const { error: linkError } = await db.from("telegram_accounts").upsert(
+    {
+      telegram_id: input.telegramId,
+      user_id: userId,
+      username: input.username ?? null,
+      first_name: input.firstName ?? null,
+      last_seen: new Date().toISOString(),
+    },
+    { onConflict: "telegram_id" }
+  );
 
   if (linkError) {
-    // A simultaneous /start may have linked this Telegram ID first.
     const { data: raced, error: racedError } = await db
       .from("telegram_accounts")
       .select("telegram_id, user_id, username, banned, gate")
@@ -164,8 +254,30 @@ export async function botAccountSnapshot(account: BotAccount) {
     (result) => result.error,
   );
   if (failed?.error) throw new Error(`bot_snapshot_failed: ${failed.error.message}`);
-  const profile = profileResult.data;
-  if (!profile) throw new Error("bot_profile_missing");
+  let profile = profileResult.data;
+  if (!profile) {
+    // Auto-heal missing profile row
+    const fallbackUsername = account.username ? `tg_${account.username}` : `tg_${account.telegramId}`;
+    const refCode = randomBytes(4).toString("hex").toUpperCase();
+    const { data: healed } = await db
+      .from("profiles")
+      .upsert(
+        {
+          id: account.userId,
+          username: fallbackUsername,
+          email: `tg${account.telegramId}@bot.zoru.cc`,
+          referral_code: refCode,
+          balance: 0,
+          bonus_balance: 0,
+        },
+        { onConflict: "id" }
+      )
+      .select("username, balance, bonus_balance, referral_code, blocked")
+      .maybeSingle();
+
+    if (!healed) throw new Error("bot_profile_missing");
+    profile = healed;
+  }
   const refs = refsResult.data;
   const key = keyResult.data;
   const settings = settingsResult.data;
