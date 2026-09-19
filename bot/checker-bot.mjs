@@ -55,31 +55,35 @@ async function tg(method, payload, timeoutMs = TELEGRAM_REQUEST_TIMEOUT_MS) {
   return data.result;
 }
 
-/* ── Premium MENU (Sleek Silver-Grey & Clean Elegant Layout) ── */
+/* ── Premium MENU (Sleek Cyber-Luxury & Clean Elegant Layout) ── */
 function buildMenuKeyboard(settings = settingsCache) {
-  const adminContactUrl = settings.bot_admin_contact || "https://t.me/samexpoit";
+  const adminContactUrl = settings.bot_admin_contact || "https://t.me/Zorushop_service";
   const websiteUrl = settings.bot_website_url || BASE;
 
   return {
     inline_keyboard: [
       [
         { text: "💳 Check Card", callback_data: "check" },
-        { text: "💰 Earn Credit", callback_data: "refer" },
+        { text: "📦 Latest Bases", callback_data: "latest_bases" },
       ],
       [
         { text: "👤 Balance & Profile", callback_data: "balance" },
-        { text: "⚡ Gate Selection", callback_data: "gates" },
+        { text: "💎 Recharge Funds", callback_data: "deposit" },
       ],
       [
-        { text: "💎 Recharge Funds", callback_data: "deposit" },
+        { text: "⚡ Gate Selection", callback_data: "gates" },
+        { text: "💰 Earn Credit", callback_data: "refer" },
+      ],
+      [
+        { text: "🛒 Open Shop", url: `${websiteUrl.replace(/\/+$/, "")}/shop` },
         { text: "📊 Statistics & Logs", callback_data: "tasks" },
       ],
       [
         { text: "🔑 API Info", callback_data: "api" },
-        { text: "🌐 Website", url: websiteUrl },
+        { text: "📢 Official Channel", url: "https://t.me/zorushop" },
       ],
       [
-        { text: "📩 Contact Admin", url: adminContactUrl },
+        { text: "💬 Customer Support", url: adminContactUrl },
       ],
     ],
   };
@@ -90,22 +94,23 @@ function buildReplyKeyboard() {
     keyboard: [
       [
         { text: "💳 Check Card" },
-        { text: "💰 Earn Credit" },
+        { text: "📦 Latest Bases" },
       ],
       [
         { text: "👤 Balance & Profile" },
-        { text: "⚡ Gate Selection" },
-      ],
-      [
         { text: "💎 Recharge Funds" },
-        { text: "📊 Statistics & Logs" },
       ],
       [
-        { text: "🔑 API Info" },
-        { text: "🌐 Website" },
+        { text: "⚡ Gate Selection" },
+        { text: "💰 Earn Credit" },
       ],
       [
-        { text: "📩 Contact Admin" },
+        { text: "🛒 Open Shop" },
+        { text: "📊 Statistics" },
+      ],
+      [
+        { text: "📢 Official Channel" },
+        { text: "💬 Support" },
       ],
     ],
     resize_keyboard: true,
@@ -525,6 +530,59 @@ async function showGates(chat, from) {
   );
 }
 
+async function showLatestBases(chat, from) {
+  try {
+    const res = await api("latest_bases", from);
+    const bases = res.bases || [];
+    if (bases.length === 0) {
+      await menu(chat, [
+        `━━━━━━━━━━━━━━━━━━━`,
+        `📦 <b>LATEST BASE UPDATES</b>`,
+        `━━━━━━━━━━━━━━━━━━━`,
+        `Currently, no active card bases found in shop.`,
+        `Please check back soon for fresh drops!`,
+        `━━━━━━━━━━━━━━━━━━━`,
+      ].join("\n"));
+      return;
+    }
+
+    const lines = [
+      `━━━━━━━━━━━━━━━━━━━`,
+      `📦 <b>ZORU SHOP — LATEST BASE DROPS</b>`,
+      `━━━━━━━━━━━━━━━━━━━`,
+      `Verified fresh card drops currently available in shop:`,
+      ``,
+    ];
+
+    for (const b of bases) {
+      lines.push(`🔹 <code>${esc(b.base)}</code>`);
+      lines.push(`   💳 <b>Stock:</b> ${b.count} cards | 🏷 <b>Brand:</b> ${esc(b.brand)}`);
+      lines.push(`   🌍 <b>Country:</b> ${esc(b.country)} | 💰 <b>Price:</b> $${Number(b.price || 1.5).toFixed(2)}`);
+      lines.push(``);
+    }
+
+    lines.push(`⚡ <i>All items are active with instant automated delivery.</i>`);
+    lines.push(`━━━━━━━━━━━━━━━━━━━`);
+
+    await send(chat, lines.join("\n"), {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "🛒 Buy in Shop", url: "https://zoru.cc/shop" },
+            { text: "🔄 Refresh Bases", callback_data: "latest_bases" },
+          ],
+          [
+            { text: "💎 Recharge Funds", callback_data: "deposit" },
+            { text: "🔙 Main Menu", callback_data: "balance" },
+          ],
+        ],
+      },
+    });
+  } catch (err) {
+    await menu(chat, `❌ Failed to fetch latest bases: ${esc(friendlyError(err))}`);
+  }
+}
+
 async function startCheck(chat) {
   pendingAction.set(chat, "check");
   await send(
@@ -847,6 +905,18 @@ async function handleMessage(msg) {
         await checkDepositStatus(chat, from, d.depositId);
         return;
       }
+      case "/latest":
+      case "/bases":
+        await showLatestBases(chat, from);
+        return;
+      case "/shop": {
+        const s = await getSettings();
+        const webUrl = s.bot_website_url || BASE;
+        await send(chat, `🛒 <b>Visit Zoru Shop:</b>\n<a href="${webUrl.replace(/\/+$/, "")}/shop">${webUrl.replace(/\/+$/, "")}/shop</a>\n\nInstant automated delivery upon checkout!`, {
+          reply_markup: { inline_keyboard: [[{ text: "🛒 Open Shop Now", url: `${webUrl.replace(/\/+$/, "")}/shop` }]] }
+        });
+        return;
+      }
       case "/help":
       default:
         await menu(
@@ -858,6 +928,8 @@ async function handleMessage(msg) {
             `• /balance — 👤 User profile & wallet balance`,
             `• /deposit [amount] — 💎 Recharge funds via LTC`,
             `• /check — 💳 Check cards (single/bulk or file)`,
+            `• /latest — 📦 View latest base restocks`,
+            `• /shop — 🛒 Visit official card shop`,
             `• /gate — ⚡ Select checker gateway`,
             `• /refer — 💰 Earn credit & referral code`,
             `• /api — 🔑 REST API documentation & key`,
@@ -874,12 +946,27 @@ async function handleMessage(msg) {
   // Reply keyboard button clicks
   const clean = text.toLowerCase();
   if (clean.includes("check card")) { pendingAction.delete(chat); await startCheck(chat); return; }
-  if (clean.includes("earn credit")) { pendingAction.delete(chat); await showReferrals(chat, from); return; }
+  if (clean.includes("latest bases") || clean.includes("bases")) { pendingAction.delete(chat); await showLatestBases(chat, from); return; }
+  if (clean.includes("earn credit") || clean.includes("refer")) { pendingAction.delete(chat); await showReferrals(chat, from); return; }
   if (clean.includes("balance") || clean.includes("profile")) { pendingAction.delete(chat); await showAccount(chat, from); return; }
   if (clean.includes("gate")) { pendingAction.delete(chat); await showGates(chat, from); return; }
   if (clean.includes("recharge") || clean.includes("deposit")) { pendingAction.delete(chat); await startDeposit(chat); return; }
   if (clean.includes("statistics") || clean.includes("tasks")) { pendingAction.delete(chat); await showTasks(chat, from); return; }
   if (clean.includes("api info") || clean === "api") { pendingAction.delete(chat); await showApi(chat, from); return; }
+  if (clean.includes("shop")) {
+    const s = await getSettings();
+    const webUrl = s.bot_website_url || BASE;
+    await send(chat, `🛒 <b>Visit Zoru Shop:</b>\n<a href="${webUrl.replace(/\/+$/, "")}/shop">${webUrl.replace(/\/+$/, "")}/shop</a>\n\nInstant automated delivery upon checkout!`, {
+      reply_markup: { inline_keyboard: [[{ text: "🛒 Open Shop Now", url: `${webUrl.replace(/\/+$/, "")}/shop` }]] }
+    });
+    return;
+  }
+  if (clean.includes("channel")) {
+    await send(chat, `📢 <b>Official Channel:</b>\n<a href="https://t.me/zorushop">@zorushop</a>\n\nJoin for real-time base restocks and exclusive announcements!`, {
+      reply_markup: { inline_keyboard: [[{ text: "📢 Join Channel", url: "https://t.me/zorushop" }]] }
+    });
+    return;
+  }
   if (clean.includes("website")) {
     const s = await getSettings();
     await send(chat, `🌐 <b>Zoru Website:</b>\n<a href="${esc(s.bot_website_url || BASE)}">${esc(s.bot_website_url || BASE)}</a>`);
@@ -950,6 +1037,7 @@ async function handleCallback(q) {
     case "balance": return showAccount(chat, from);
     case "deposit": return startDeposit(chat);
     case "check": return startCheck(chat);
+    case "latest_bases": return showLatestBases(chat, from);
     case "gates": return showGates(chat, from);
     case "refer": return showReferrals(chat, from);
     case "api": return showApi(chat, from);

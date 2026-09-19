@@ -680,6 +680,43 @@ export const Route = createFileRoute("/api/public/bot/$action")({
               return json({ status: "success", sent, failed });
             }
 
+            /* ---------------- latest_bases ---------------- */
+            case "latest_bases": {
+              const { data: rows, error: bErr } = await db
+                .from("products")
+                .select("base, brand, country, price, stock, created_at")
+                .eq("active", true)
+                .gt("stock", 0)
+                .not("base", "is", null)
+                .order("created_at", { ascending: false })
+                .limit(250);
+
+              if (bErr) return json({ status: "error", message: bErr.message }, 500);
+
+              const baseMap = new Map<string, { base: string; count: number; brand: string; country: string; price: number; date: string }>();
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              for (const r of (rows ?? []) as any[]) {
+                const b = (r.base || "").replace(/^\s*(admin|seller)[\s_\-.:]+/i, "");
+                if (!b) continue;
+                if (!baseMap.has(b)) {
+                  baseMap.set(b, {
+                    base: b,
+                    count: r.stock || 1,
+                    brand: r.brand || "VISA/MC",
+                    country: r.country || "MIX",
+                    price: Number(r.price || 1.5),
+                    date: r.created_at,
+                  });
+                } else {
+                  const existing = baseMap.get(b)!;
+                  existing.count += (r.stock || 1);
+                }
+              }
+
+              const list = Array.from(baseMap.values()).slice(0, 10);
+              return json({ status: "success", bases: list });
+            }
+
             default:
               return json({ status: "error", message: "unknown_action" }, 404);
           }
