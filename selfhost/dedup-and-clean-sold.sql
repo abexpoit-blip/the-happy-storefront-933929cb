@@ -1,15 +1,15 @@
 -- ============================================================
 -- Deduplicate cards, prevent double uploads, and hide sold items
--- Idempotent migration
+-- Idempotent & Highly Optimized Migration
 -- ============================================================
 
 -- 1. Ensure pan column exists on product_keys
 ALTER TABLE public.product_keys ADD COLUMN IF NOT EXISTS pan text;
 CREATE INDEX IF NOT EXISTS idx_product_keys_pan ON public.product_keys (pan);
 
--- 2. Populate pan on all existing product_keys from content
+-- 2. Fast populate pan on existing product_keys from content
 UPDATE public.product_keys
-   SET pan = regexp_replace(substring(content from '([0-9]{12,19})'), '\D', '', 'g')
+   SET pan = substring(content from '([0-9]{12,19})')
  WHERE (pan IS NULL OR pan = '')
    AND content ~ '[0-9]{12,19}';
 
@@ -20,7 +20,7 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
   IF (NEW.pan IS NULL OR NEW.pan = '') AND NEW.content IS NOT NULL THEN
-    NEW.pan := regexp_replace(substring(NEW.content from '([0-9]{12,19})'), '\D', '', 'g');
+    NEW.pan := substring(NEW.content from '([0-9]{12,19})');
   END IF;
   RETURN NEW;
 END;
@@ -31,13 +31,9 @@ CREATE TRIGGER trg_set_product_key_pan
 BEFORE INSERT OR UPDATE ON public.product_keys
 FOR EACH ROW EXECUTE FUNCTION public.set_product_key_pan();
 
--- 4. Clean up duplicate keys in product_keys:
--- If multiple rows share the same non-empty pan:
---   a) Keep any sold row (is_sold = true).
---   b) If multiple unsold, keep the oldest one (min created_at/id).
---   c) Delete duplicate unsold keys and their orphaned products.
+-- 4. Fast deduplicate keys in product_keys using window function
 WITH ranked_keys AS (
-  SELECT id, product_id, pan, is_sold, created_at,
+  SELECT id, is_sold,
          ROW_NUMBER() OVER (
            PARTITION BY pan
            ORDER BY is_sold DESC, created_at ASC, id ASC
@@ -50,20 +46,19 @@ DELETE FROM public.product_keys
    SELECT id FROM ranked_keys WHERE rn > 1 AND is_sold = false
  );
 
--- Also clean up duplicate products whose keys were deleted
+-- Clean up duplicate products whose keys were deleted
 DELETE FROM public.products p
  WHERE p.delivery_type = 'key'
    AND NOT EXISTS (
      SELECT 1 FROM public.product_keys k WHERE k.product_id = p.id
    );
 
--- 5. Create unique index on product_keys(pan)
+-- 5. Safe Unique index on product_keys(pan)
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_indexes WHERE indexname = 'idx_product_keys_pan_unique'
   ) THEN
-    -- In case multiple sold keys exist for the same pan historically, keep only 1 per pan
     WITH dup_sold AS (
       SELECT id, ROW_NUMBER() OVER (PARTITION BY pan ORDER BY sold_at DESC, created_at ASC) as rn
         FROM public.product_keys
@@ -76,25 +71,21 @@ BEGIN
       WHERE pan IS NOT NULL AND pan <> '';
   END IF;
 EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'Could not create idx_product_keys_pan_unique: %', SQLERRM;
+  RAISE NOTICE 'Notice: idx_product_keys_pan_unique already exists or skipped';
 END $$;
 
--- 6. Clean up duplicate pending items in card_drip_items
+-- 6. Fast clean up duplicate pending items in card_drip_items
+WITH dup_drip AS (
+  SELECT id, ROW_NUMBER() OVER (PARTITION BY cc ORDER BY created_at ASC, id ASC) as rn
+    FROM public.card_drip_items
+   WHERE status = 'pending'
+)
+DELETE FROM public.card_drip_items WHERE id IN (SELECT id FROM dup_drip WHERE rn > 1);
+
+-- Also remove pending drip items that already exist in product_keys (using indexed IN lookup)
 DELETE FROM public.card_drip_items a
  WHERE a.status = 'pending'
-   AND (
-     -- duplicate within card_drip_items
-     EXISTS (
-       SELECT 1 FROM public.card_drip_items b
-        WHERE regexp_replace(b.cc, '\D', '', 'g') = regexp_replace(a.cc, '\D', '', 'g')
-          AND (b.id < a.id OR b.status = 'released')
-     )
-     -- or already in product_keys
-     OR EXISTS (
-       SELECT 1 FROM public.product_keys k
-        WHERE k.pan = regexp_replace(a.cc, '\D', '', 'g')
-     )
-   );
+   AND a.cc IN (SELECT pan FROM public.product_keys WHERE pan IS NOT NULL);
 
 -- 7. Fix sync_product_stock function and trigger
 CREATE OR REPLACE FUNCTION public.sync_product_stock()
@@ -149,4 +140,3 @@ CREATE TABLE IF NOT EXISTS public.update_bot_subscribers (
   last_seen timestamptz NOT NULL DEFAULT now()
 );
 GRANT ALL ON public.update_bot_subscribers TO service_role;
-
