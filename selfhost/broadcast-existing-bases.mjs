@@ -45,6 +45,8 @@ const serviceKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_SERVICE_KEY ||
   process.env.VITE_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_PUBLISHABLE_KEY ||
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   "";
 
 const telegramToken = (
@@ -56,7 +58,7 @@ const telegramToken = (
 const telegramChannel = (process.env.TELEGRAM_CHANNEL_ID || "@zorushop").trim();
 
 if (!serviceKey) {
-  console.error("❌ SUPABASE_SERVICE_ROLE_KEY is required to query existing bases.");
+  console.error("❌ SUPABASE key is required to query existing bases.");
   process.exit(1);
 }
 
