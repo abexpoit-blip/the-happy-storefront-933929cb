@@ -60,6 +60,13 @@ if [ -f "$APP_DIR/selfhost/drip-worker.mjs" ]; then
   pm2 start "$APP_DIR/selfhost/drip-worker.mjs" --name "zoru-drip" --update-env
 fi
 
+# Start or restart the dedicated update alert bot daemon (@Zorushopupdatebot)
+if [ -f "$APP_DIR/bot/update-bot.mjs" ]; then
+  pm2 delete "zoru-update-bot" >/dev/null 2>&1 || true
+  pm2 start "$APP_DIR/bot/update-bot.mjs" --name "zoru-update-bot" --update-env
+fi
+
 pm2 save
 
-echo "OK: $APP_NAME and zoru-drip restarted on port $PORT with env from .env"
+echo "OK: $APP_NAME, zoru-drip, and zoru-update-bot restarted with env from .env"
+

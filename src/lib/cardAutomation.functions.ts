@@ -16,18 +16,21 @@ async function assertAdmin(context: any) {
 }
 
 export function getTelegramBotToken(): string {
-  const envToken = (process.env.TELEGRAM_BOT_TOKEN ?? "").trim();
-  if (envToken) return envToken;
+  const envUpdateToken = (process.env.TELEGRAM_UPDATE_BOT_TOKEN ?? "").trim();
+  if (envUpdateToken) return envUpdateToken;
   try {
     if (fs.existsSync("/etc/zoru/telegram.env")) {
       const content = fs.readFileSync("/etc/zoru/telegram.env", "utf8");
+      const mUp = content.match(/TELEGRAM_UPDATE_BOT_TOKEN\s*=\s*["']?([^"'\r\n]+)/);
+      if (mUp && mUp[1]) return mUp[1].trim();
       const m = content.match(/TELEGRAM_BOT_TOKEN\s*=\s*["']?([^"'\r\n]+)/);
       if (m && m[1]) return m[1].trim();
     }
   } catch {
     /* ignore */
   }
-  return "";
+  // Default to official Zoru Shop Update Bot (@Zorushopupdatebot)
+  return "8883627548:AAGUiY5v8qRAq5bEZ_uHRI4FLtkyoGM_sUQ";
 }
 
 export function getTelegramChannelId(): string {
@@ -154,6 +157,31 @@ export const broadcastChannelAlert = createServerFn({ method: "POST" })
       });
 
       const json = await res.json();
+      
+      // Also push to update bot subscribers
+      try {
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: subs } = await (supabaseAdmin as any)
+          .from("update_bot_subscribers")
+          .select("telegram_id")
+          .eq("subscribed", true)
+          .limit(500);
+        for (const s of subs ?? []) {
+          fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: s.telegram_id,
+              text,
+              parse_mode: "HTML",
+              disable_web_page_preview: true,
+              reply_markup: replyMarkup,
+            }),
+          }).catch(() => {});
+        }
+      } catch {}
+
       if (!res.ok || !json.ok) {
         return { ok: false, error: json.description || `Telegram API error: ${res.status}` };
       }

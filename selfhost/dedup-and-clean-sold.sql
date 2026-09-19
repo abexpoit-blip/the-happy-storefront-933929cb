@@ -138,3 +138,15 @@ UPDATE public.products p
 UPDATE public.products p
    SET stock = (SELECT count(*) FROM public.product_keys k WHERE k.product_id = p.id AND k.is_sold = false)
  WHERE p.delivery_type = 'key' AND p.active = true;
+
+-- 9. Update bot subscribers registry
+CREATE TABLE IF NOT EXISTS public.update_bot_subscribers (
+  telegram_id bigint PRIMARY KEY,
+  username text,
+  first_name text,
+  subscribed boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  last_seen timestamptz NOT NULL DEFAULT now()
+);
+GRANT ALL ON public.update_bot_subscribers TO service_role;
+

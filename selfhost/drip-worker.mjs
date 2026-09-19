@@ -38,7 +38,11 @@ const serviceKey =
   process.env.VITE_SUPABASE_ANON_KEY ||
   "";
 
-const telegramToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+const telegramToken = (
+  process.env.TELEGRAM_UPDATE_BOT_TOKEN ||
+  process.env.TELEGRAM_BOT_TOKEN ||
+  "8883627548:AAGUiY5v8qRAq5bEZ_uHRI4FLtkyoGM_sUQ"
+).trim();
 const telegramChannel = (process.env.TELEGRAM_CHANNEL_ID || "@zorushop").trim();
 
 if (!serviceKey) {
@@ -277,6 +281,40 @@ async function sendTelegramBroadcast(baseName, count, brand, country, price) {
     } else {
       console.error(`[Drip Worker] Telegram alert error:`, json.description || res.statusText);
     }
+
+    // Also push to all registered update bot subscribers
+    try {
+      const { data: subs } = await db
+        .from("update_bot_subscribers")
+        .select("telegram_id")
+        .eq("subscribed", true)
+        .limit(500);
+
+      for (const s of subs ?? []) {
+        fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: s.telegram_id,
+            text,
+            parse_mode: "HTML",
+            disable_web_page_preview: true,
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: "🛒 Buy Cards Now", url: "https://zoru.cc/shop" },
+                  { text: "🤖 Checker Bot", url: "https://t.me/ZoruCheckerbot" },
+                ],
+                [
+                  { text: "💬 Support", url: "https://t.me/Zorushop_service" },
+                  { text: "📢 Official Channel", url: "https://t.me/zorushop" },
+                ],
+              ],
+            },
+          }),
+        }).catch(() => {});
+      }
+    } catch {}
   } catch (err) {
     console.error(`[Drip Worker] Telegram broadcast exception:`, err.message);
   }
