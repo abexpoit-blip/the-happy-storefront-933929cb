@@ -314,24 +314,36 @@ const Admin = () => {
         kind: "update",
       }).catch(() => {});
 
-      // Telegram Channel Broadcast
+      // Telegram Channel & Bot Broadcast for each distinct base uploaded
       if (tgBroadcastCardUpload && rows.length > 0) {
-        try {
-          const sample = rows[0];
-          const countries = [...new Set(rows.map(r => r.country))].slice(0, 4).join(", ");
-          await broadcastChannelAlert({
-            data: {
-              baseName: sample.base,
-              count,
-              brand: sample.brand,
-              country: countries || "MIX",
-              price: sample.price ?? fixedPriceVal,
-            },
-          });
-          toast.info("Sent restock alert to Telegram channel @zorushop!");
-        } catch {
-          /* ignore */
+        const basesMap = new Map<string, typeof rows>();
+        for (const r of rows) {
+          const b = r.base || "NEW_BASE";
+          const list = basesMap.get(b) || [];
+          list.push(r);
+          basesMap.set(b, list);
         }
+
+        for (const [bName, bRows] of basesMap.entries()) {
+          try {
+            const sample = bRows[0];
+            const countries = [...new Set(bRows.map((r) => r.country).filter(Boolean))].slice(0, 4).join(", ");
+            const avgP = bRows.reduce((acc, x) => acc + (Number(x.price) || fixedPriceVal), 0) / bRows.length;
+            await broadcastChannelAlert({
+              data: {
+                baseName: bName,
+                count: bRows.length,
+                brand: sample.brand,
+                country: countries || "MIX",
+                price: Number(avgP.toFixed(2)),
+              },
+            });
+          } catch {
+            /* ignore */
+          }
+          await new Promise((r) => setTimeout(r, 600)); // safe rate limit delay
+        }
+        toast.info(`Sent alert for ${basesMap.size} base(s) to Telegram @zorushop & update bot!`);
       }
 
       toast.success(`Published ${count} cards` + (dropped > 0 ? ` (${dropped} dupes removed)` : "") + (failed.length > 0 ? ` · ${failed.length} unparseable` : ""));

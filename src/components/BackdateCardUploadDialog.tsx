@@ -45,6 +45,7 @@ import { parseAndFormat, dedupe, detectBrand, toPipeFormat } from "@/lib/cardFor
 import { detectOfflineBin } from "@/lib/binDetection";
 import {
   broadcastChannelAlert,
+  broadcastAllExistingBasesAlert,
   testTelegramAlert,
   createDripQueue,
   appendDripItems,
@@ -195,6 +196,13 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
     let latestBaseCount = 0;
     let latestBrand = "VISA";
     let latestCountries: string[] = [];
+    const createdBasesList: Array<{
+      baseName: string;
+      count: number;
+      brand: string;
+      country: string;
+      price: number;
+    }> = [];
 
     try {
       const s = new Date(startDate || defaultSixMonthsAgo);
@@ -294,6 +302,16 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
           const created = await adminPublishFullCards(fullCardInputs);
           uploadedCount += created;
 
+          if (created > 0) {
+            createdBasesList.push({
+              baseName,
+              count: created,
+              brand,
+              country: latestCountries.slice(0, 3).join(", ") || "MIX",
+              price: backdatePricingMode === "fixed" ? parseFloat(backdatePrice) || 1.5 : pricingSummary?.avg || 2.0,
+            });
+          }
+
           // 2. Post dated announcement if enabled
           if (postAnnouncements && created > 0) {
             const pubName = `${dateStr}_${brand}`;
@@ -307,21 +325,34 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
         }
       }
 
-      // 3. Telegram channel alert for latest base if enabled
-      if (notifyTelegramLatest && latestBaseCreated) {
-        try {
-          await broadcastChannelAlert({
-            data: {
-              baseName: latestBaseCreated,
-              count: latestBaseCount,
-              brand: latestBrand,
-              country: latestCountries.slice(0, 3).join(", ") || "MIX",
-              price: backdatePricingMode === "fixed" ? parseFloat(backdatePrice) || 1.5 : pricingSummary?.avg || 2.0,
-              customNote: `Back-date upload of ${uploadedCount} cards completed successfully.`,
-            },
+      // 3. Telegram channel & Bot alerts for EVERY distinct base created (Option 2)
+      if (notifyTelegramLatest && createdBasesList.length > 0) {
+        for (let i = 0; i < createdBasesList.length; i++) {
+          const b = createdBasesList[i];
+          setBackdateProgress({
+            currentDay: i + 1,
+            totalDays: createdBasesList.length,
+            currentDate: `Broadcasting base alert: ${b.baseName} (${i + 1}/${createdBasesList.length})...`,
+            totalUploaded: uploadedCount,
+            totalExpected: allCards.length,
           });
-        } catch (tgErr) {
-          console.warn("Telegram broadcast error:", tgErr);
+          try {
+            await broadcastChannelAlert({
+              data: {
+                baseName: b.baseName,
+                count: b.count,
+                brand: b.brand,
+                country: b.country,
+                price: b.price,
+                customNote: `Verified base update with ${b.count} fresh cards.`,
+              },
+            });
+          } catch (tgErr) {
+            console.warn("Telegram broadcast error for base:", b.baseName, tgErr);
+          }
+          if (i < createdBasesList.length - 1) {
+            await new Promise((r) => setTimeout(r, 600)); // 600ms rate limit protection
+          }
         }
       }
 
@@ -358,6 +389,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
   const [loadingQueues, setLoadingQueues] = useState(false);
   const [releasingQueueId, setReleasingQueueId] = useState<string | null>(null);
   const [testingTg, setTestingTg] = useState(false);
+  const [broadcastingExisting, setBroadcastingExisting] = useState(false);
 
   const handleTestTelegram = async () => {
     setTestingTg(true);
@@ -375,6 +407,26 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
       toast.error(e instanceof Error ? e.message : "Failed to test telegram alert");
     } finally {
       setTestingTg(false);
+    }
+  };
+
+  const handleBroadcastExisting = async () => {
+    if (
+      !window.confirm(
+        "Broadcast alerts for all active bases currently in shop to Telegram (@Zorushopupdatebot & @zorushop)?\n\nEach distinct base will be broadcasted one by one."
+      )
+    ) {
+      return;
+    }
+    setBroadcastingExisting(true);
+    try {
+      const res = await broadcastAllExistingBasesAlert({ data: { limit: 100 } });
+      if (!res.ok) throw new Error(res.error || "Broadcast failed");
+      toast.success(`Successfully sent ${res.broadcasted} base alert(s) to Telegram bot & channel!`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Broadcast failed");
+    } finally {
+      setBroadcastingExisting(false);
     }
   };
 
@@ -740,21 +792,49 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
 
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#162348] border border-slate-700/80">
                 <div>
-                  <div className="font-semibold text-xs text-white">Notify TG Channel</div>
+                  <div className="font-semibold text-xs text-white flex items-center gap-1.5">
+                    <span>Alert Every Base to TG</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold">Auto</span>
+                  </div>
                   <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                    <span>Alert @zorushop</span>
+                    <span>Alert @zorushop & Bot</span>
                     <button
                       type="button"
                       disabled={testingTg}
                       onClick={handleTestTelegram}
                       className="text-[10px] text-[#38bdf8] hover:underline font-semibold"
                     >
-                      {testingTg ? "Testing..." : "· Click to Test Live"}
+                      {testingTg ? "Testing..." : "· Test Live"}
                     </button>
                   </div>
                 </div>
                 <Switch checked={notifyTelegramLatest} onCheckedChange={setNotifyTelegramLatest} />
               </div>
+            </div>
+
+            {/* Quick Action: Broadcast all existing active bases in database */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-xl bg-gradient-to-r from-blue-950/40 via-[#162348] to-slate-900 border border-blue-500/30 text-xs shadow-md">
+              <div className="space-y-0.5">
+                <div className="font-bold text-slate-200 flex items-center gap-2">
+                  <span>📢 Broadcast Previous / Existing Bases</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-[#38bdf8] border border-blue-500/30 font-semibold">
+                    One-Click Update
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  Shop-এ ইতিমধ্যে থাকা পূর্বের সকল অ্যাক্টিভ বেইজের আলাদা আলাদা নোটিফিকেশন বটে ও চ্যানেলে পাঠান।
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                disabled={broadcastingExisting}
+                onClick={handleBroadcastExisting}
+                className="bg-[#38bdf8] hover:bg-[#0284c7] text-[#07101f] font-bold text-xs h-9 px-4 rounded-lg flex items-center gap-1.5 shadow-md flex-shrink-0"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {broadcastingExisting ? "Broadcasting Bases..." : "Broadcast All Existing Bases"}
+              </Button>
             </div>
 
             {/* Raw Cards Input Area */}

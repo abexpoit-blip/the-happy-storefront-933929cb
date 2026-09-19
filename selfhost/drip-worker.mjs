@@ -237,12 +237,15 @@ async function sendTelegramBroadcast(baseName, count, brand, country, price) {
   }
 
   const cleanBase = baseName.replace(/^\s*(admin|seller)[\s_\-.:]+/i, "");
+  const priceStr = price ? `$${Number(price).toFixed(2)}` : "$1.50";
   const text = [
     `⚡ <b>ZORU SHOP — NEW BASE UPDATE!</b> ⚡`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `📦 <b>Base:</b> <code>${cleanBase}</code>`,
     `🏷 <b>Brand:</b> ${brand || "VISA/MC"}`,
     `🌍 <b>Country:</b> ${country || "MIX"}`,
+    count ? `💳 <b>Cards Added:</b> ${count} Verified Cards` : ``,
+    `💰 <b>Price:</b> ${priceStr}`,
     `⚡ <b>Delivery:</b> Instant Automated Delivery`,
     ``,
     `🛒 <b>Shop Now:</b> <a href="https://zoru.cc/shop">zoru.cc/shop</a>`,
@@ -250,7 +253,9 @@ async function sendTelegramBroadcast(baseName, count, brand, country, price) {
     `📢 <b>Official Channel:</b> ${telegramChannel}`,
     `💬 <b>Support:</b> @Zorushop_service`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   try {
     const res = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
@@ -626,12 +631,21 @@ async function processActiveQueues() {
         }
       }
 
-      // Telegram Broadcast
+      // Telegram Broadcast (Option 2: Individual alert for every distinct base)
       if (queue.telegram_broadcast) {
-        const brandsList = [...new Set(products.map((p) => p.brand))].join(", ");
-        const countries = [...new Set(products.map((it) => it.country).filter(Boolean))].join(", ") || "MIX";
-        const cleanBases = distinctBases.map((b) => b.replace(/^\s*(admin|seller)[\s_\-.:]+/i, "")).join(" / ");
-        await sendTelegramBroadcast(cleanBases, items.length, brandsList, countries, queue.price);
+        for (let bIdx = 0; bIdx < distinctBases.length; bIdx++) {
+          const bName = distinctBases[bIdx];
+          const bProds = products.filter((p) => p.base === bName);
+          const bBrands = [...new Set(bProds.map((p) => p.brand))].join(", ") || "VISA/MC";
+          const bCountries = [...new Set(bProds.map((it) => it.country).filter(Boolean))].join(", ") || "MIX";
+          const avgP = bProds.length > 0
+            ? (bProds.reduce((acc, x) => acc + (Number(x.price) || 1.5), 0) / bProds.length).toFixed(2)
+            : queue.price;
+          await sendTelegramBroadcast(bName, bProds.length, bBrands, bCountries, avgP);
+          if (bIdx < distinctBases.length - 1) {
+            await new Promise((r) => setTimeout(r, 600)); // 600ms rate limit protection
+          }
+        }
       }
     } catch (qErr) {
       console.error(`[Drip Worker] Error processing queue '${queue.name}' (${queue.id}):`, qErr.message);

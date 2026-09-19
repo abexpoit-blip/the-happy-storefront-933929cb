@@ -118,6 +118,8 @@ export const broadcastChannelAlert = createServerFn({ method: "POST" })
       `📦 <b>Base:</b> <code>${pBase}</code>`,
       `🏷 <b>Brand:</b> ${brandStr}`,
       `🌍 <b>Country:</b> ${countryStr}`,
+      data.count ? `💳 <b>Cards Added:</b> ${data.count} Verified Cards` : ``,
+      `💰 <b>Price:</b> ${priceStr}`,
       `⚡ <b>Delivery:</b> Instant Automated Delivery`,
       data.customNote ? `📝 <b>Note:</b> ${data.customNote}\n` : ``,
       `🛒 <b>Shop Now:</b> <a href="https://zoru.cc/shop">zoru.cc/shop</a>`,
@@ -189,6 +191,163 @@ export const broadcastChannelAlert = createServerFn({ method: "POST" })
     } catch (e: unknown) {
       return { ok: false, error: e instanceof Error ? e.message : "Failed to broadcast to Telegram" };
     }
+  });
+
+/**
+ * Broadcast alerts for all active bases currently in the shop
+ */
+export const broadcastAllExistingBasesAlert = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        limit: z.number().optional().default(50),
+      })
+      .parse(input)
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Fetch active products with stock > 0 that have a base
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: prods, error: pErr } = await (supabaseAdmin as any)
+      .from("products")
+      .select("base, brand, country, price, stock, active")
+      .eq("active", true)
+      .gt("stock", 0)
+      .not("base", "is", null)
+      .limit(10000);
+
+    if (pErr) return { ok: false, error: pErr.message };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (!prods || (prods as any[]).length === 0) {
+      return { ok: false, error: "No active products with bases found in shop." };
+    }
+
+    // Group by base
+    const baseMap = new Map<string, { count: number; brands: Set<string>; countries: Set<string>; totalPrice: number }>();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const p of prods as any[]) {
+      if (!p.base) continue;
+      const b = p.base;
+      const cur = baseMap.get(b) || { count: 0, brands: new Set<string>(), countries: new Set<string>(), totalPrice: 0 };
+      cur.count += (p.stock || 1);
+      if (p.brand) cur.brands.add(p.brand);
+      if (p.country) cur.countries.add(p.country);
+      cur.totalPrice += Number(p.price || 1.5);
+      baseMap.set(b, cur);
+    }
+
+    const baseList: Array<{
+      baseName: string;
+      count: number;
+      brand: string;
+      country: string;
+      price: number;
+    }> = [];
+
+    for (const [baseName, info] of baseMap.entries()) {
+      baseList.push({
+        baseName,
+        count: info.count,
+        brand: Array.from(info.brands).slice(0, 2).join("/") || "VISA/MC",
+        country: Array.from(info.countries).slice(0, 3).join(", ") || "MIX",
+        price: Number((info.totalPrice / Math.max(1, info.count)).toFixed(2)),
+      });
+    }
+
+    // Sort descending by base name (most recent first)
+    baseList.sort((a, b) => b.baseName.localeCompare(a.baseName));
+    const toBroadcast = baseList.slice(0, data.limit || 50);
+
+    const token = getTelegramBotToken();
+    if (!token) return { ok: false, error: "TELEGRAM_BOT_TOKEN not configured on server" };
+    const channelId = getTelegramChannelId();
+
+    let sentCount = 0;
+    let failedCount = 0;
+
+    for (let i = 0; i < toBroadcast.length; i++) {
+      const b = toBroadcast[i];
+      const pBase = publicBase(b.baseName);
+      const text = [
+        `⚡ <b>ZORU SHOP — NEW BASE UPDATE!</b> ⚡`,
+        `━━━━━━━━━━━━━━━━━━━━━━`,
+        `📦 <b>Base:</b> <code>${pBase}</code>`,
+        `🏷 <b>Brand:</b> ${b.brand}`,
+        `🌍 <b>Country:</b> ${b.country}`,
+        `💳 <b>In Stock:</b> ${b.count} Verified Cards`,
+        `💰 <b>Price:</b> $${b.price.toFixed(2)}`,
+        `⚡ <b>Delivery:</b> Instant Automated Delivery`,
+        `🛒 <b>Shop Now:</b> <a href="https://zoru.cc/shop">zoru.cc/shop</a>`,
+        `🤖 <b>Checker Bot:</b> <a href="https://t.me/ZoruCheckerbot">@ZoruCheckerbot</a>`,
+        `📢 <b>Official Channel:</b> ${channelId}`,
+        `💬 <b>Support:</b> @Zorushop_service`,
+        `━━━━━━━━━━━━━━━━━━━━━━`,
+      ].join("\n");
+
+      const replyMarkup = {
+        inline_keyboard: [
+          [
+            { text: "🛒 Buy Cards Now", url: "https://zoru.cc/shop" },
+            { text: "🤖 Telegram Checker Bot", url: "https://t.me/ZoruCheckerbot" },
+          ],
+          [
+            { text: "💬 Support", url: "https://t.me/Zorushop_service" },
+            { text: "📢 Official Channel", url: "https://t.me/zorushop" },
+          ],
+        ],
+      };
+
+      try {
+        const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: channelId,
+            text,
+            parse_mode: "HTML",
+            disable_web_page_preview: true,
+            reply_markup: replyMarkup,
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (res.ok) sentCount++;
+        else failedCount++;
+
+        // Push to update bot subscribers
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: subs } = await (supabaseAdmin as any)
+            .from("update_bot_subscribers")
+            .select("telegram_id")
+            .eq("subscribed", true)
+            .limit(500);
+          for (const s of subs ?? []) {
+            fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: s.telegram_id,
+                text,
+                parse_mode: "HTML",
+                disable_web_page_preview: true,
+                reply_markup: replyMarkup,
+              }),
+            }).catch(() => {});
+          }
+        } catch {}
+      } catch {
+        failedCount++;
+      }
+
+      if (i < toBroadcast.length - 1) {
+        await new Promise((r) => setTimeout(r, 600));
+      }
+    }
+
+    return { ok: true, totalBases: baseList.length, broadcasted: sentCount, failed: failedCount };
   });
 
 /**
