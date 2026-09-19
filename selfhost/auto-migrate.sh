@@ -57,6 +57,10 @@ else
     if [ -f "$MIGRATION_DIR/bin-searches.sql" ]; then
       docker compose exec -T db psql -U postgres -d postgres < "$MIGRATION_DIR/bin-searches.sql" >/dev/null 2>&1 || true
     fi
+    if [ -f "$MIGRATION_DIR/fix-unknown-banks.sql" ]; then
+      echo "--> Applying fix-unknown-banks via compose..."
+      docker compose exec -T db psql -U postgres -d postgres < "$MIGRATION_DIR/fix-unknown-banks.sql" >/dev/null 2>&1 || true
+    fi
     docker compose exec -T db psql -U postgres -d postgres -c "ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bonus_balance numeric NOT NULL DEFAULT 0;" >/dev/null 2>&1 || true
     docker compose exec -T db psql -U postgres -d postgres -c "UPDATE public.site_settings SET value = '5' WHERE key = 'referral_bonus' AND (value = '0.10' OR value = '0.1' OR value = '0.1000');" >/dev/null 2>&1 || true
     docker compose exec -T db psql -U postgres -d postgres -c "INSERT INTO public.site_settings (key, value) VALUES ('bot_referral_bonus', '0.10') ON CONFLICT (key) DO NOTHING;" >/dev/null 2>&1 || true

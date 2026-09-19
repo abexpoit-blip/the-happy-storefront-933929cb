@@ -15,6 +15,7 @@ import { BrandLogo, detectBrandFromBin, CountryFlagImg, countryCode, countryName
 import { sortBasesLatestFirst } from "@/lib/baseLabel";
 import { allCountries, flagEmoji, resolveCountryCode, resolveCountryName } from "@/lib/countries";
 import { lookupBin } from "@/lib/bin";
+import { detectOfflineBin } from "@/lib/binDetection";
 import { trackBinSearch } from "@/lib/binTracking";
 
 type CardMeta = { type: string | null; level: string | null; bank: string | null };
@@ -290,10 +291,23 @@ const Shop = () => {
     const p = c as unknown as { card_type?: string | null; card_level?: string | null; bank?: string | null };
     const fromBin = binMeta[(c.bin ?? "").replace(/\D/g, "").slice(0, 8)] ?? { type: null, level: null, bank: null };
     
-    // Never show "UNKNOWN BANK" to buyers — prefer enriched BIN bank or fall back cleanly
-    const isInvalid = (val?: string | null) => !val || /unknown/i.test(val.trim());
+    // Never show "UNKNOWN BANK" or brand placeholders like "VISA ISSUING BANK" to buyers — resolve real issuing bank
+    const isInvalid = (val?: string | null) =>
+      !val ||
+      /unknown/i.test(val.trim()) ||
+      /issuing bank/i.test(val.trim()) ||
+      val.trim() === "—" ||
+      val.trim() === "-";
+
     let bankName = !isInvalid(p.bank) ? p.bank : (!isInvalid(fromBin.bank) ? fromBin.bank : null);
-    if (bankName && isInvalid(bankName)) bankName = null;
+    if (isInvalid(bankName)) {
+      const offline = detectOfflineBin(c.bin || "");
+      if (!isInvalid(offline.bank)) {
+        bankName = offline.bank;
+      } else {
+        bankName = null;
+      }
+    }
 
     return {
       type: p.card_type || fromBin.type,

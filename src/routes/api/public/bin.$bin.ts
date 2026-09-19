@@ -99,12 +99,17 @@ export const Route = createFileRoute("/api/public/bin/$bin")({
         }
 
         const offline = detectOfflineBin(bin);
+        const resolvedBank =
+          data?.bank && !/issuing bank/i.test(data.bank) && !/unknown/i.test(data.bank)
+            ? data.bank
+            : offline.bank;
+
         const merged: BinInfo = {
           bin,
           brand: data?.brand || offline.brand,
           type: data?.type || offline.type,
           level: data?.level || offline.level,
-          bank: data?.bank || offline.bank,
+          bank: resolvedBank,
           country: data?.country || offline.country,
           countryName: data?.countryName || offline.countryName,
           currency: data?.currency || null,

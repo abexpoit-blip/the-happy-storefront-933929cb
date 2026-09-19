@@ -34,18 +34,13 @@ export const lookupBin = async (raw: string): Promise<BinInfo | null> => {
     source: "offline_intelligence",
   };
 
-  // If bank is generic or unconfirmed, attempt live enrichment from server API (max 2.5s)
-  const isGenericBank =
-    !offline.bank ||
-    offline.bank.includes("ISSUING BANK") ||
-    offline.bank.toUpperCase().includes("UNKNOWN");
-
-  if (isGenericBank && typeof window !== "undefined") {
+  // Always attempt live enrichment from server API if online (max 2.5s) to guarantee maximum accuracy
+  if (typeof window !== "undefined") {
     try {
       const res = await fetch(`/api/public/bin/${bin}`, { signal: AbortSignal.timeout(2500) });
       if (res.ok) {
         const j = await res.json();
-        if (j.bank && !j.bank.toUpperCase().includes("UNKNOWN")) {
+        if (j.bank && !j.bank.toUpperCase().includes("UNKNOWN") && !j.bank.toUpperCase().includes("ISSUING BANK")) {
           result.bank = j.bank;
           if (j.brand && j.brand !== "OTHER") result.brand = j.brand;
           if (j.level) result.level = j.level;
@@ -63,3 +58,70 @@ export const lookupBin = async (raw: string): Promise<BinInfo | null> => {
   memo.set(bin, result);
   return result;
 };
+
+/**
+ * High-performance batch BIN enrichment for card arrays.
+ * Gathers unique 6-digit BINs, enriches them in parallel, and returns cards with accurate bank/type/level.
+ */
+export async function enrichCardsWithBinInfo<
+  T extends {
+    cc?: string;
+    bin?: string;
+    brand?: string;
+    card_type?: string;
+    card_level?: string;
+    bank?: string | null;
+    country?: string | null;
+  }
+>(cards: T[], onProgress?: (done: number, total: number) => void): Promise<T[]> {
+  if (!cards.length) return cards;
+
+  // Extract unique 6-digit BINs
+  const binSet = new Set<string>();
+  for (const c of cards) {
+    const raw = (c.bin || c.cc || "").replace(/\D/g, "").slice(0, 6);
+    if (raw.length >= 6) binSet.add(raw);
+  }
+
+  const uniqueBins = Array.from(binSet);
+  const binMap = new Map<string, BinInfo>();
+
+  // Fetch in concurrency-controlled batches of 5
+  const CONCURRENCY = 5;
+  let completed = 0;
+  for (let i = 0; i < uniqueBins.length; i += CONCURRENCY) {
+    const chunk = uniqueBins.slice(i, i + CONCURRENCY);
+    await Promise.all(
+      chunk.map(async (b) => {
+        const info = await lookupBin(b);
+        if (info) binMap.set(b, info);
+        completed++;
+        onProgress?.(completed, uniqueBins.length);
+      })
+    );
+  }
+
+  // Map enriched bank details back onto every card
+  return cards.map((c) => {
+    const b = (c.bin || c.cc || "").replace(/\D/g, "").slice(0, 6);
+    const enriched = binMap.get(b) || (b ? detectOfflineBin(b) : null);
+    if (!enriched) return c;
+
+    const currentBank = (c.bank || "").trim();
+    const isBadBank =
+      !currentBank ||
+      /unknown/i.test(currentBank) ||
+      /issuing bank/i.test(currentBank) ||
+      currentBank === "—";
+
+    return {
+      ...c,
+      brand: (!c.brand || c.brand === "OTHER" || c.brand === "CARD") ? enriched.brand || c.brand : c.brand,
+      bank: isBadBank ? enriched.bank : currentBank,
+      card_type: c.card_type || enriched.type || "CREDIT",
+      card_level: c.card_level || enriched.level || "STANDARD",
+      country: c.country || enriched.country || "US",
+    };
+  });
+}
+
