@@ -166,6 +166,8 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
           card_level: binInfo.level,
           card_type: binInfo.type,
           refundable: backdateRefundable === "yes" ? true : backdateRefundable === "no" ? false : binInfo.refundable,
+          exp_month: c.month,
+          exp_year: c.year,
         };
       }),
       {
@@ -250,6 +252,8 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                 card_level: binInfo.level,
                 card_type: binInfo.type,
                 refundable: isRef,
+                exp_month: c.month,
+                exp_year: c.year,
               },
               {
                 mode: backdatePricingMode,

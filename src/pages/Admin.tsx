@@ -274,6 +274,8 @@ const Admin = () => {
             card_level: binInfo.level,
             card_type: binInfo.type,
             refundable: isRefundable,
+            exp_month: p.month,
+            exp_year: p.year,
           },
           pricingConfig
         );
@@ -985,6 +987,8 @@ const Admin = () => {
                               card_level: binInfo.level,
                               card_type: binInfo.type,
                               refundable: isRef,
+                              exp_month: c.month,
+                              exp_year: c.year,
                             },
                             {
                               mode: cardPricingMode,

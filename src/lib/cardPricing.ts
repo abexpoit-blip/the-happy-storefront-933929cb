@@ -22,6 +22,26 @@ export interface CardForPricing {
   card_level?: string | null;
   card_type?: string | null;
   refundable?: boolean;
+  exp_month?: string | number | null;
+  exp_year?: string | number | null;
+}
+
+/**
+ * Check if a card expires in the current running month or has already expired.
+ */
+export function isExpiringThisMonthOrPast(
+  monthStr: string | number | null | undefined,
+  yearStr: string | number | null | undefined,
+  referenceDate: Date = new Date()
+): boolean {
+  if (!monthStr || !yearStr) return false;
+  const m = parseInt(String(monthStr).replace(/\D/g, ""), 10);
+  let y = parseInt(String(yearStr).replace(/\D/g, ""), 10);
+  if (!m || !y || m < 1 || m > 12) return false;
+  if (y < 100) y = 2000 + y;
+  const curY = referenceDate.getUTCFullYear();
+  const curM = referenceDate.getUTCMonth() + 1;
+  return y < curY || (y === curY && m <= curM);
 }
 
 /**
@@ -88,9 +108,14 @@ export function detectCardTier(card: CardForPricing): {
 }
 
 /**
- * Calculate dynamic card price based on card level and item value
+ * Calculate dynamic card price based on card level and item value.
+ * Clearance discount rule: Cards expiring in the current running month (or past) auto-drop to $0.20.
  */
 export function calculateCardPrice(card: CardForPricing, config: PricingConfig): number {
+  if (isExpiringThisMonthOrPast(card.exp_month, card.exp_year)) {
+    return 0.20;
+  }
+
   if (config.mode === "fixed") {
     return Math.max(0.01, Math.round(config.fixedPrice * 100) / 100);
   }

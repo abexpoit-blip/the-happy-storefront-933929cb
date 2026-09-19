@@ -177,20 +177,14 @@ export const Route = createFileRoute("/api/public/bot/$action")({
 
               const { error: expireError } = await db.rpc("expire_stale_deposits");
               if (expireError) return json({ status: "error", message: "deposit_cleanup_failed" }, 500);
-              const { data: openDeposit, error: openDepositError } = await db
+
+              // Supersede any previous uncompleted pending deposit for this user so they are never blocked
+              await db
                 .from("deposits")
-                .select("id")
+                .update({ status: "expired", admin_note: "Superseded by newer deposit request" })
                 .eq("user_id", account.userId)
-                .eq("status", "pending")
-                .gte("created_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
-                .limit(1)
-                .maybeSingle();
-              if (openDepositError) {
-                return json({ status: "error", message: "deposit_lookup_failed" }, 500);
-              }
-              if (openDeposit) {
-                return json({ status: "error", message: "deposit_already_pending" }, 409);
-              }
+                .eq("status", "pending");
+
               const { data: dep, error } = await db
                 .from("deposits")
                 .insert({
@@ -209,19 +203,19 @@ export const Route = createFileRoute("/api/public/bot/$action")({
 
               let inv;
               try {
-                const { data: payer, error: payerError } = await db
+                const { data: payer } = await db
                   .from("profiles")
                   .select("email")
                   .eq("id", account.userId)
-                  .single();
-                if (payerError || !payer?.email) throw new Error("deposit_account_email_missing");
+                  .maybeSingle();
+                const payerEmail = payer?.email || `tg${account.telegramId}@bot.zoru.cc`;
                 inv = await createLtcInvoice({
                   usdAmount: charged,
                   orderNumber: dep.id,
                   callbackUrl: `${origin}/api/public/deposit-callback`,
                   successUrl: `${origin}/recharge?payment=success&deposit=${dep.id}`,
                   failUrl: `${origin}/recharge?payment=failed&deposit=${dep.id}`,
-                  email: String(payer.email),
+                  email: String(payerEmail),
                 });
               } catch (e) {
                 const detail = e instanceof Error ? e.message : String(e);

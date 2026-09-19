@@ -154,7 +154,14 @@ const SYNTH_DOMAIN = "zoru.cc";
 
 function toAuthEmail(identifier: string): string {
   const id = identifier.trim();
-  return id.includes("@") ? id.toLowerCase() : `${id.toLowerCase()}@${SYNTH_DOMAIN}`;
+  if (id.includes("@")) return id.toLowerCase();
+  const clean = id.toLowerCase().replace(/[^a-z0-9_.-]/g, "");
+  if (clean.length < 2) {
+    const hash = Array.from(id).reduce((acc, c) => ((acc << 5) - acc + c.charCodeAt(0)) | 0, 0);
+    const hex = Math.abs(hash).toString(36);
+    return `u_${clean || "user"}_${hex}@${SYNTH_DOMAIN}`;
+  }
+  return `${clean}@${SYNTH_DOMAIN}`;
 }
 
 async function loadRolesAndProfile(userId: string) {
@@ -178,7 +185,12 @@ async function loadRolesAndProfile(userId: string) {
 }
 
 async function requireRole(userId: string, role: "seller" | "admin"): Promise<boolean> {
-  const { data } = await supabase.rpc("has_role", { _user_id: userId, _role: role });
+  const { data } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", role)
+    .maybeSingle();
   return Boolean(data);
 }
 
@@ -222,8 +234,21 @@ export const authApi = {
 
     if (error) throw new ApiError(400, authMessage(error.message));
     if (!res.user) throw new ApiError(400, "Не удалось создать аккаунт");
+
+    // If session is null (e.g. email confirmation required by server), attempt immediate login
+    let token = res.session?.access_token ?? "";
+    if (!token) {
+      const loginRes = await supabase.auth.signInWithPassword({
+        email,
+        password: data.password,
+      });
+      if (loginRes.data?.session?.access_token) {
+        token = loginRes.data.session.access_token;
+      }
+    }
+
     const user = await loadRolesAndProfile(res.user.id);
-    return { token: res.session?.access_token ?? "", user };
+    return { token, user };
   },
 
   login: async (data: { identifier: string; password: string }): Promise<AuthResult> => {

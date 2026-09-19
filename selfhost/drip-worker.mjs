@@ -242,12 +242,62 @@ function getDhakaDateAndHour(date = new Date()) {
   };
 }
 
+function isExpiringThisMonthOrPast(monthStr, yearStr, referenceDate = new Date()) {
+  if (!monthStr || !yearStr) return false;
+  const m = parseInt(String(monthStr).replace(/\D/g, ""), 10);
+  let y = parseInt(String(yearStr).replace(/\D/g, ""), 10);
+  if (!m || !y || m < 1 || m > 12) return false;
+  if (y < 100) y = 2000 + y;
+  const curY = referenceDate.getUTCFullYear();
+  const curM = referenceDate.getUTCMonth() + 1;
+  return y < curY || (y === curY && m <= curM);
+}
+
+async function autoDiscountExpiringProducts(db) {
+  try {
+    const now = new Date();
+    const { data: prods, error } = await db
+      .from("products")
+      .select("id, exp_month, exp_year, price")
+      .eq("active", true)
+      .gt("price", 0.20)
+      .not("exp_month", "is", null)
+      .not("exp_year", "is", null)
+      .limit(1000);
+
+    if (error || !prods || prods.length === 0) return;
+
+    const toDiscount = [];
+    for (const p of prods) {
+      if (isExpiringThisMonthOrPast(p.exp_month, p.exp_year, now)) {
+        toDiscount.push(p.id);
+      }
+    }
+
+    if (toDiscount.length > 0) {
+      console.log(`[Drip Worker] Auto-discounting ${toDiscount.length} cards expiring this month to $0.20...`);
+      for (let i = 0; i < toDiscount.length; i += 100) {
+        const chunk = toDiscount.slice(i, i + 100);
+        await db
+          .from("products")
+          .update({ price: 0.20, updated_at: now.toISOString() })
+          .in("id", chunk);
+      }
+    }
+  } catch (err) {
+    console.error("[Drip Worker] Error in autoDiscountExpiringProducts:", err.message);
+  }
+}
+
 async function processActiveQueues() {
   const now = new Date();
   const dhakaNow = getDhakaDateAndHour(now);
   console.log(
     `[Drip Worker] Checking queues at ${now.toISOString()} (Dhaka local: ${dhakaNow.dateStr} ${String(dhakaNow.hour).padStart(2, "0")}:${String(dhakaNow.minute).padStart(2, "0")})...`
   );
+
+  // Run running-month auto-discount check for existing active products
+  await autoDiscountExpiringProducts(db);
 
   // Target release hour: 10:00 AM Asia/Dhaka time (04:00 AM UTC)
   const TARGET_RELEASE_HOUR_DHAKA = 10;
@@ -335,9 +385,12 @@ async function processActiveQueues() {
             else if (lvl.includes("GOLD") || lvl.includes("PREPAID")) weight = 0.35;
 
             const boost = (isRef ? range * 0.06 : 0) + (meta.type === "CREDIT" ? range * 0.04 : 0);
-            const seed = parseInt(String(c.cc || "5555").replace(/\D/g, "").slice(-4) || "5555", 10) % 100;
-            const variance = ((seed - 50) / 100) * (range * 0.12);
             cardPrice = Math.round(Math.max(minP, Math.min(maxP, minP + range * weight + variance + boost)) * 100) / 100;
+          }
+
+          // Clearance discount rule: any card expiring in running month (or past) auto drops to $0.20
+          if (isExpiringThisMonthOrPast(c.month, c.year, now)) {
+            cardPrice = 0.20;
           }
 
           return {

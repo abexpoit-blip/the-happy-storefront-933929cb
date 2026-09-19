@@ -555,6 +555,8 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
           card_level: binInfo.level,
           card_type: binInfo.type,
           refundable: isRef,
+          exp_month: c.month,
+          exp_year: c.year,
         },
         {
           mode: (queue.pricing_mode as "fixed" | "dynamic_level") || "fixed",
