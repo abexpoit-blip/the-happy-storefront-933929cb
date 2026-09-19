@@ -1,21 +1,17 @@
 #!/usr/bin/env node
 /**
- * Zoru Shop Official Telegram Bot (Premium All-in-One Edition)
+ * Zoru Shop Official Update & Drop Alert Bot (@Zorushopupdatebot)
  *
- * Full Feature Suite:
- *   - 💳 CC/CCN Card Checker (Single & Bulk)
- *   - 📦 Live Base Updates & Restock Drops
- *   - 💎 Crypto Recharge (Plisio LTC with instant credit & QR)
- *   - 👤 Account Profile & Balance (Synced with Website)
- *   - ⚡ Gateway Selection (Multiple auth gates)
- *   - 💰 Referral Program (Earn bonus credit)
- *   - 🛒 Direct Shop Access (zoru.cc/shop)
- *   - 📊 Statistics & Logs
- *   - 🔑 API Key Info & Management
- *   - 📢 Official Channel (@zorushop)
- *   - 💬 24/7 Customer Support (@Zorushop_service)
- *   - Auto-subscribes users to base drop notifications
- *   - 100% PURE ZORU SHOP BRANDING — STRICTLY NO THIRD-PARTY ADS!
+ * Dedicated strictly to:
+ *   - 📦 Live Base Restock & Drop Alerts
+ *   - 🔔 Instant Push Notifications to Subscribers
+ *   - 📢 Official Telegram Channel Announcements (@zorushop)
+ *   - 📊 Browsing Active Bases & Stock (/latest)
+ *   - 🔗 Seamless Link to Official Card Checker Bot (@ZoruCheckerbot)
+ *   - 🛒 Direct Storefront Access (zoru.cc/shop)
+ *   - 💬 24/7 Official Support (@Zorushop_service)
+ *
+ * 100% PURE ZORU SHOP BRANDING — NO THIRD-PARTY ADS OR REDUNDANCIES!
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -51,6 +47,7 @@ loadEnv(join(__dirname, "../.env"));
 loadEnv("/etc/zoru/backend.env");
 loadEnv("/etc/zoru/telegram.env");
 
+// Dedicated update bot token (never fall back to checker bot token!)
 const TOKEN = (
   process.env.TELEGRAM_UPDATE_BOT_TOKEN ||
   "8883627548:AAGrYhz6FNQXr5NRetLVbbke6lJ4EJEIk8g"
@@ -60,18 +57,14 @@ const BASE = (process.env.BOT_API_BASE || process.env.API_BASE || "https://zoru.
   .trim()
   .replace(/\/+$/, "");
 
-const SECRET = (
-  process.env.BOT_ADMIN_SECRET ||
-  process.env.TELEGRAM_BOT_ADMIN_SECRET ||
-  ""
-).trim();
-
 const CHANNEL = (process.env.TELEGRAM_CHANNEL_ID || "@zorushop").trim();
+const CHECKER_BOT_USERNAME = "ZoruCheckerbot";
+const SUPPORT_USERNAME = "Zorushop_service";
+
 const API = `https://api.telegram.org/bot${TOKEN}`;
 const TELEGRAM_REQUEST_TIMEOUT_MS = 20_000;
 const TELEGRAM_POLL_TIMEOUT_SECONDS = 30;
 const TELEGRAM_POLL_REQUEST_TIMEOUT_MS = (TELEGRAM_POLL_TIMEOUT_SECONDS + 15) * 1000;
-const WEBSITE_REQUEST_TIMEOUT_MS = 45_000;
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "https://api.zoru.cc";
 const serviceKey =
@@ -126,35 +119,49 @@ async function registerSubscriber(user) {
   } catch {}
 }
 
-/* ── Premium MENU Layout (Cyber-Luxury & Sleek) ── */
-function buildMenuKeyboard(settings = settingsCache) {
-  const adminContactUrl = settings.bot_admin_contact || "https://t.me/Zorushop_service";
-  const websiteUrl = settings.bot_website_url || BASE;
+async function getSubscriber(userId) {
+  if (!db || !userId) return null;
+  try {
+    const { data } = await db
+      .from("update_bot_subscribers")
+      .select("subscribed")
+      .eq("telegram_id", userId)
+      .maybeSingle();
+    return data;
+  } catch {
+    return null;
+  }
+}
 
+async function setSubscribed(userId, subscribed) {
+  if (!db || !userId) return false;
+  try {
+    const { error } = await db
+      .from("update_bot_subscribers")
+      .update({ subscribed, last_seen: new Date().toISOString() })
+      .eq("telegram_id", userId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/* ── UI Keyboards ── */
+function buildMenuKeyboard(isSubscribed = true) {
+  const notifLabel = isSubscribed ? "🔔 Notifications: ON" : "🔕 Notifications: MUTED";
   return {
     inline_keyboard: [
       [
-        { text: "💳 Check Card", callback_data: "check" },
         { text: "📦 Latest Bases", callback_data: "latest_bases" },
+        { text: notifLabel, callback_data: "toggle_notif" },
       ],
       [
-        { text: "👤 Balance & Profile", callback_data: "balance" },
-        { text: "💎 Recharge Funds", callback_data: "deposit" },
-      ],
-      [
-        { text: "⚡ Gate Selection", callback_data: "gates" },
-        { text: "💰 Earn Credit", callback_data: "refer" },
-      ],
-      [
-        { text: "🛒 Open Shop", url: `${websiteUrl.replace(/\/+$/, "")}/shop` },
-        { text: "📊 Statistics", callback_data: "tasks" },
-      ],
-      [
-        { text: "🔑 API Info", callback_data: "api" },
+        { text: "🛒 Open Shop (zoru.cc)", url: `${BASE}/shop` },
         { text: "📢 Official Channel", url: "https://t.me/zorushop" },
       ],
       [
-        { text: "💬 Customer Support", url: adminContactUrl },
+        { text: "💳 Card Checker Bot", url: `https://t.me/${CHECKER_BOT_USERNAME}` },
+        { text: "💬 24/7 Support", url: `https://t.me/${SUPPORT_USERNAME}` },
       ],
     ],
   };
@@ -164,23 +171,15 @@ function buildReplyKeyboard() {
   return {
     keyboard: [
       [
-        { text: "💳 Check Card" },
         { text: "📦 Latest Bases" },
-      ],
-      [
-        { text: "👤 Balance & Profile" },
-        { text: "💎 Recharge Funds" },
-      ],
-      [
-        { text: "⚡ Gate Selection" },
-        { text: "💰 Earn Credit" },
+        { text: "🔔 Notification Status" },
       ],
       [
         { text: "🛒 Open Shop" },
-        { text: "📊 Statistics" },
+        { text: "📢 Official Channel" },
       ],
       [
-        { text: "📢 Official Channel" },
+        { text: "💳 Card Checker Bot" },
         { text: "💬 Support" },
       ],
     ],
@@ -189,760 +188,357 @@ function buildReplyKeyboard() {
   };
 }
 
-const menu = async (chat, text) => {
-  const s = await getSettings();
-  const notice = s.bot_notice;
-  const fullText = notice ? `${text}\n\n<i>📢 ${esc(notice)}</i>` : text;
-  return send(chat, fullText, { reply_markup: buildMenuKeyboard(s) });
-};
+/* ── Views ── */
 
-/* ------------------------------------------------------------------ */
-/* Settings Cache                                                      */
-/* ------------------------------------------------------------------ */
-let settingsCache = {
-  bot_maintenance: false,
-  bot_maintenance_msg: "",
-  bot_notice: "",
-  checker_enabled: true,
-  bot_admin_contact: "https://t.me/Zorushop_service",
-  bot_website_url: BASE,
-};
-let settingsCachedAt = 0;
+async function showWelcome(chat, from) {
+  await registerSubscriber(from);
+  const sub = await getSubscriber(from.id);
+  const isSubscribed = sub ? sub.subscribed !== false : true;
 
-async function refreshSettings() {
-  try {
-    const d = await api("bot_settings", { id: 0, username: null, first_name: null }, {});
-    settingsCache = {
-      bot_maintenance: Boolean(d.bot_maintenance),
-      bot_maintenance_msg: String(d.bot_maintenance_msg || "🔧 Under maintenance. Please check back shortly."),
-      bot_notice: String(d.bot_notice || ""),
-      checker_enabled: Boolean(d.checker_enabled !== false),
-      bot_admin_contact: String(d.bot_admin_contact || "https://t.me/Zorushop_service"),
-      bot_website_url: String(d.bot_website_url || BASE),
-    };
-  } catch {}
-  settingsCachedAt = Date.now();
-}
+  const text = [
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `🚀 <b>ZORU SHOP — BASE UPDATES & DROPS</b>`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `Welcome, <b>${esc(from.first_name || "Member")}</b>!`,
+    ``,
+    `This is the official announcement bot for <b>Zoru Shop</b>. You will receive real-time alerts whenever fresh card bases and restocks are released!`,
+    ``,
+    `🔔 <b>Drop Alerts:</b> ${isSubscribed ? "<code>ACTIVE (ON) ✅</code>" : "<code>MUTED 🔕</code>"}`,
+    `📢 <b>Official Channel:</b> <a href="https://t.me/zorushop">@zorushop</a>`,
+    `🛒 <b>Storefront:</b> <a href="${BASE}/shop">zoru.cc/shop</a>`,
+    `💳 <b>Card Checker:</b> <a href="https://t.me/${CHECKER_BOT_USERNAME}">@${CHECKER_BOT_USERNAME}</a>`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `👇 <i>Tap an option below to browse or manage alerts:</i>`,
+  ].join("\n");
 
-async function getSettings() {
-  if (Date.now() - settingsCachedAt > 2 * 60 * 1000) await refreshSettings();
-  return settingsCache;
-}
-
-/* ------------------------------------------------------------------ */
-/* Website API Bridge                                                 */
-/* ------------------------------------------------------------------ */
-async function api(action, from, body = {}) {
-  const res = await fetch(`${BASE}/api/public/bot/${action}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-bot-secret": SECRET },
-    body: JSON.stringify({
-      telegram_id: from.id,
-      username: from.username ?? null,
-      first_name: from.first_name ?? null,
-      ...body,
-    }),
-    signal: AbortSignal.timeout(WEBSITE_REQUEST_TIMEOUT_MS),
+  await send(chat, text, {
+    reply_markup: buildReplyKeyboard(),
   });
-  let data;
-  try { data = await res.json(); } catch { throw new Error(`server_error_${res.status}`); }
-  if (!res.ok || data.status !== "success") throw new Error(data.message || `error_${res.status}`);
-  return data;
+  await send(chat, "📱 <b>Quick Action Menu:</b>", {
+    reply_markup: buildMenuKeyboard(isSubscribed),
+  });
 }
 
-function extractCards(text) {
-  return String(text || "")
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => /\d{12,}/.test(l))
-    .slice(0, 500);
+function cleanBaseName(name) {
+  if (!name) return "FRESH BASE";
+  return String(name).replace(/^\s*(admin|seller)[\s_\-.:]+/i, "").trim();
 }
 
-function friendlyError(err) {
-  const raw = String(err instanceof Error ? err.message : err || "unknown");
-  if (raw.includes("insufficient_balance")) return "Insufficient balance! Please recharge your account first.";
-  if (raw.includes("invalid_amount")) return "Invalid amount entered. Please check minimum deposit limit.";
-  if (raw.includes("no_cards_found")) return "No valid cards found in your message. Format: PAN|MM|YYYY|CVV";
-  if (raw.includes("too_many_cards")) return "Too many cards at once. Maximum 500 cards per check.";
-  if (raw.includes("fetch failed") || raw.includes("timeout")) return "Network timeout connecting to server. Please try again.";
-  return raw.replace(/_/g, " ");
-}
+async function showLatestBases(chat, from, isEditMsgId = null) {
+  await registerSubscriber(from);
 
-/* ------------------------------------------------------------------ */
-/* Deposit System with Timer & Status Polling                         */
-/* ------------------------------------------------------------------ */
-const pendingDeposits = new Map();
-
-function formatCountdown(expiresMs) {
-  const left = Math.max(0, expiresMs - Date.now());
-  const mins = Math.floor(left / 60000);
-  const secs = Math.floor((left % 60000) / 1000);
-  if (left === 0) return "⏰ Expired";
-  return `⏱ <b>${mins}m ${secs.toString().padStart(2, "0")}s</b> remaining`;
-}
-
-function buildDepositCard(d, expiresMs) {
-  return [
-    `━━━━━━━━━━━━━━━━━━━`,
-    `💎 <b>CRYPTO RECHARGE INVOICE</b>`,
-    `━━━━━━━━━━━━━━━━━━━`,
-    `<b>Status:</b> ⏳ Waiting for payment`,
-    ``,
-    `💰 <b>Amount Details:</b>`,
-    `┌ Credit to wallet: <b>${money(d.credit)}</b>`,
-    d.fee > 0 ? `├ Network fee: <b>${money(d.fee)}</b>` : "",
-    `└ Total charged: <b>${money(d.charged)}</b>`,
-    ``,
-    `🔗 <b>Send Exactly (LTC):</b>`,
-    `<code>${esc(d.crypto_amount)} LTC</code>`,
-    `<i>(Tap amount to copy)</i>`,
-    ``,
-    `📬 <b>Deposit Address:</b>`,
-    `<code>${esc(d.wallet_address)}</code>`,
-    `<i>(Tap address to copy)</i>`,
-    ``,
-    `⏱ ${formatCountdown(expiresMs)}`,
-    d.invoice_url ? `\n🌐 <a href="${esc(d.invoice_url)}"><b>Open Hosted Payment Page</b></a>` : "",
-    ``,
-    `⚡ <i>Funds will be added automatically to your account balance after 1 network confirmation.</i>`,
-    `━━━━━━━━━━━━━━━━━━━`,
-  ].filter((l) => l !== "").join("\n");
-}
-
-function depositButtons(depositId) {
-  return {
-    inline_keyboard: [
-      [
-        { text: "🔄 Check Payment Status", callback_data: `dep_status:${depositId}` },
-        { text: "❌ Cancel", callback_data: "balance" },
-      ],
-    ],
-  };
-}
-
-function clearDepositTimer(chat) {
-  const d = pendingDeposits.get(chat);
-  if (d?.timerId) clearInterval(d.timerId);
-}
-
-function startDepositTimer(chat, msgId, depositId, expiresMs, from = { id: chat }) {
-  clearDepositTimer(chat);
-  const tick = async () => {
-    const d = pendingDeposits.get(chat);
-    if (!d || d.messageId !== msgId) return;
-
-    try {
-      const st = await api("deposit_status", from, { deposit_id: depositId });
-      if (st.deposit_status === "approved") {
-        clearDepositTimer(chat);
-        pendingDeposits.delete(chat);
-        await edit(chat, msgId, [
-          `━━━━━━━━━━━━━━━━━━━`,
-          `✅ <b>PAYMENT CONFIRMED & CREDITED!</b>`,
-          `━━━━━━━━━━━━━━━━━━━`,
-          `Your cryptocurrency recharge has been verified on the blockchain!`,
-          ``,
-          `💵 <b>Amount Credited:</b> <code>${money(st.amount)}</code>`,
-          ``,
-          `⚡ <i>Funds have been added to your balance and are ready to use immediately!</i>`,
-          `━━━━━━━━━━━━━━━━━━━`,
-        ].join("\n"), {});
-        return;
-      }
-      if (st.deposit_status === "rejected" || st.deposit_status === "expired") {
-        clearDepositTimer(chat);
-        pendingDeposits.delete(chat);
-        await edit(chat, msgId, `⏰ <b>Invoice ${st.deposit_status.toUpperCase()}</b>\nThis deposit invoice has ended.`);
-        return;
-      }
-    } catch {}
-
-    if (Date.now() >= expiresMs + 30_000) {
-      clearDepositTimer(chat);
-      pendingDeposits.delete(chat);
-      await edit(chat, msgId, `⏰ <b>Invoice Expired</b>\nPlease generate a new recharge invoice.`);
-      return;
-    }
-
-    const current = pendingDeposits.get(chat);
-    if (current) {
-      await edit(
-        chat,
-        msgId,
-        buildDepositCard(current, expiresMs),
-        { reply_markup: depositButtons(depositId) }
-      );
-    }
-  };
-  const timerId = setInterval(tick, 10_000);
-  const existing = pendingDeposits.get(chat);
-  if (existing) existing.timerId = timerId;
-}
-
-/* ------------------------------------------------------------------ */
-/* Command Handlers                                                   */
-/* ------------------------------------------------------------------ */
-const pendingAction = new Map();
-
-async function showAccount(chat, from) {
-  try {
-    const { account } = await api("session", from);
-    const text = [
+  if (!db) {
+    const fallbackText = [
       `━━━━━━━━━━━━━━━━━━━`,
-      `👤 <b>ZORU PROFILE & WALLET</b>`,
+      `📦 <b>LATEST BASE RESTOCKS</b>`,
       `━━━━━━━━━━━━━━━━━━━`,
-      `🆔 <b>User ID:</b> <code>${esc(account.id)}</code>`,
-      `💵 <b>Balance:</b> <code>${money(account.balance)}</code>`,
-      account.bonus_balance > 0 ? `🎁 <b>Bonus Balance:</b> <code>${money(account.bonus_balance)}</code>` : "",
-      `🎟 <b>Referral Code:</b> <code>${esc(account.referral_code || "-")}</code>`,
-      `👥 <b>Referred Users:</b> <b>${account.referral_count || 0}</b>`,
-      ``,
-      `⚡ <b>Quick Actions:</b>`,
-      `• Use 💳 <b>Check Card</b> to check CCV/CCN`,
-      `• Use 📦 <b>Latest Bases</b> to view shop restocks`,
-      `• Use 💎 <b>Recharge</b> to add funds via LTC`,
+      `Visit the official shop catalog for real-time live inventory:`,
+      `👉 <a href="${BASE}/shop"><b>${BASE}/shop</b></a>`,
       `━━━━━━━━━━━━━━━━━━━`,
-    ].filter((l) => l !== "").join("\n");
-    await menu(chat, text);
-  } catch (err) {
-    await menu(chat, `❌ Failed to load account: ${esc(friendlyError(err))}`);
+    ].join("\n");
+    if (isEditMsgId) await edit(chat, isEditMsgId, fallbackText);
+    else await send(chat, fallbackText, { reply_markup: { inline_keyboard: [[{ text: "🛒 Open Shop", url: `${BASE}/shop` }]] } });
+    return;
   }
-}
 
-async function showLatestBases(chat, from) {
   try {
-    let bases = [];
-    try {
-      const res = await api("latest_bases", from);
-      bases = res.bases || [];
-    } catch {
-      // Fallback direct db query
-      if (db) {
-        const { data } = await db
-          .from("products")
-          .select("base, brand, country, price, stock, created_at")
-          .eq("active", true)
-          .gt("stock", 0)
-          .not("base", "is", null)
-          .order("created_at", { ascending: false })
-          .limit(100);
-        const baseMap = new Map();
-        for (const r of data ?? []) {
-          const b = (r.base || "").replace(/^\s*(admin|seller)[\s_\-.:]+/i, "");
-          if (!b) continue;
-          if (!baseMap.has(b)) {
-            baseMap.set(b, {
-              base: b,
-              count: r.stock || 1,
-              brand: r.brand || "VISA/MC",
-              country: r.country || "MIX",
-              price: Number(r.price || 1.5),
-            });
-          } else {
-            baseMap.get(b).count += (r.stock || 1);
-          }
-        }
-        bases = Array.from(baseMap.values()).slice(0, 10);
-      }
-    }
+    const { data: prods, error } = await db
+      .from("products")
+      .select("base, brand, country, price, stock, active")
+      .eq("active", true)
+      .gt("stock", 0)
+      .not("base", "is", null)
+      .limit(2000);
 
-    if (bases.length === 0) {
-      await menu(chat, [
+    if (error || !prods || prods.length === 0) {
+      const emptyMsg = [
         `━━━━━━━━━━━━━━━━━━━`,
-        `📦 <b>LATEST BASE DROPS</b>`,
+        `📦 <b>LATEST BASES IN STORE</b>`,
         `━━━━━━━━━━━━━━━━━━━`,
-        `Currently, no active card bases found in shop.`,
-        `Please check back soon for fresh drops!`,
+        `Currently, all existing base drops are being restocked!`,
+        ``,
+        `🔔 <i>Keep your alerts enabled to receive an instant notification as soon as the next drop lands.</i>`,
         `━━━━━━━━━━━━━━━━━━━`,
-      ].join("\n"));
+      ].join("\n");
+      const kb = {
+        inline_keyboard: [
+          [{ text: "🛒 Visit Shop", url: `${BASE}/shop` }],
+          [{ text: "🔄 Refresh", callback_data: "latest_bases" }],
+        ],
+      };
+      if (isEditMsgId) await edit(chat, isEditMsgId, emptyMsg, { reply_markup: kb });
+      else await send(chat, emptyMsg, { reply_markup: kb });
       return;
     }
+
+    // Group products by base
+    const baseMap = new Map();
+    for (const p of prods) {
+      if (!p.base) continue;
+      const b = cleanBaseName(p.base);
+      const cur = baseMap.get(b) || {
+        count: 0,
+        brands: new Set(),
+        countries: new Set(),
+        totalPrice: 0,
+      };
+      cur.count += (p.stock || 1);
+      if (p.brand) cur.brands.add(p.brand.toUpperCase());
+      if (p.country) cur.countries.add(p.country.toUpperCase());
+      cur.totalPrice += Number(p.price || 1.5);
+      baseMap.set(b, cur);
+    }
+
+    const baseList = [];
+    for (const [bName, info] of baseMap.entries()) {
+      baseList.push({
+        name: bName,
+        count: info.count,
+        brand: Array.from(info.brands).slice(0, 2).join("/") || "MIX",
+        country: Array.from(info.countries).slice(0, 3).join(", ") || "US",
+        price: Number((info.totalPrice / Math.max(1, info.count)).toFixed(2)),
+      });
+    }
+
+    // Sort descending by stock count
+    baseList.sort((a, b) => b.count - a.count);
 
     const lines = [
       `━━━━━━━━━━━━━━━━━━━`,
-      `📦 <b>ZORU SHOP — LATEST BASE DROPS</b>`,
+      `📦 <b>LIVE BASES AVAILABLE IN SHOP</b>`,
       `━━━━━━━━━━━━━━━━━━━`,
-      `Verified fresh card drops currently available in shop:`,
-      ``,
+      `⚡ Available Bases: <b>${baseList.length} distinct bases</b>`,
+      `🌐 Storefront: <a href="${BASE}/shop"><b>${BASE}/shop</b></a>`,
+      `━━━━━━━━━━━━━━━━━━━`,
     ];
 
-    for (const b of bases) {
-      lines.push(`🔹 <code>${esc(b.base)}</code>`);
-      lines.push(`   💳 <b>Stock:</b> ${b.count} cards | 🏷 <b>Brand:</b> ${esc(b.brand)}`);
-      lines.push(`   🌍 <b>Country:</b> ${esc(b.country)} | 💰 <b>Price:</b> $${Number(b.price || 1.5).toFixed(2)}`);
+    for (const b of baseList.slice(0, 8)) {
+      lines.push(`🔥 <b>${esc(b.name)}</b>`);
+      lines.push(`├ 🌍 Country: <b>${esc(b.country)}</b>`);
+      lines.push(`├ 💳 Type: <b>${esc(b.brand)}</b>`);
+      lines.push(`├ 📦 In Stock: <b>${b.count} cards</b>`);
+      lines.push(`└ 💵 Starting: <b>${money(b.price)}</b>`);
       lines.push(``);
     }
 
-    lines.push(`⚡ <i>All items are active with instant automated delivery.</i>`);
     lines.push(`━━━━━━━━━━━━━━━━━━━`);
+    lines.push(`⚡ <i>All bases have instant automated delivery upon purchase!</i>`);
 
-    await send(chat, lines.join("\n"), {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: "🛒 Buy in Shop", url: "https://zoru.cc/shop" },
-            { text: "🔄 Refresh Bases", callback_data: "latest_bases" },
-          ],
-          [
-            { text: "💎 Recharge Funds", callback_data: "deposit" },
-            { text: "🔙 Main Menu", callback_data: "balance" },
-          ],
+    const buttons = {
+      inline_keyboard: [
+        [
+          { text: "🛒 Buy on Zoru Shop", url: `${BASE}/shop` },
+          { text: "🔄 Refresh", callback_data: "latest_bases" },
         ],
-      },
-    });
+        [
+          { text: "📢 Official Channel", url: "https://t.me/zorushop" },
+          { text: "💳 Card Checker Bot", url: `https://t.me/${CHECKER_BOT_USERNAME}` },
+        ],
+      ],
+    };
+
+    if (isEditMsgId) {
+      await edit(chat, isEditMsgId, lines.join("\n"), { reply_markup: buttons });
+    } else {
+      await send(chat, lines.join("\n"), { reply_markup: buttons });
+    }
   } catch (err) {
-    await menu(chat, `❌ Failed to fetch latest bases: ${esc(friendlyError(err))}`);
+    console.error("Error showing latest bases:", err);
+    await send(chat, `❌ Could not load bases: ${esc(err.message || "Database error")}`);
   }
 }
 
-async function startDeposit(chat) {
-  pendingAction.set(chat, "deposit");
-  await send(chat, [
-    `━━━━━━━━━━━━━━━━━━━`,
-    `💎 <b>RECHARGE WALLET FUNDS</b>`,
-    `━━━━━━━━━━━━━━━━━━━`,
-    `Choose a quick amount below or type any custom USD amount in chat (e.g. <code>25</code>):`,
-    `━━━━━━━━━━━━━━━━━━━`,
-  ].join("\n"), {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: "$5", callback_data: "recharge:5" },
-          { text: "$10", callback_data: "recharge:10" },
-          { text: "$20", callback_data: "recharge:20" },
-        ],
-        [
-          { text: "$50", callback_data: "recharge:50" },
-          { text: "$100", callback_data: "recharge:100" },
-          { text: "$200", callback_data: "recharge:200" },
-        ],
-        [
-          { text: "🔙 Cancel", callback_data: "balance" },
-        ],
-      ],
-    },
+async function toggleNotifications(chat, from) {
+  const sub = await getSubscriber(from.id);
+  const current = sub ? sub.subscribed !== false : true;
+  const next = !current;
+
+  await setSubscribed(from.id, next);
+
+  const statusText = next
+    ? `🔔 <b>Drop Alerts Activated!</b>\n\nYou will receive real-time notifications directly in this chat whenever a new base drops.`
+    : `🔕 <b>Drop Alerts Muted.</b>\n\nYou will not receive notifications in private chat. (You can still view them in @zorushop).`;
+
+  await send(chat, statusText, {
+    reply_markup: buildMenuKeyboard(next),
   });
 }
 
-async function createDeposit(chat, from, amount) {
-  try {
-    const d = await api("deposit", from, { amount });
-    const expiresMs = Date.now() + 15 * 60 * 1000;
-    const msg = await send(chat, buildDepositCard(d, expiresMs), {
-      reply_markup: depositButtons(d.deposit_id),
-    });
-    pendingDeposits.set(chat, {
-      messageId: msg.message_id,
-      depositId: d.deposit_id,
-      credit: d.credit,
-      fee: d.fee,
-      charged: d.charged,
-      crypto_amount: d.crypto_amount,
-      wallet_address: d.wallet_address,
-      invoice_url: d.invoice_url,
-      expiresMs,
-    });
-    startDepositTimer(chat, msg.message_id, d.deposit_id, expiresMs, from);
-  } catch (err) {
-    await menu(chat, `❌ Deposit creation failed: ${esc(friendlyError(err))}`);
-  }
-}
-
-async function checkDepositStatus(chat, from, depositId) {
-  try {
-    const d = await api("deposit_status", from, { deposit_id: depositId });
-    const status = String(d.deposit_status || "unknown");
-    const statusEmoji = { approved: "✅", pending: "⏳", rejected: "❌", expired: "⏰" }[status] || "❓";
-    await menu(chat, [
-      `━━━━━━━━━━━━━━━━━━━`,
-      `${statusEmoji} <b>DEPOSIT STATUS: ${status.toUpperCase()}</b>`,
-      `━━━━━━━━━━━━━━━━━━━`,
-      `Amount: <b>${money(d.amount)}</b>`,
-      d.charged_amount ? `Charged: <b>${money(d.charged_amount)}</b>` : "",
-      d.crypto_amount ? `Crypto: <code>${esc(d.crypto_amount)} LTC</code>` : "",
-      status === "approved" ? `\n🎉 <b>Your payment is confirmed and balance updated!</b>` : "",
-      status === "pending" ? `\n⏳ <i>Still waiting for blockchain payment confirmation.</i>` : "",
-      status === "expired" ? `\n⏰ <i>This payment window has expired.</i>` : "",
-      `━━━━━━━━━━━━━━━━━━━`,
-    ].filter(Boolean).join("\n"));
-  } catch (e) {
-    await menu(chat, `❌ ${esc(friendlyError(e))}`);
-  }
-}
-
-async function showReferrals(chat, from) {
-  const { account } = await api("session", from);
-  const webOrigin = settingsCache.bot_website_url || BASE;
-  const link = `${webOrigin.replace(/\/+$/, "")}/auth?ref=${account.referral_code || ""}`;
-
-  await menu(
+function sendCheckerRedirect(chat) {
+  return send(
     chat,
     [
-      `━━━━━━━━━━━━━━━━━━━`,
-      `💰 <b>EARN CREDIT & AFFILIATE</b>`,
-      `━━━━━━━━━━━━━━━━━━━`,
-      `Invite friends or customers and earn automatic cash commissions directly to your balance!`,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+      `💳 <b>LOOKING TO CHECK CARDS?</b>`,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+      `This bot (<b>@Zorushopupdatebot</b>) is dedicated exclusively to <b>Live Base Drops & Shop Restock Updates</b>!`,
       ``,
-      `🎟 <b>Your Referral Code:</b> <code>${esc(account.referral_code || "-")}</code>`,
-      `🔗 <b>Your Invite Link:</b>`,
-      `<code>${esc(link)}</code>`,
+      `For CC/CCN card checking, wallet balance, gate selection, and crypto deposits, please use our official <b>Card Checker Bot</b>:`,
       ``,
-      `🎁 <b>Commission Rate:</b> <code>${money(account.referral_bonus)}</code> per approved deposit`,
-      `👥 <b>Total Invited:</b> <b>${account.referral_count}</b> users`,
-      `💵 <b>Total Bonus Earned:</b> <code>${money(account.referral_earned)}</code>`,
-      `━━━━━━━━━━━━━━━━━━━`,
-    ].join("\n"),
-  );
-}
-
-async function showGates(chat, from) {
-  const g = await api("gates", from);
-  const rows = g.gates.slice(0, 20).map((gate) => [
-    {
-      text: `${gate.id === g.selected ? "✅ " : "⚡ "}${gate.id}`,
-      callback_data: `gate:${gate.id}`,
-    },
-  ]);
-  rows.push([{ text: "🔙 Main Menu", callback_data: "balance" }]);
-
-  await send(
-    chat,
-    [
-      `━━━━━━━━━━━━━━━━━━━`,
-      `⚡ <b>CHECKER GATES SELECTION</b>`,
-      `━━━━━━━━━━━━━━━━━━━`,
-      `Current Active Gate: <code>${esc(g.selected)}</code>`,
-      ``,
-      `Select a gateway below to activate:`,
-      `━━━━━━━━━━━━━━━━━━━`,
-    ].join("\n"),
-    {
-      reply_markup: { inline_keyboard: rows },
-    },
-  );
-}
-
-async function startCheck(chat) {
-  pendingAction.set(chat, "check");
-  await send(
-    chat,
-    [
-      `━━━━━━━━━━━━━━━━━━━`,
-      `💳 <b>CHECK CARDS (SINGLE / BULK)</b>`,
-      `━━━━━━━━━━━━━━━━━━━`,
-      `Send your card(s) now in the chat or upload a <code>.txt</code> file (up to 500 cards).`,
-      ``,
-      `📋 <b>Standard Format:</b>`,
-      `<code>PAN|MM|YYYY|CVV</code>`,
-      ``,
-      `💡 <i>Example:</i>`,
-      `<code>4111111111111111|12|2028|123</code>`,
-      `━━━━━━━━━━━━━━━━━━━`,
-    ].join("\n"),
-  );
-}
-
-async function runCheck(chat, from, cards) {
-  const settings = await getSettings();
-  if (!settings.checker_enabled) {
-    await menu(chat, "⚠️ The checker is temporarily disabled by admin.");
-    return;
-  }
-  if (!cards.length) {
-    await menu(chat, "❌ No valid card numbers found. Format: PAN|MM|YYYY|CVV");
-    return;
-  }
-
-  const { account } = await api("session", from);
-  const cost = Number(account.check_price || 0.10) * cards.length;
-  if (account.balance < cost) {
-    await menu(chat, [
-      `❌ <b>Insufficient Balance</b>`,
-      `Checking ${cards.length} card(s) requires <code>${money(cost)}</code>.`,
-      `Your current balance: <code>${money(account.balance)}</code>.`,
-      ``,
-      `Please recharge using 💎 <b>Recharge Funds</b>.`,
-    ].join("\n"));
-    return;
-  }
-
-  const waitMsg = await send(chat, `⏳ Checking ${cards.length} card(s)... Please wait.`);
-  try {
-    const res = await api("check", from, { cards });
-    const live = res.approved || [];
-    const dead = res.declined || [];
-    const err = res.errors || [];
-
-    const lines = [
-      `━━━━━━━━━━━━━━━━━━━`,
-      `📊 <b>CHECK RESULTS SUMMARY</b>`,
-      `━━━━━━━━━━━━━━━━━━━`,
-      `✅ <b>LIVE (CVV/CCN):</b> ${live.length}`,
-      `❌ <b>DEAD / DECLINED:</b> ${dead.length}`,
-      `⚠️ <b>ERRORS:</b> ${err.length}`,
-      `💰 <b>Cost Charged:</b> ${money(res.charged || cost)}`,
-      `💵 <b>New Balance:</b> ${money(res.balance)}`,
-      `━━━━━━━━━━━━━━━━━━━`,
-    ];
-
-    if (live.length > 0) {
-      lines.push(`\n<b>🔥 APPROVED CARDS:</b>`);
-      for (const c of live.slice(0, 20)) {
-        lines.push(`✅ <code>${esc(c.line || c.card)}</code> — ${esc(c.msg || "APPROVED")}`);
-      }
-    }
-
-    await edit(chat, waitMsg.message_id, lines.join("\n"));
-  } catch (e) {
-    await edit(chat, waitMsg.message_id, `❌ Check failed: ${esc(friendlyError(e))}`);
-  }
-}
-
-async function showTasks(chat, from) {
-  try {
-    const res = await api("tasks", from);
-    const tasks = res.tasks || [];
-    if (!tasks.length) {
-      await menu(chat, "📊 <b>No recent checking history found.</b>");
-      return;
-    }
-    const lines = [
-      `━━━━━━━━━━━━━━━━━━━`,
-      `📊 <b>RECENT CHECK TASKS</b>`,
-      `━━━━━━━━━━━━━━━━━━━`,
-    ];
-    for (const t of tasks.slice(0, 6)) {
-      lines.push(`🆔 <code>${esc(t.id)}</code> | ${t.total} cards | Live: ${t.live || 0} | ${money(t.cost)}`);
-    }
-    lines.push(`━━━━━━━━━━━━━━━━━━━`);
-    await menu(chat, lines.join("\n"));
-  } catch (err) {
-    await menu(chat, `❌ ${esc(friendlyError(err))}`);
-  }
-}
-
-async function showApi(chat, from) {
-  const { account } = await api("session", from);
-  await send(
-    chat,
-    [
-      `━━━━━━━━━━━━━━━━━━━`,
-      `🔑 <b>DEVELOPER API ACCESS</b>`,
-      `━━━━━━━━━━━━━━━━━━━`,
-      `Integrate our high-speed CCV & CCN checker directly into your own tools and bots.`,
-      ``,
-      `⚡ <b>Endpoints:</b> <code>https://zoru.cc/api/public/v1/check</code>`,
-      `💳 <b>Lifetime Fee:</b> <code>${money(account.api_fee || 10)}</code>`,
-      `━━━━━━━━━━━━━━━━━━━`,
+      `👉 <a href="https://t.me/${CHECKER_BOT_USERNAME}"><b>Open @${CHECKER_BOT_USERNAME}</b></a>`,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
     ].join("\n"),
     {
       reply_markup: {
         inline_keyboard: [
-          [{ text: "🔙 Main Menu", callback_data: "balance" }],
+          [{ text: "💳 Open Card Checker Bot", url: `https://t.me/${CHECKER_BOT_USERNAME}` }],
+          [{ text: "📦 View Latest Bases", callback_data: "latest_bases" }],
         ],
       },
-    },
+    }
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Message & Callback Router                                          */
+/* Message and Callback Handlers                                      */
 /* ------------------------------------------------------------------ */
+
 async function handleMessage(msg) {
   const chat = msg.chat.id;
   const from = msg.from;
   const text = (msg.text || msg.caption || "").trim();
+  if (!text || !from) return;
 
-  // Always subscribe user to updates
-  await registerSubscriber(from);
-
-  const settings = await getSettings();
-  if (settings.bot_maintenance) {
-    await send(chat, `🔧 <b>Maintenance</b>\n\n${esc(settings.bot_maintenance_msg)}`);
+  // Intercept card checks or check commands and redirect cleanly to Checker Bot
+  if (
+    text.startsWith("/check") ||
+    text.startsWith("/gate") ||
+    text.startsWith("/deposit") ||
+    text.startsWith("/balance") ||
+    text.startsWith("/profile") ||
+    text.startsWith("/refer") ||
+    /\d{12,}/.test(text)
+  ) {
+    await sendCheckerRedirect(chat);
     return;
   }
 
-  if (msg.document) {
-    const file = await tg("getFile", { file_id: msg.document.file_id });
-    const res = await fetch(`https://api.telegram.org/file/bot${TOKEN}/${file.file_path}`);
-    const content = await res.text();
-    pendingAction.delete(chat);
-    await runCheck(chat, from, extractCards(content));
-    return;
+  const parts = text.split(/\s+/);
+  const cmd = parts[0].toLowerCase();
+
+  switch (cmd) {
+    case "/start":
+    case "/menu":
+      await showWelcome(chat, from);
+      return;
+
+    case "/latest":
+    case "/bases":
+      await showLatestBases(chat, from);
+      return;
+
+    case "/subscribe":
+      await setSubscribed(from.id, true);
+      await send(chat, `🔔 <b>Drop Alerts Activated!</b>\n\nYou are subscribed to real-time base restock notifications.`, {
+        reply_markup: buildMenuKeyboard(true),
+      });
+      return;
+
+    case "/unsubscribe":
+      await setSubscribed(from.id, false);
+      await send(chat, `🔕 <b>Drop Alerts Muted.</b>\n\nYou will not receive notifications in private chat.`, {
+        reply_markup: buildMenuKeyboard(false),
+      });
+      return;
+
+    case "/checker":
+      await sendCheckerRedirect(chat);
+      return;
+
+    case "/channel":
+      await send(chat, `📢 <b>Official Zoru Shop Channel:</b>\n<a href="https://t.me/zorushop">https://t.me/zorushop</a>\n\nJoin for restock announcements and community updates!`, {
+        reply_markup: { inline_keyboard: [[{ text: "📢 Join Channel", url: "https://t.me/zorushop" }]] },
+      });
+      return;
+
+    case "/shop":
+      await send(chat, `🛒 <b>Official Zoru Shop:</b>\n<a href="${BASE}/shop">${BASE}/shop</a>\n\nInstant automated card delivery!`, {
+        reply_markup: { inline_keyboard: [[{ text: "🛒 Open Storefront", url: `${BASE}/shop` }]] },
+      });
+      return;
+
+    case "/support":
+      await send(chat, `💬 <b>Customer Support:</b>\n<a href="https://t.me/${SUPPORT_USERNAME}">@${SUPPORT_USERNAME}</a>\n\n24/7 dedicated assistance.`, {
+        reply_markup: { inline_keyboard: [[{ text: "💬 Contact Support", url: `https://t.me/${SUPPORT_USERNAME}` }]] },
+      });
+      return;
+
+    case "/help":
+      await send(chat, [
+        `━━━━━━━━━━━━━━━━━━━`,
+        `📖 <b>ZORU UPDATE BOT COMMANDS</b>`,
+        `━━━━━━━━━━━━━━━━━━━`,
+        `/latest — View latest available card bases`,
+        `/subscribe — Enable private drop notifications`,
+        `/unsubscribe — Mute private drop notifications`,
+        `/channel — Official announcements channel`,
+        `/checker — Switch to Card Checker Bot`,
+        `/shop — Open official card store`,
+        `/support — Contact 24/7 customer service`,
+        `━━━━━━━━━━━━━━━━━━━`,
+      ].join("\n"));
+      return;
   }
 
-  if (text.startsWith("/")) {
-    const [cmd, ...args] = text.split(/\s+/);
-    pendingAction.delete(chat);
-    switch (cmd.split("@")[0]) {
-      case "/start": {
-        const ref = args[0] ? { ref: args[0] } : {};
-        await api("session", from, ref).catch(() => {});
-        const name = esc(from.first_name || "Member");
-        await send(
-          chat,
-          [
-            `⚡ ━━━━━━━━━━━━━━━━━━━━━ ⚡`,
-            `        👑 <b>ZORU SHOP OFFICIAL BOT</b> 👑`,
-            `⚡ ━━━━━━━━━━━━━━━━━━━━━ ⚡`,
-            ``,
-            `👋 Welcome, <b>${name}</b>!`,
-            `Your automated high-speed hub for card checking, instant LTC crypto deposits, and live stock restocks.`,
-            ``,
-            `🚀 <b>Core Capabilities:</b>`,
-            `┌ 💳 <b>Check Card:</b> Fast live CCV/CCN validation`,
-            `├ 📦 <b>Latest Bases:</b> Real-time shop drops & restocks`,
-            `├ 💎 <b>Recharge:</b> Instant zero-fee LTC wallet funding`,
-            `├ 💰 <b>Affiliate:</b> Earn bonuses per referred user`,
-            `└ ⚡ <b>Gateways:</b> Multi-gate auth processing`,
-            ``,
-            `🔔 <b>Status:</b> You are now subscribed to automated alerts!`,
-            ``,
-            `👇 <i>Select an option below to begin:</i>`,
-            `━━━━━━━━━━━━━━━━━━━━━━`,
-          ].join("\n"),
-          { reply_markup: buildReplyKeyboard() }
-        );
-        await menu(chat, "📱 <b>Quick Navigation Menu:</b>");
-        return;
-      }
-      case "/latest":
-      case "/bases":
-        await showLatestBases(chat, from);
-        return;
-      case "/menu":
-      case "/profile":
-      case "/balance":
-        await showAccount(chat, from);
-        return;
-      case "/deposit":
-        if (args[0] && Number(args[0]) > 0) {
-          await createDeposit(chat, from, Number(args[0]));
-        } else {
-          await startDeposit(chat);
-        }
-        return;
-      case "/check":
-        if (args.length) await runCheck(chat, from, extractCards(args.join("\n")));
-        else await startCheck(chat);
-        return;
-      case "/shop": {
-        const s = await getSettings();
-        const webUrl = s.bot_website_url || BASE;
-        await send(chat, `🛒 <b>Visit Zoru Shop:</b>\n<a href="${webUrl.replace(/\/+$/, "")}/shop">${webUrl.replace(/\/+$/, "")}/shop</a>\n\nInstant automated delivery upon checkout!`, {
-          reply_markup: { inline_keyboard: [[{ text: "🛒 Open Shop Now", url: `${webUrl.replace(/\/+$/, "")}/shop` }]] }
-        });
-        return;
-      }
-      case "/gate":
-        await showGates(chat, from);
-        return;
-      case "/refer":
-        await showReferrals(chat, from);
-        return;
-      case "/tasks":
-        await showTasks(chat, from);
-        return;
-      case "/api":
-        await showApi(chat, from);
-        return;
-      default:
-        await menu(chat, "📖 Use the buttons below to navigate Zoru Shop.");
-        return;
-    }
-  }
-
-  // Reply keyboard button clicks
+  // Reply Keyboard Clicks
   const clean = text.toLowerCase();
-  if (clean.includes("check card")) { pendingAction.delete(chat); await startCheck(chat); return; }
-  if (clean.includes("latest bases") || clean.includes("bases")) { pendingAction.delete(chat); await showLatestBases(chat, from); return; }
-  if (clean.includes("balance") || clean.includes("profile")) { pendingAction.delete(chat); await showAccount(chat, from); return; }
-  if (clean.includes("recharge") || clean.includes("deposit")) { pendingAction.delete(chat); await startDeposit(chat); return; }
-  if (clean.includes("gate")) { pendingAction.delete(chat); await showGates(chat, from); return; }
-  if (clean.includes("earn credit") || clean.includes("refer")) { pendingAction.delete(chat); await showReferrals(chat, from); return; }
-  if (clean.includes("statistics") || clean.includes("tasks")) { pendingAction.delete(chat); await showTasks(chat, from); return; }
-  if (clean.includes("shop")) {
-    const s = await getSettings();
-    const webUrl = s.bot_website_url || BASE;
-    await send(chat, `🛒 <b>Visit Zoru Shop:</b>\n<a href="${webUrl.replace(/\/+$/, "")}/shop">${webUrl.replace(/\/+$/, "")}/shop</a>\n\nInstant automated delivery upon checkout!`, {
-      reply_markup: { inline_keyboard: [[{ text: "🛒 Open Shop Now", url: `${webUrl.replace(/\/+$/, "")}/shop` }]] }
+  if (clean.includes("latest bases") || clean.includes("bases")) {
+    await showLatestBases(chat, from);
+    return;
+  }
+  if (clean.includes("notification") || clean.includes("alert")) {
+    await toggleNotifications(chat, from);
+    return;
+  }
+  if (clean.includes("card checker") || clean.includes("checker")) {
+    await sendCheckerRedirect(chat);
+    return;
+  }
+  if (clean.includes("shop") || clean.includes("store")) {
+    await send(chat, `🛒 <b>Visit Zoru Shop:</b>\n<a href="${BASE}/shop">${BASE}/shop</a>\n\nInstant automated delivery upon checkout!`, {
+      reply_markup: { inline_keyboard: [[{ text: "🛒 Open Shop Now", url: `${BASE}/shop` }]] },
     });
     return;
   }
   if (clean.includes("channel")) {
     await send(chat, `📢 <b>Official Channel:</b>\n<a href="https://t.me/zorushop">@zorushop</a>\n\nJoin for real-time base restocks and exclusive announcements!`, {
-      reply_markup: { inline_keyboard: [[{ text: "📢 Join Channel", url: "https://t.me/zorushop" }]] }
+      reply_markup: { inline_keyboard: [[{ text: "📢 Join Channel", url: "https://t.me/zorushop" }]] },
     });
     return;
   }
   if (clean.includes("support") || clean.includes("contact")) {
-    await send(chat, `💬 <b>Customer Support:</b>\n<a href="https://t.me/Zorushop_service">@Zorushop_service</a>\n\n24/7 dedicated customer assistance.`, {
-      reply_markup: { inline_keyboard: [[{ text: "💬 Contact Support", url: "https://t.me/Zorushop_service" }]] }
+    await send(chat, `💬 <b>Customer Support:</b>\n<a href="https://t.me/${SUPPORT_USERNAME}">@${SUPPORT_USERNAME}</a>\n\n24/7 dedicated customer assistance.`, {
+      reply_markup: { inline_keyboard: [[{ text: "💬 Contact Support", url: `https://t.me/${SUPPORT_USERNAME}` }]] },
     });
     return;
   }
 
-  const waiting = pendingAction.get(chat);
-  if (waiting === "deposit") {
-    const amount = Number(text.replace(/[^0-9.]/g, ""));
-    pendingAction.delete(chat);
-    if (!Number.isFinite(amount) || amount < 5) {
-      await menu(chat, `❌ <b>Invalid Amount:</b> Minimum deposit is <code>$5.00</code>.`);
-      return;
-    }
-    await createDeposit(chat, from, amount);
-    return;
-  }
-
-  const cards = extractCards(text);
-  if (cards.length) {
-    pendingAction.delete(chat);
-    await runCheck(chat, from, cards);
-    return;
-  }
-
-  await showAccount(chat, from);
+  // Default
+  await showWelcome(chat, from);
 }
 
 async function handleCallback(q) {
   const chat = q.message.chat.id;
   const from = q.from;
-  await tg("answerCallbackQuery", { callback_query_id: q.id });
+  await tg("answerCallbackQuery", { callback_query_id: q.id }).catch(() => {});
   const data = q.data || "";
 
-  if (data.startsWith("gate:")) {
-    const gate = data.slice(5);
-    await api("setgate", from, { gate });
-    await menu(chat, `⚡ Gate set to <code>${esc(gate)}</code>`);
+  if (data === "latest_bases") {
+    await showLatestBases(chat, from, q.message.message_id);
     return;
   }
 
-  if (data.startsWith("dep_status:")) {
-    const depositId = data.slice(11);
-    await checkDepositStatus(chat, from, depositId);
+  if (data === "toggle_notif") {
+    await toggleNotifications(chat, from);
     return;
   }
 
-  if (data.startsWith("recharge:")) {
-    const amt = Number(data.slice(9));
-    if (amt > 0) {
-      pendingAction.delete(chat);
-      await createDeposit(chat, from, amt);
-      return;
-    }
+  if (data === "menu") {
+    await showWelcome(chat, from);
+    return;
   }
 
-  switch (data) {
-    case "balance": return showAccount(chat, from);
-    case "deposit": return startDeposit(chat);
-    case "check": return startCheck(chat);
-    case "latest_bases": return showLatestBases(chat, from);
-    case "gates": return showGates(chat, from);
-    case "refer": return showReferrals(chat, from);
-    case "api": return showApi(chat, from);
-    case "tasks": return showTasks(chat, from);
-    default: return showAccount(chat, from);
-  }
+  await showWelcome(chat, from);
 }
 
 /* ------------------------------------------------------------------ */
@@ -951,28 +547,26 @@ async function handleCallback(q) {
 async function main() {
   const identity = await tg("getMe", {});
   console.log("=================================================");
-  console.log(`🤖 Zoru Bot Authenticated: @${identity.username} (ID: ${identity.id})`);
-  console.log(`Website API: ${BASE}`);
+  console.log(`🤖 Zoru Update Bot Authenticated: @${identity.username} (ID: ${identity.id})`);
+  console.log(`Channel: ${CHANNEL}`);
+  console.log(`Storefront: ${BASE}`);
   console.log("=================================================");
 
   await tg("deleteWebhook", { drop_pending_updates: false }).catch(() => {});
 
   await tg("setMyCommands", {
     commands: [
-      { command: "menu", description: "📱 Main interactive menu" },
-      { command: "balance", description: "👤 Profile & wallet balance" },
-      { command: "deposit", description: "💎 Recharge balance (LTC)" },
-      { command: "check", description: "💳 Check cards (single/bulk)" },
+      { command: "menu", description: "📱 Main menu & alert status" },
       { command: "latest", description: "📦 View latest base restocks" },
+      { command: "subscribe", description: "🔔 Enable drop notifications" },
+      { command: "unsubscribe", description: "🔕 Mute drop notifications" },
+      { command: "checker", description: "💳 Card Checker Bot (@ZoruCheckerbot)" },
       { command: "shop", description: "🛒 Official card shop" },
-      { command: "gate", description: "⚡ Select checking gate" },
-      { command: "refer", description: "💰 Referral program & earn" },
-      { command: "tasks", description: "📊 Check statistics & history" },
+      { command: "channel", description: "📢 Official announcements channel" },
+      { command: "support", description: "💬 24/7 Support service" },
       { command: "help", description: "📖 Commands list" },
     ],
   }).catch(() => {});
-
-  await refreshSettings().catch(() => {});
 
   let offset = 0;
   for (;;) {
@@ -991,13 +585,12 @@ async function main() {
         }
       }
     } catch (err) {
-      // transient network wait
       await new Promise((r) => setTimeout(r, 3000));
     }
   }
 }
 
 main().catch((err) => {
-  console.error("Fatal bot error:", err);
+  console.error("Fatal update bot error:", err);
   process.exit(1);
 });
