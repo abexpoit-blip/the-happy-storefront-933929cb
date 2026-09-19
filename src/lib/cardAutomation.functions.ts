@@ -536,7 +536,6 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
     const dd = String(today.getUTCDate()).padStart(2, "0");
     const dateStr = `${yyyy}_${mm}_${dd}`;
     const primaryBrand = stagedItems[0]?.brand || "CARD";
-    const baseName = `ADMIN_${dateStr}_${primaryBrand}`;
     const clean = (s: string | null | undefined) => (!s || s.toLowerCase() === "null" ? "" : s);
     const stamp = Date.now().toString(36);
 
@@ -547,7 +546,8 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
           ? true
           : binInfo.refundable;
       const cardCountry = clean(c.country) || binInfo.country || null;
-      const brand = c.brand || binInfo.brand || primaryBrand;
+      const brand = (c.brand && c.brand !== "OTHER" && c.brand !== "UNKNOWN") ? c.brand : (binInfo.brand || "VISA");
+      const cardBase = `ADMIN_${dateStr}_${brand}`;
       const cardPrice = calculateCardPrice(
         {
           cc: c.cc || undefined,
@@ -581,7 +581,7 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
         zip: clean(c.zip) || null,
         exp_month: clean(c.month) || null,
         exp_year: clean(c.year) || null,
-        base: baseName,
+        base: cardBase,
         refundable: isRef,
         card_type: binInfo.type,
         card_level: binInfo.level,
@@ -634,15 +634,18 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
       })
       .eq("id", data.queue_id);
 
-    // 8. Auto-Announce if enabled
+    // 8. Auto-Announce if enabled (announce all distinct bases)
+    const distinctBases = [...new Set(products.map((p) => p.base))];
     if (queue.auto_announce) {
-      const pub = publicBase(baseName);
-      await db.from("announcements").insert({
-        title: `Base Update: ${pub}`,
-        body: `Fresh batch of verified cards added for base ${pub}. Available in shop now.`,
-        kind: "update",
-        created_at: today.toISOString(),
-      }).catch(() => {});
+      for (const bName of distinctBases) {
+        const pub = publicBase(bName);
+        await db.from("announcements").insert({
+          title: `Base Update: ${pub}`,
+          body: `Fresh batch of verified cards added for base ${pub}. Available in shop now.`,
+          kind: "update",
+          created_at: today.toISOString(),
+        }).catch(() => {});
+      }
     }
 
     // 9. Telegram Channel Broadcast if enabled
@@ -651,13 +654,14 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
       const token = getTelegramBotToken();
       if (token) {
         const channelId = getTelegramChannelId();
-        const pBase = publicBase(baseName);
+        const cleanBases = distinctBases.map(publicBase).join(" / ");
+        const brandsList = [...new Set(products.map((p) => p.brand))].join(", ");
         const countries = [...new Set(stagedItems.map((it) => it.country).filter(Boolean))].join(", ") || "MIX";
         const text = [
           `⚡ <b>ZORU SHOP — NEW BASE UPDATE!</b> ⚡`,
           `━━━━━━━━━━━━━━━━━━━━━━`,
-          `📦 <b>Base:</b> <code>${pBase}</code>`,
-          `🏷 <b>Brand:</b> ${primaryBrand}`,
+          `📦 <b>Base:</b> <code>${cleanBases}</code>`,
+          `🏷 <b>Brand:</b> ${brandsList}`,
           `🌍 <b>Country:</b> ${countries}`,
           `⚡ <b>Delivery:</b> Instant Automated Delivery`,
           ``,
@@ -701,7 +705,7 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
     return {
       released: items.length,
       remaining: remainingAfter,
-      base: publicBase(baseName),
+      base: distinctBases.map(publicBase).join(" / "),
       telegram: tgStatus,
     };
   });

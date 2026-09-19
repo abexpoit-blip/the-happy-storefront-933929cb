@@ -55,6 +55,7 @@ export function detectBrand(cc: string): string {
   if (/^6(011|5|4[4-9])/.test(n)) return "DISCOVER";
   if (/^35/.test(n)) return "JCB";
   if (/^3(0[0-5]|[68])/.test(n)) return "DINERS";
+  if (/^62/.test(n)) return "UNIONPAY";
   return "OTHER";
 }
 

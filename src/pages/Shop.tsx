@@ -289,10 +289,16 @@ const Shop = () => {
   const metaFor = (c: Product): CardMeta => {
     const p = c as unknown as { card_type?: string | null; card_level?: string | null; bank?: string | null };
     const fromBin = binMeta[(c.bin ?? "").replace(/\D/g, "").slice(0, 8)] ?? { type: null, level: null, bank: null };
+    
+    // Never show "UNKNOWN BANK" to buyers — prefer enriched BIN bank or fall back cleanly
+    const isInvalid = (val?: string | null) => !val || /unknown/i.test(val.trim());
+    let bankName = !isInvalid(p.bank) ? p.bank : (!isInvalid(fromBin.bank) ? fromBin.bank : null);
+    if (bankName && isInvalid(bankName)) bankName = null;
+
     return {
       type: p.card_type || fromBin.type,
       level: p.card_level || fromBin.level,
-      bank: p.bank || fromBin.bank,
+      bank: bankName ?? null,
     };
   };
 

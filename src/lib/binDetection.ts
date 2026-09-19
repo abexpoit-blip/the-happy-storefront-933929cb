@@ -238,7 +238,7 @@ export function detectOfflineBin(raw: string): BinDetectionResult {
   }
 
   // 2. Intelligent pattern & prefix heuristics
-  let brand = "VISA";
+  let brand = "OTHER";
   if (/^4/.test(bin)) brand = "VISA";
   else if (/^(5[1-5]|2[2-7])/.test(bin)) brand = "MASTERCARD";
   else if (/^3[47]/.test(bin)) brand = "AMEX";
@@ -293,7 +293,6 @@ export function detectOfflineBin(raw: string): BinDetectionResult {
   }
 
   // Country deduction fallback:
-  // Most online cards without explicit country on international markets are US, UK, or CA
   let country = "US";
   let countryName = "United States";
   if (["4929", "4001", "4546", "5168", "4462", "4751", "4544"].includes(bin.slice(0, 4))) {
@@ -309,13 +308,27 @@ export function detectOfflineBin(raw: string): BinDetectionResult {
 
   // Common issuing bank heuristics
   let bank = "MAJOR ISSUING BANK";
-  if (["4147", "4246", "4388", "4400", "4737", "4465"].includes(bin.slice(0, 4))) bank = "JPMORGAN CHASE BANK, N.A.";
-  else if (["4800", "4802", "4854", "4356", "5424", "5524"].includes(bin.slice(0, 4))) bank = "BANK OF AMERICA, N.A.";
-  else if (["4716", "4097", "4342", "5434", "5275"].includes(bin.slice(0, 4))) bank = "WELLS FARGO BANK, N.A.";
-  else if (["4128", "4553", "5424", "5466"].includes(bin.slice(0, 4))) bank = "CITIBANK, N.A.";
-  else if (["5178", "5291", "5338", "5353", "5456", "4288"].includes(bin.slice(0, 4))) bank = "CAPITAL ONE BANK (USA), N.A.";
-  else if (brand === "AMEX") bank = "AMERICAN EXPRESS";
-  else if (brand === "DISCOVER") bank = "DISCOVER BANK";
+  const p4 = bin.slice(0, 4);
+  const p2 = bin.slice(0, 2);
+  if (["4147", "4246", "4388", "4400", "4737", "4465", "4111"].includes(p4)) bank = "JPMORGAN CHASE BANK, N.A.";
+  else if (["4800", "4802", "4854", "4356", "5424", "5524", "5243"].includes(p4)) bank = "BANK OF AMERICA, N.A.";
+  else if (["4716", "4097", "4342", "5434", "5275", "4717"].includes(p4)) bank = "WELLS FARGO BANK, N.A.";
+  else if (["4128", "4553", "5424", "5466", "5467", "4129"].includes(p4)) bank = "CITIBANK, N.A.";
+  else if (["5178", "5291", "5338", "5353", "5456", "4288", "5179"].includes(p4)) bank = "CAPITAL ONE BANK (USA), N.A.";
+  else if (["4000", "4224", "4225", "4226", "4744", "4851", "5108"].includes(p4)) bank = "U.S. BANK N.A.";
+  else if (["4389", "5219", "5180", "5181"].includes(p4)) bank = "PNC BANK, N.A.";
+  else if (["4514", "4724", "4504", "4520"].includes(p4)) bank = "TD BANK, N.A.";
+  else if (["4020", "4021", "4833", "6032"].includes(p4)) bank = "SYNCHRONY BANK";
+  else if (["4566", "4985", "4567"].includes(p4)) bank = "NAVY FEDERAL CREDIT UNION";
+  else if (["4310", "4447", "4503", "5117"].includes(p4)) bank = "USAA FEDERAL SAVINGS BANK";
+  else if (["4929", "4543", "4921"].includes(p4)) bank = "BARCLAYS BANK PLC";
+  else if (["4001", "4546", "5168"].includes(p4)) bank = "HSBC BANK PLC";
+  else if (["4544"].includes(p4)) bank = "SANTANDER BANK, N.A.";
+  else if (["4510", "4511"].includes(p4)) bank = "ROYAL BANK OF CANADA";
+  else if (brand === "AMEX" || p2 === "34" || p2 === "37") bank = "AMERICAN EXPRESS";
+  else if (brand === "DISCOVER" || bin.startsWith("6011") || bin.startsWith("65")) bank = "DISCOVER FINANCIAL SERVICES";
+  else if (brand === "VISA") bank = "VISA ISSUING BANK";
+  else if (brand === "MASTERCARD") bank = "MASTERCARD ISSUING BANK";
 
   const isHigh = isLevelHighTier(level);
   return {
