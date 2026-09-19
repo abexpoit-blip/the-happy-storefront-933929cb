@@ -23,8 +23,6 @@ export function getTelegramBotToken(): string {
       const content = fs.readFileSync("/etc/zoru/telegram.env", "utf8");
       const mUp = content.match(/TELEGRAM_UPDATE_BOT_TOKEN\s*=\s*["']?([^"'\r\n]+)/);
       if (mUp && mUp[1]) return mUp[1].trim();
-      const m = content.match(/TELEGRAM_BOT_TOKEN\s*=\s*["']?([^"'\r\n]+)/);
-      if (m && m[1]) return m[1].trim();
     }
   } catch {
     /* ignore */

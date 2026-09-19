@@ -51,7 +51,6 @@ const serviceKey =
 
 const telegramToken = (
   process.env.TELEGRAM_UPDATE_BOT_TOKEN ||
-  process.env.TELEGRAM_BOT_TOKEN ||
   "8883627548:AAGrYhz6FNQXr5NRetLVbbke6lJ4EJEIk8g"
 ).trim();
 
