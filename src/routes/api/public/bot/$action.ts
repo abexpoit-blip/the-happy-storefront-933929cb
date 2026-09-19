@@ -617,7 +617,7 @@ export const Route = createFileRoute("/api/public/bot/$action")({
                 bot_maintenance_msg: map["bot_maintenance_msg"] ?? "🔧 Under maintenance.",
                 bot_notice: map["bot_notice"] ?? "",
                 checker_enabled: map["checker_enabled"] !== "false",
-                bot_admin_contact: map["bot_admin_contact"] ?? "https://t.me/samexpoit",
+                bot_admin_contact: map["bot_admin_contact"] ?? "https://t.me/Zorushop_service",
                 bot_website_url: map["bot_website_url"] ?? "https://zoru.cc/",
               });
             }

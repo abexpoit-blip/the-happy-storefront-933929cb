@@ -612,7 +612,7 @@ const AdminBotControl = () => {
                 <Input
                   value={settings.bot_admin_contact}
                   onChange={(e) => setS("bot_admin_contact", e.target.value)}
-                  placeholder="https://t.me/samexpoit"
+                  placeholder="https://t.me/Zorushop_service"
                   className="mt-1.5 bg-[#131f40] border-slate-600 text-white font-medium"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">

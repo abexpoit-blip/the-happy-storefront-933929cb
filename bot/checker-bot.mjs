@@ -141,7 +141,7 @@ let settingsCache = {
   bot_maintenance_msg: "",
   bot_notice: "",
   checker_enabled: true,
-  bot_admin_contact: "https://t.me/samexpoit",
+  bot_admin_contact: "https://t.me/Zorushop_service",
   bot_website_url: BASE,
 };
 let settingsCachedAt = 0;
@@ -154,7 +154,7 @@ async function refreshSettings() {
       bot_maintenance_msg: String(d.bot_maintenance_msg || "🔧 Under maintenance. Please check back shortly."),
       bot_notice: String(d.bot_notice || ""),
       checker_enabled: Boolean(d.checker_enabled !== false),
-      bot_admin_contact: String(d.bot_admin_contact || "https://t.me/samexpoit"),
+      bot_admin_contact: String(d.bot_admin_contact || "https://t.me/Zorushop_service"),
       bot_website_url: String(d.bot_website_url || BASE),
     };
   } catch { /* keep previous */ }

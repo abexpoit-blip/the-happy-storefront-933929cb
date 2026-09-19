@@ -96,7 +96,7 @@ export const getBotSettings = createServerFn({ method: "GET" })
       check_credit_cost: Number(map["check_credit_cost"] ?? 30),
       credits_per_usd: Number(map["credits_per_usd"] ?? 1000),
       referral_bonus: Number(map["bot_referral_bonus"] ?? 0.10),
-      bot_admin_contact: map["bot_admin_contact"] ?? "https://t.me/samexpoit",
+      bot_admin_contact: map["bot_admin_contact"] ?? "https://t.me/Zorushop_service",
       bot_website_url: map["bot_website_url"] ?? "https://zoru.cc/",
     };
   });
