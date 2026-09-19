@@ -186,6 +186,7 @@ const Shop = () => {
   const stockCountries = useMemo(() => {
     const counts = new Map<string, number>();
     for (const p of all) {
+      if (!p.active || (p.delivery_type === "key" && (p.stock ?? 0) <= 0)) continue;
       const cc = resolveCountryCode(p.country);
       if (cc) counts.set(cc, (counts.get(cc) ?? 0) + 1);
     }
@@ -201,6 +202,9 @@ const Shop = () => {
       // BIN and DUMP live on their own pages — the card shop shows cards only.
       const sec = `${(p as { section?: string }).section ?? "card"}`.toLowerCase();
       if (sec === "bin" || sec === "dump") return false;
+      // Sold or out-of-stock items must never show in the shop
+      if (!p.active) return false;
+      if (p.delivery_type === "key" && (p.stock ?? 0) <= 0) return false;
       if (q.bin && !(p.bin ?? "").startsWith(q.bin)) return false;
       if (q.base && q.base !== "all") {
         const cardBase = publicBase(p.base ?? "");
@@ -679,17 +683,13 @@ const Shop = () => {
                   ${Number(c.price).toFixed(2)}
                 </td>
                 <td className="px-2.5 py-2 align-middle">
-                  {c.delivery_type === "key" && c.stock <= 0 ? (
-                    <span className="text-[#bbb] text-[13px]">sold</span>
-                  ) : (
-                    <button
-                      onClick={() => buyMany([c.id])}
-                      disabled={buying}
-                      className="h-8 px-3 rounded-lg bg-gradient-to-b from-[#7bd17f] to-[#2e7d32] text-white text-[12px] font-bold inline-flex items-center gap-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_8px_16px_-9px_rgba(46,125,50,1)] hover:from-[#66bb6a] hover:to-[#256a29] active:translate-y-px transition disabled:opacity-50"
-                    >
-                      <ShoppingCart className="h-4 w-4" /> Buy
-                    </button>
-                  )}
+                  <button
+                    onClick={() => buyMany([c.id])}
+                    disabled={buying}
+                    className="h-8 px-3 rounded-lg bg-gradient-to-b from-[#7bd17f] to-[#2e7d32] text-white text-[12px] font-bold inline-flex items-center gap-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_8px_16px_-9px_rgba(46,125,50,1)] hover:from-[#66bb6a] hover:to-[#256a29] active:translate-y-px transition disabled:opacity-50"
+                  >
+                    <ShoppingCart className="h-4 w-4" /> Buy
+                  </button>
                 </td>
               </tr>
             ))}

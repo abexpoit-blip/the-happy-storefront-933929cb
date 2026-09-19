@@ -427,11 +427,51 @@ async function processActiveQueues() {
 
       // Format today's base date with Dhaka local date (e.g. 2026_09_19)
       const baseDateStr = dhakaNow.dateStr.replace(/-/g, "_");
+      // Check existing keys to strictly avoid duplicate cards in shop
+      const itemPans = items.map((c) => String(c.cc || "").replace(/\D/g, "")).filter((p) => p.length >= 12);
+      const existingKeyPans = new Set();
+      try {
+        const { data: exKeys } = await db.from("product_keys").select("pan").in("pan", itemPans);
+        for (const k of exKeys ?? []) {
+          if (k?.pan) existingKeyPans.add(k.pan);
+        }
+      } catch {}
+
+      const cleanItems = [];
+      const skippedIds = [];
+      for (const it of items) {
+        const p = String(it.cc || "").replace(/\D/g, "");
+        if (existingKeyPans.has(p)) {
+          skippedIds.push(it.id);
+        } else {
+          cleanItems.push(it);
+        }
+      }
+
+      if (skippedIds.length > 0) {
+        await db.from("card_drip_items").update({ status: "released", released_at: now.toISOString() }).in("id", skippedIds);
+        console.log(`[Drip Worker] Skipped ${skippedIds.length} duplicate cards already in shop for queue '${queue.name}'.`);
+      }
+
+      if (cleanItems.length === 0) {
+        const remainingAfter = Math.max(0, queue.cards_remaining - items.length);
+        await db
+          .from("card_drip_queues")
+          .update({
+            cards_remaining: remainingAfter,
+            last_run_at: now.toISOString(),
+            status: remainingAfter === 0 ? "completed" : queue.status,
+            updated_at: now.toISOString(),
+          })
+          .eq("id", queue.id);
+        continue;
+      }
+
       const stamp = Date.now().toString(36);
       const clean = (s) => (!s || String(s).toLowerCase() === "null" ? "" : s);
 
       const products = await Promise.all(
-        items.map(async (c, idx) => {
+        cleanItems.map(async (c, idx) => {
           const meta = await detectBinMeta(c.cc || c.bin);
           const isRef = queue.refundable === true ? true : meta.refundable;
           const cardCountry = clean(c.country) || meta.country || null;
@@ -502,7 +542,8 @@ async function processActiveQueues() {
       // Insert keys
       const keys = (inserted ?? []).map((prod, idx) => ({
         product_id: prod.id,
-        content: items[idx].card_line,
+        content: cleanItems[idx].card_line,
+        pan: String(cleanItems[idx].cc || "").replace(/\D/g, "") || null,
       }));
       const { error: kErr } = await db.from("product_keys").insert(keys);
       if (kErr) {
@@ -510,7 +551,7 @@ async function processActiveQueues() {
       }
 
       // Mark items as released
-      const releasedIds = items.map((it) => it.id);
+      const releasedIds = cleanItems.map((it) => it.id);
       await db
         .from("card_drip_items")
         .update({
@@ -531,7 +572,7 @@ async function processActiveQueues() {
         })
         .eq("id", queue.id);
 
-      console.log(`[Drip Worker] Successfully released ${items.length} cards for '${queue.name}'! (${remainingAfter} left)`);
+      console.log(`[Drip Worker] Successfully released ${cleanItems.length} cards for '${queue.name}'! (${remainingAfter} left)`);
 
       // Announcements for all distinct bases released
       const distinctBases = [...new Set(products.map((p) => p.base))];

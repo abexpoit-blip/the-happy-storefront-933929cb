@@ -290,12 +290,12 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
             };
           });
 
-          // 1. Insert cards into database
-          await adminPublishFullCards(fullCardInputs);
-          uploadedCount += brandCards.length;
+          // 1. Insert cards into database (deduplicates against database automatically)
+          const created = await adminPublishFullCards(fullCardInputs);
+          uploadedCount += created;
 
           // 2. Post dated announcement if enabled
-          if (postAnnouncements) {
+          if (postAnnouncements && created > 0) {
             const pubName = `${dateStr}_${brand}`;
             await adminCreateAnnouncement({
               title: `Base Update: ${pubName}`,

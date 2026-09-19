@@ -311,10 +311,57 @@ export const createDripQueue = createServerFn({ method: "POST" })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = supabaseAdmin as any;
 
-    const total = data.items.length;
-    if (total === 0) throw new Error("No cards provided");
+    // 1. Deduplicate within the input batch by PAN
+    const seenBatch = new Set<string>();
+    const dedupedItems: typeof data.items = [];
+    for (const item of data.items) {
+      const pan = (item.cc || "").replace(/\D/g, "");
+      if (pan.length >= 12) {
+        if (seenBatch.has(pan)) continue;
+        seenBatch.add(pan);
+      }
+      dedupedItems.push(item);
+    }
+    if (dedupedItems.length === 0) throw new Error("No valid unique cards provided");
 
-    // 1. Create queue row
+    // 2. Check existing cards in database (product_keys & card_drip_items)
+    const existingPans = new Set<string>();
+    const pansToCheck = dedupedItems
+      .map((it) => (it.cc || "").replace(/\D/g, ""))
+      .filter((p) => p.length >= 12);
+
+    const CHUNK_CHECK = 300;
+    for (let i = 0; i < pansToCheck.length; i += CHUNK_CHECK) {
+      const slice = pansToCheck.slice(i, i + CHUNK_CHECK);
+      try {
+        const { data: keyRows } = await db
+          .from("product_keys")
+          .select("pan")
+          .in("pan", slice);
+        for (const r of keyRows ?? []) {
+          if (r?.pan) existingPans.add(r.pan);
+        }
+      } catch {}
+      try {
+        const { data: dripRows } = await db
+          .from("card_drip_items")
+          .select("cc")
+          .in("cc", slice);
+        for (const r of dripRows ?? []) {
+          if (r?.cc) existingPans.add(r.cc.replace(/\D/g, ""));
+        }
+      } catch {}
+    }
+
+    const cleanItems = dedupedItems.filter((item) => {
+      const pan = (item.cc || "").replace(/\D/g, "");
+      return !existingPans.has(pan);
+    });
+
+    if (cleanItems.length === 0) throw new Error("All cards provided already exist in shop or queues (duplicates)");
+    const total = cleanItems.length;
+
+    // 3. Create queue row
     const { data: queueRow, error: qErr } = await db
       .from("card_drip_queues")
       .insert({
@@ -338,10 +385,10 @@ export const createDripQueue = createServerFn({ method: "POST" })
     if (qErr) throw new Error(qErr.message);
     const queueId = queueRow.id;
 
-    // 2. Insert items in chunks of 200
+    // 4. Insert items in chunks of 200
     const CHUNK = 200;
-    for (let i = 0; i < data.items.length; i += CHUNK) {
-      const slice = data.items.slice(i, i + CHUNK).map((item) => ({
+    for (let i = 0; i < cleanItems.length; i += CHUNK) {
+      const slice = cleanItems.slice(i, i + CHUNK).map((item) => ({
         queue_id: queueId,
         card_line: item.card_line,
         cc: item.cc,
@@ -405,9 +452,58 @@ export const appendDripItems = createServerFn({ method: "POST" })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = supabaseAdmin as any;
 
+    // 1. Deduplicate within the input batch by PAN
+    const seenBatch = new Set<string>();
+    const dedupedItems: typeof data.items = [];
+    for (const item of data.items) {
+      const pan = (item.cc || "").replace(/\D/g, "");
+      if (pan.length >= 12) {
+        if (seenBatch.has(pan)) continue;
+        seenBatch.add(pan);
+      }
+      dedupedItems.push(item);
+    }
+    if (dedupedItems.length === 0) return { added: 0 };
+
+    // 2. Check existing cards in database (product_keys & card_drip_items)
+    const existingPans = new Set<string>();
+    const pansToCheck = dedupedItems
+      .map((it) => (it.cc || "").replace(/\D/g, ""))
+      .filter((p) => p.length >= 12);
+
+    const CHUNK_CHECK = 300;
+    for (let i = 0; i < pansToCheck.length; i += CHUNK_CHECK) {
+      const slice = pansToCheck.slice(i, i + CHUNK_CHECK);
+      try {
+        const { data: keyRows } = await db
+          .from("product_keys")
+          .select("pan")
+          .in("pan", slice);
+        for (const r of keyRows ?? []) {
+          if (r?.pan) existingPans.add(r.pan);
+        }
+      } catch {}
+      try {
+        const { data: dripRows } = await db
+          .from("card_drip_items")
+          .select("cc")
+          .in("cc", slice);
+        for (const r of dripRows ?? []) {
+          if (r?.cc) existingPans.add(r.cc.replace(/\D/g, ""));
+        }
+      } catch {}
+    }
+
+    const cleanItems = dedupedItems.filter((item) => {
+      const pan = (item.cc || "").replace(/\D/g, "");
+      return !existingPans.has(pan);
+    });
+
+    if (cleanItems.length === 0) return { added: 0 };
+
     const CHUNK = 200;
-    for (let i = 0; i < data.items.length; i += CHUNK) {
-      const slice = data.items.slice(i, i + CHUNK).map((item) => ({
+    for (let i = 0; i < cleanItems.length; i += CHUNK) {
+      const slice = cleanItems.slice(i, i + CHUNK).map((item) => ({
         queue_id: data.queue_id,
         card_line: item.card_line,
         cc: item.cc,
@@ -431,7 +527,7 @@ export const appendDripItems = createServerFn({ method: "POST" })
       if (insErr) throw new Error(insErr.message);
     }
 
-    const countAdded = data.items.length;
+    const countAdded = cleanItems.length;
     const { data: q } = await db
       .from("card_drip_queues")
       .select("total_cards, cards_remaining")
@@ -609,6 +705,7 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
     const keyRows = insertedRows.map((prod, idx: number) => ({
       product_id: prod.id,
       content: stagedItems[idx].card_line,
+      pan: (stagedItems[idx].cc || "").replace(/\D/g, "") || null,
     }));
 
     const { error: kErr } = await db.from("product_keys").insert(keyRows);

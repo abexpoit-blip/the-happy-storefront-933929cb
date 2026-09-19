@@ -29,6 +29,7 @@ if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' | grep -
     "announcements-update.sql"
     "fix-unknown-banks.sql"
     "deposit-bot-sync.sql"
+    "dedup-and-clean-sold.sql"
   )
 
   for file in "${MIGRATIONS[@]}"; do

@@ -500,7 +500,13 @@ export const adminDeleteCategory = async (id: string) => {
 
 /** Bulk-add card/key lines to a product and re-sync its stock. */
 export const adminAddKeys = async (productId: string, lines: string[]) => {
-  const rows = lines.map((l) => l.trim()).filter(Boolean).map((content) => ({ product_id: productId, content }));
+  const rows = lines
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((content) => {
+      const match = content.match(/[0-9]{12,19}/);
+      return { product_id: productId, content, pan: match ? match[0] : null };
+    });
   if (rows.length === 0) return 0;
   const { error } = await supabase.from("product_keys").insert(rows);
   if (error) throw error;
@@ -515,8 +521,12 @@ export const adminSyncStock = async (productId: string) => {
     .eq("product_id", productId)
     .eq("is_sold", false);
   if (error) throw error;
-  await supabase.from("products").update({ stock: count ?? 0 }).eq("id", productId);
-  return count ?? 0;
+  const stock = count ?? 0;
+  await supabase
+    .from("products")
+    .update({ stock, ...(stock <= 0 ? { active: false } : {}) })
+    .eq("id", productId);
+  return stock;
 };
 
 /* ---------------- admin: bulk CSV upload ----------------
@@ -652,10 +662,51 @@ export const adminPublishFullCards = async (
   onProgress?: (done: number, total: number) => void,
 ) => {
   if (!cards.length) return 0;
+
+  // 1. Deduplicate within the uploaded batch
+  const seenInBatch = new Set<string>();
+  const dedupedBatch: FullCardInput[] = [];
+  for (const c of cards) {
+    const pan = (c.cc || "").replace(/\D/g, "");
+    if (pan.length >= 12) {
+      if (seenInBatch.has(pan)) continue;
+      seenInBatch.add(pan);
+    }
+    dedupedBatch.push(c);
+  }
+  if (!dedupedBatch.length) return 0;
+
+  // 2. Check existing cards in database (product_keys)
+  const existingPans = new Set<string>();
+  const pansToCheck = dedupedBatch
+    .map((c) => (c.cc || "").replace(/\D/g, ""))
+    .filter((p) => p.length >= 12);
+
+  for (const pChunk of chunk(pansToCheck, 250)) {
+    try {
+      const { data: rows } = await supabase
+        .from("product_keys")
+        .select("pan")
+        .in("pan", pChunk);
+      for (const r of (rows ?? []) as { pan?: string }[]) {
+        if (r?.pan) existingPans.add(r.pan);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // Filter out any card whose PAN already exists in database
+  const finalCards = dedupedBatch.filter((c) => {
+    const pan = (c.cc || "").replace(/\D/g, "");
+    return !existingPans.has(pan);
+  });
+  if (!finalCards.length) return 0;
+
   const clean = (s: string | null | undefined) => (!s || s.toLowerCase() === "null" ? "" : s);
   const stamp = Date.now().toString(36);
 
-  const products = cards.map((c, i) => ({
+  const products = finalCards.map((c, i) => ({
     category_id: c.category_id ?? null,
     title: `${c.brand} ${c.bin} · ${clean(c.city) || clean(c.state) || clean(c.country) || "—"}`,
     slug: `${c.bin}-${stamp}-${i}-${Math.random().toString(36).slice(2, 8)}`,
@@ -689,7 +740,7 @@ export const adminPublishFullCards = async (
     clean(c.country), clean(c.tel), clean(c.email), "", "",
   ].join("|");
 
-  const bySlug = new Map(products.map((p, i) => [p.slug, cards[i]]));
+  const bySlug = new Map(products.map((p, i) => [p.slug, finalCards[i]]));
   let created = 0;
 
   for (const part of chunk(products, CHUNK)) {
@@ -700,9 +751,11 @@ export const adminPublishFullCards = async (
     const keys = (data ?? [])
       .map((row) => {
         const card = bySlug.get(row.slug as string);
-        return card ? { product_id: row.id as string, content: lineFor(card) } : null;
+        if (!card) return null;
+        const pan = (card.cc || "").replace(/\D/g, "");
+        return { product_id: row.id as string, content: lineFor(card), pan };
       })
-      .filter(Boolean) as { product_id: string; content: string }[];
+      .filter(Boolean) as { product_id: string; content: string; pan?: string }[];
     if (keys.length) {
       const { error: kerr } = await withRetry(async () => await supabase.from("product_keys").insert(keys));
       if (kerr) throw kerr;

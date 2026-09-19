@@ -404,6 +404,7 @@ export type Database = {
           created_at: string
           id: string
           is_sold: boolean
+          pan: string | null
           product_id: string
           sold_at: string | null
           sold_to: string | null
@@ -413,6 +414,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_sold?: boolean
+          pan?: string | null
           product_id: string
           sold_at?: string | null
           sold_to?: string | null
@@ -422,6 +424,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_sold?: boolean
+          pan?: string | null
           product_id?: string
           sold_at?: string | null
           sold_to?: string | null
