@@ -54,7 +54,7 @@ loadEnv("/etc/zoru/telegram.env");
 const TOKEN = (
   process.env.TELEGRAM_UPDATE_BOT_TOKEN ||
   process.env.TELEGRAM_BOT_TOKEN ||
-  "8883627548:AAGUiY5v8qRAq5bEZ_uHRI4FLtkyoGM_sUQ"
+  "8883627548:AAGrYhz6FNQXr5NRetLVbbke6lJ4EJEIk8g"
 ).trim();
 
 const BASE = (process.env.BOT_API_BASE || process.env.API_BASE || "https://zoru.cc")

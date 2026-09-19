@@ -30,7 +30,7 @@ export function getTelegramBotToken(): string {
     /* ignore */
   }
   // Default to official Zoru Shop Update Bot (@Zorushopupdatebot)
-  return "8883627548:AAGUiY5v8qRAq5bEZ_uHRI4FLtkyoGM_sUQ";
+  return "8883627548:AAGrYhz6FNQXr5NRetLVbbke6lJ4EJEIk8g";
 }
 
 export function getTelegramChannelId(): string {
