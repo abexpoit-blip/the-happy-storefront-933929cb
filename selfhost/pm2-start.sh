@@ -60,6 +60,15 @@ if [ -f "$APP_DIR/selfhost/drip-worker.mjs" ]; then
   pm2 start "$APP_DIR/selfhost/drip-worker.mjs" --name "zoru-drip" --update-env
 fi
 
+# Keep or start the checker bot daemon (zoru-bot) if TELEGRAM_BOT_TOKEN is configured
+if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -f "$APP_DIR/bot/checker-bot.mjs" ]; then
+  if pm2 describe "zoru-bot" >/dev/null 2>&1; then
+    pm2 restart "zoru-bot" --update-env >/dev/null 2>&1 || true
+  else
+    pm2 start "$APP_DIR/bot/checker-bot.mjs" --name "zoru-bot" --update-env --restart-delay 3000 || true
+  fi
+fi
+
 # Start or restart the dedicated update alert bot daemon (@Zorushopupdatebot)
 if [ -f "$APP_DIR/bot/update-bot.mjs" ]; then
   pm2 delete "zoru-update-bot" >/dev/null 2>&1 || true
@@ -68,5 +77,5 @@ fi
 
 pm2 save
 
-echo "OK: $APP_NAME, zoru-drip, and zoru-update-bot restarted with env from .env"
+echo "OK: zoru-cc, zoru-drip, zoru-bot (checker), and zoru-update-bot (updates) configured."
 

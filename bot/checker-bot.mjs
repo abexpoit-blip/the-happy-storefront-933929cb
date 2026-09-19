@@ -19,11 +19,7 @@
  *   BOT_ADMIN_SECRET     shared secret, must match the site's .env
  */
 
-const TOKEN = (
-  process.env.TELEGRAM_BOT_TOKEN ||
-  process.env.TELEGRAM_UPDATE_BOT_TOKEN ||
-  "8883627548:AAGrYhz6FNQXr5NRetLVbbke6lJ4EJEIk8g"
-).trim();
+const TOKEN = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
 const BASE = (process.env.BOT_API_BASE || process.env.API_BASE || "https://zoru.cc")
   .trim()
   .replace(/\/+$/, "");
