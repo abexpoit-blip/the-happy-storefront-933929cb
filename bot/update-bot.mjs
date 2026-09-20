@@ -334,6 +334,9 @@ async function showLatestBases(chat, from, isEditMsgId = null) {
           { text: "📢 Official Channel", url: "https://t.me/zorushop" },
           { text: "💳 Card Checker Bot", url: `https://t.me/${CHECKER_BOT_USERNAME}` },
         ],
+        [
+          { text: "🔙 Main Menu", callback_data: "menu" },
+        ],
       ],
     };
 

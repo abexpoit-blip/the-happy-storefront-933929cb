@@ -564,15 +564,19 @@ async function showLatestBases(chat, from) {
     lines.push(`⚡ <i>All items are active with instant automated delivery.</i>`);
     lines.push(`━━━━━━━━━━━━━━━━━━━`);
 
+    const webUrl = (settingsCache.bot_website_url || BASE).replace(/\/+$/, "");
     await send(chat, lines.join("\n"), {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: "🛒 Buy in Shop", url: "https://zoru.cc/shop" },
+            { text: "🛒 Buy in Shop", url: `${webUrl}/shop` },
             { text: "🔄 Refresh Bases", callback_data: "latest_bases" },
           ],
           [
+            { text: "🔔 Drop Alerts Bot", url: "https://t.me/Zorushopupdatebot" },
             { text: "💎 Recharge Funds", callback_data: "deposit" },
+          ],
+          [
             { text: "🔙 Main Menu", callback_data: "balance" },
           ],
         ],

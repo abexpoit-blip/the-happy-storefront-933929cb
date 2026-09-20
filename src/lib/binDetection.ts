@@ -210,7 +210,9 @@ export function evaluateRefundable(
     return hash > 0.42;
   }
 
-  return Math.random() > 0.45;
+  const n = parseInt(bin.slice(0, 6), 10) || 123456;
+  const hash = ((n * 9301 + 49297) % 233280) / 233280;
+  return hash > 0.45;
 }
 
 /**
