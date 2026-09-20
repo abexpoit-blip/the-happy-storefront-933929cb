@@ -42,7 +42,7 @@ import {
   type Category,
 } from "@/lib/store";
 import { parseAndFormat, dedupe, detectBrand, toPipeFormat } from "@/lib/cardFormatter";
-import { detectOfflineBin } from "@/lib/binDetection";
+import { detectOfflineBin, enrichBinsBatch } from "@/lib/binDetection";
 import {
   broadcastChannelAlert,
   broadcastAllExistingBasesAlert,
@@ -233,6 +233,10 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
           byBrand.set(brand, list);
         }
 
+        // Pre-enrich distinct BINs with live global BIN lookup
+        const dayBins = Array.from(new Set(dayCards.map((c) => c.cc.replace(/\D/g, "").slice(0, 6)).filter((b) => b.length === 6)));
+        const enrichedBinMap = await enrichBinsBatch(dayBins);
+
         for (const [brand, brandCards] of byBrand.entries()) {
           const baseName = `ADMIN_${dateStr}_${brand}`;
           latestBaseCreated = baseName;
@@ -241,7 +245,8 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
           latestCountries = brandCards.map((c) => c.country).filter(Boolean);
 
           const fullCardInputs: FullCardInput[] = brandCards.map((c) => {
-            const binInfo = detectOfflineBin(c.cc);
+            const b6 = c.cc.replace(/\D/g, "").slice(0, 6);
+            const binInfo = enrichedBinMap.get(b6) || detectOfflineBin(c.cc);
             const isRef =
               backdateRefundable === "yes"
                 ? true

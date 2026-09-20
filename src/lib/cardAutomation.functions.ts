@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { publicBase } from "@/lib/baseLabel";
-import { detectOfflineBin } from "@/lib/binDetection";
+import { detectOfflineBin, enrichBinsBatch } from "@/lib/binDetection";
 import { calculateCardPrice } from "@/lib/cardPricing";
 import fs from "node:fs";
 
@@ -820,8 +820,17 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
     const clean = (s: string | null | undefined) => (!s || s.toLowerCase() === "null" ? "" : s);
     const stamp = Date.now().toString(36);
 
+    // Pre-enrich distinct BINs with live global BIN API
+    const distinctBins = Array.from(
+      new Set(
+        stagedItems.map((c) => String(c.bin || (c.cc || "").slice(0, 6)).replace(/\D/g, "").slice(0, 6)).filter((b) => b.length === 6)
+      )
+    );
+    const enrichedBinMap = await enrichBinsBatch(distinctBins);
+
     const products = stagedItems.map((c, i: number) => {
-      const binInfo = detectOfflineBin(c.cc || c.bin);
+      const bKey = String(c.bin || (c.cc || "").slice(0, 6)).replace(/\D/g, "").slice(0, 6);
+      const binInfo = enrichedBinMap.get(bKey) || detectOfflineBin(c.cc || c.bin);
       const isRef =
         queue.refundable === true
           ? true

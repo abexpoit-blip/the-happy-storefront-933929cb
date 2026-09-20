@@ -4,9 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BrandLogo, detectBrandFromBin, BRANDS } from "@/lib/brands";
 import { parseAndFormat, dedupe, detectBrand, toPipeFormat } from "@/lib/cardFormatter";
-import { detectOfflineBin } from "@/lib/binDetection";
+import { detectOfflineBin, enrichBinsBatch } from "@/lib/binDetection";
 import {
   adminPublishFullCards, adminListUsers, adminAdjustBalance, adminSetBlocked,
   adminOverview, adminSystemSnapshot, adminListDeposits, adminSetDepositStatus,
@@ -256,8 +255,12 @@ const Admin = () => {
         randomVariation: true,
       };
 
+      const distinctBins = Array.from(new Set(unique.map((p) => p.cc.replace(/\D/g, "").slice(0, 6)).filter((b) => b.length === 6)));
+      const enrichedBinMap = await enrichBinsBatch(distinctBins);
+
       const rows = unique.map((p) => {
-        const binInfo = detectOfflineBin(p.cc);
+        const b6 = p.cc.replace(/\D/g, "").slice(0, 6);
+        const binInfo = enrichedBinMap.get(b6) || detectOfflineBin(p.cc);
         const brand = detectBrand(p.cc) || binInfo.brand;
         const country = p.country !== "null" && p.country ? p.country.toUpperCase() : binInfo.country;
         const isRefundable =
