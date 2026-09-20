@@ -454,15 +454,90 @@ export async function lookupBinLive(raw: string): Promise<BinDetectionResult> {
     return offline;
   }
 
-  // 2. Query free real-time global BIN API
+  // 2. If running on server, check 374,000+ local bins.csv
+  if (typeof window === "undefined") {
+    try {
+      const fs = await import("node:fs");
+      const path = await import("node:path");
+      const csvPath = path.join(process.cwd(), "selfhost", "bins.csv");
+      if (fs.existsSync(csvPath)) {
+        const content = fs.readFileSync(csvPath, "utf8");
+        const target = `\n${bin},`;
+        const idx = content.indexOf(target);
+        if (idx !== -1) {
+          const start = idx + 1;
+          const end = content.indexOf("\n", start);
+          const line = end === -1 ? content.slice(start) : content.slice(start, end);
+          const parts = line.split(",").map((s) => s.replace(/"/g, "").trim());
+          const brand = (parts[1] || detectOfflineBin(bin).brand).toUpperCase();
+          const type = (parts[2] || "CREDIT").toUpperCase() as "CREDIT" | "DEBIT" | "PREPAID";
+          const level = (parts[3] || "STANDARD").toUpperCase();
+          const bank = parts[4] || "";
+          const country = (parts[7] || "US").toUpperCase();
+          const countryName = parts[9] || "United States";
+
+          if (bank && !/unknown/i.test(bank) && !/issuing bank/i.test(bank)) {
+            const res: BinDetectionResult = {
+              bin,
+              brand,
+              type,
+              level,
+              bank,
+              country,
+              countryName,
+              isHighTier: isLevelHighTier(level),
+              refundable: evaluateRefundable(bin, level, type),
+            };
+            liveCache.set(bin, res);
+            return res;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // 3. Query Binlist API
   try {
-    const res = await fetch(`https://data.handyapi.com/bin/${bin}`, {
-      headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
-      signal: AbortSignal.timeout(3000),
+    const res = await fetch(`https://lookup.binlist.net/${bin}`, {
+      headers: { "Accept-Version": "3", Accept: "application/json", "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(2500),
     });
     if (res.ok) {
       const data = await res.json();
-      if (data && data.Status === "SUCCESS") {
+      if (data && data.bank?.name) {
+        const brand = String(data.scheme || detectOfflineBin(bin).brand).toUpperCase();
+        const type = (String(data.type || "CREDIT").toUpperCase() as "CREDIT" | "DEBIT" | "PREPAID");
+        const level = String(data.brand || "STANDARD").toUpperCase();
+        const bank = String(data.bank.name).trim();
+        const country = String(data.country?.alpha2 || "US").toUpperCase();
+        const countryName = String(data.country?.name || "United States").trim();
+
+        const result: BinDetectionResult = {
+          bin,
+          brand,
+          type,
+          level,
+          bank,
+          country,
+          countryName,
+          isHighTier: isLevelHighTier(level),
+          refundable: evaluateRefundable(bin, level, type),
+        };
+        liveCache.set(bin, result);
+        return result;
+      }
+    }
+  } catch {}
+
+  // 4. Query HandyAPI
+  try {
+    const res = await fetch(`https://data.handyapi.com/bin/${bin}`, {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", Accept: "application/json" },
+      signal: AbortSignal.timeout(2500),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.Status === "SUCCESS" && data.Issuer && !/unknown/i.test(data.Issuer)) {
         const brand = String(data.Scheme || detectOfflineBin(bin).brand).toUpperCase();
         const type = (String(data.Type || "CREDIT").toUpperCase() as "CREDIT" | "DEBIT" | "PREPAID");
         const level = String(data.CardTier || "STANDARD").toUpperCase();
@@ -475,7 +550,7 @@ export async function lookupBinLive(raw: string): Promise<BinDetectionResult> {
           brand,
           type,
           level,
-          bank: bank && !/issuing bank/i.test(bank) && !/unknown/i.test(bank) ? bank : `${countryName} COMMERCIAL BANK`,
+          bank: bank && !/issuing bank/i.test(bank) ? bank : `${countryName} COMMERCIAL BANK`,
           country,
           countryName,
           isHighTier: isLevelHighTier(level),
@@ -485,9 +560,7 @@ export async function lookupBinLive(raw: string): Promise<BinDetectionResult> {
         return result;
       }
     }
-  } catch {
-    /* fallback to offline intelligence */
-  }
+  } catch {}
 
   const fallback = detectOfflineBin(bin);
   liveCache.set(bin, fallback);
