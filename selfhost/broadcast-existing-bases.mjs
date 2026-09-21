@@ -54,8 +54,6 @@ const telegramToken = (
   "8883627548:AAGrYhz6FNQXr5NRetLVbbke6lJ4EJEIk8g"
 ).trim();
 
-const telegramChannel = (process.env.TELEGRAM_CHANNEL_ID || "@zorushop").trim();
-
 if (!serviceKey) {
   console.error("❌ SUPABASE key is required to query existing bases.");
   process.exit(1);
@@ -65,17 +63,81 @@ const db = createClient(supabaseUrl, serviceKey, {
   auth: { persistSession: false },
 });
 
+/* ── Multi-Channel Management ── */
+async function getAllBroadcastChannels(database = db) {
+  const channelSet = new Set();
+
+  const envChannels = [
+    process.env.TELEGRAM_CHANNELS,
+    process.env.TELEGRAM_CHANNEL_ID,
+  ].filter(Boolean).join(",");
+
+  for (const raw of envChannels.split(/[,\s]+/)) {
+    const ch = raw.trim().replace(/^["']|["']$/g, "");
+    if (ch) channelSet.add(ch);
+  }
+
+  try {
+    if (existsSync("/etc/zoru/telegram.env")) {
+      const content = readFileSync("/etc/zoru/telegram.env", "utf8");
+      const m1 = content.match(/TELEGRAM_CHANNELS\s*=\s*["']?([^"'\r\n]+)/);
+      const m2 = content.match(/TELEGRAM_CHANNEL_ID\s*=\s*["']?([^"'\r\n]+)/);
+      const fileVals = [m1?.[1], m2?.[1]].filter(Boolean).join(",");
+      for (const raw of fileVals.split(/[,\s]+/)) {
+        const ch = raw.trim().replace(/^["']|["']$/g, "");
+        if (ch) channelSet.add(ch);
+      }
+    }
+  } catch {}
+
+  if (database) {
+    try {
+      const { data: rows } = await database
+        .from("site_settings")
+        .select("key, value")
+        .in("key", ["telegram_broadcast_channels", "telegram_channels", "telegram_channel_id", "telegram_channel"]);
+      for (const r of rows ?? []) {
+        if (!r?.value) continue;
+        const str = String(r.value).trim();
+        if (str.startsWith("[") && str.endsWith("]")) {
+          try {
+            const arr = JSON.parse(str);
+            if (Array.isArray(arr)) {
+              for (const item of arr) {
+                const s = String(item).trim().replace(/^["']|["']$/g, "");
+                if (s) channelSet.add(s);
+              }
+              continue;
+            }
+          } catch {}
+        }
+        for (const part of str.split(/[,\s]+/)) {
+          const s = part.trim().replace(/^["']|["']$/g, "");
+          if (s) channelSet.add(s);
+        }
+      }
+    } catch {}
+  }
+
+  if (channelSet.size === 0) {
+    channelSet.add("@zorushop");
+  }
+
+  return Array.from(channelSet);
+}
+
 function publicBase(base) {
   if (!base) return "FRESH_BASE";
   return base.replace(/^\s*(admin|seller)[\s_\-.:]+/i, "");
 }
 
 async function main() {
+  const channels = await getAllBroadcastChannels(db);
   console.log("=================================================");
   console.log("⚡ ZORU SHOP — BROADCAST EXISTING BASES TO TELEGRAM ⚡");
   console.log("=================================================");
   console.log(`Backend API: ${supabaseUrl}`);
-  console.log(`Channel: ${telegramChannel}`);
+  console.log(`Channels (${channels.length}): ${channels.join(", ")}`);
   console.log(`Update Bot: token prefix ${telegramToken.slice(0, 10)}...`);
 
   // Parse --limit argument if provided
@@ -143,15 +205,27 @@ async function main() {
   console.log(`Total distinct bases found: ${baseList.length}`);
   console.log(`Bases to broadcast: ${toBroadcast.length}\n`);
 
-  // Fetch registered subscribers
+  // Fetch registered subscribers and bot users
+  const subscriberIds = new Set();
   const { data: subs } = await db
     .from("update_bot_subscribers")
     .select("telegram_id")
     .eq("subscribed", true)
-    .limit(500);
+    .limit(2000);
+  for (const s of subs ?? []) {
+    if (s.telegram_id) subscriberIds.add(s.telegram_id);
+  }
 
-  const subscriberCount = subs?.length || 0;
-  console.log(`Found ${subscriberCount} registered update bot subscriber(s).`);
+  const { data: tgUsers } = await db
+    .from("telegram_accounts")
+    .select("telegram_id")
+    .eq("banned", false)
+    .limit(3000);
+  for (const u of tgUsers ?? []) {
+    if (u.telegram_id) subscriberIds.add(u.telegram_id);
+  }
+
+  console.log(`Found ${subscriberIds.size} unique bot subscriber(s) for direct alerts.`);
 
   let sentCount = 0;
   let failCount = 0;
@@ -171,7 +245,7 @@ async function main() {
       ``,
       `🛒 <b>Shop Now:</b> <a href="https://zoru.cc/shop">zoru.cc/shop</a>`,
       `🤖 <b>Checker Bot:</b> <a href="https://t.me/ZoruCheckerbot">@ZoruCheckerbot</a>`,
-      `📢 <b>Official Channel:</b> ${telegramChannel}`,
+      `📢 <b>Official Channel:</b> ${channels[0] || "@zorushop"}`,
       `💬 <b>Support:</b> @Zorushop_service`,
       `━━━━━━━━━━━━━━━━━━━━━━`,
     ].join("\n");
@@ -190,46 +264,54 @@ async function main() {
     };
 
     try {
-      // 1. Post to channel
-      const res = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: telegramChannel,
-          text,
-          parse_mode: "HTML",
-          disable_web_page_preview: true,
-          reply_markup: replyMarkup,
-        }),
-        signal: AbortSignal.timeout(10000),
-      });
+      // 1. Post to ALL registered channels
+      for (const ch of channels) {
+        try {
+          const res = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: ch,
+              text,
+              parse_mode: "HTML",
+              disable_web_page_preview: true,
+              reply_markup: replyMarkup,
+            }),
+            signal: AbortSignal.timeout(10000),
+          });
 
-      const json = await res.json();
-      if (res.ok && json.ok) {
-        sentCount++;
-        console.log(`[${i + 1}/${toBroadcast.length}] ✔ Broadcasted ${pBase} (${b.count} cards, $${b.price})`);
-      } else {
-        failCount++;
-        console.warn(`[${i + 1}/${toBroadcast.length}] ❌ Failed to broadcast ${pBase}: ${json.description || res.statusText}`);
+          const json = await res.json().catch(() => ({}));
+          if (res.ok && json.ok) {
+            sentCount++;
+            console.log(`[${i + 1}/${toBroadcast.length}] ✔ Broadcasted ${pBase} to ${ch} (${b.count} cards, $${b.price})`);
+          } else {
+            failCount++;
+            console.warn(`[${i + 1}/${toBroadcast.length}] ❌ Failed to broadcast ${pBase} to ${ch}: ${json.description || res.statusText}`);
+          }
+        } catch (chErr) {
+          failCount++;
+          console.error(`[${i + 1}/${toBroadcast.length}] ❌ Network error for ${pBase} on ${ch}:`, chErr.message);
+        }
       }
 
       // 2. Post to update bot subscribers
-      for (const s of subs ?? []) {
+      for (const tid of subscriberIds) {
         fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            chat_id: s.telegram_id,
+            chat_id: tid,
             text,
             parse_mode: "HTML",
             disable_web_page_preview: true,
             reply_markup: replyMarkup,
           }),
         }).catch(() => {});
+        await new Promise((r) => setTimeout(r, 40));
       }
     } catch (err) {
       failCount++;
-      console.error(`[${i + 1}/${toBroadcast.length}] ❌ Network error for ${pBase}:`, err.message);
+      console.error(`[${i + 1}/${toBroadcast.length}] ❌ Error for ${pBase}:`, err.message);
     }
 
     // Rate limit throttle: 600ms between each message

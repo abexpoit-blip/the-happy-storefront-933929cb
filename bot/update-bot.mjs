@@ -146,6 +146,180 @@ async function setSubscribed(userId, subscribed) {
   }
 }
 
+/* ── Multi-Channel Management ── */
+export async function getAllBroadcastChannels(database = db) {
+  const channelSet = new Set();
+
+  const envChannels = [
+    process.env.TELEGRAM_CHANNELS,
+    process.env.TELEGRAM_CHANNEL_ID,
+  ].filter(Boolean).join(",");
+
+  for (const raw of envChannels.split(/[,\s]+/)) {
+    const ch = raw.trim().replace(/^["']|["']$/g, "");
+    if (ch) channelSet.add(ch);
+  }
+
+  try {
+    if (existsSync("/etc/zoru/telegram.env")) {
+      const content = readFileSync("/etc/zoru/telegram.env", "utf8");
+      const m1 = content.match(/TELEGRAM_CHANNELS\s*=\s*["']?([^"'\r\n]+)/);
+      const m2 = content.match(/TELEGRAM_CHANNEL_ID\s*=\s*["']?([^"'\r\n]+)/);
+      const fileVals = [m1?.[1], m2?.[1]].filter(Boolean).join(",");
+      for (const raw of fileVals.split(/[,\s]+/)) {
+        const ch = raw.trim().replace(/^["']|["']$/g, "");
+        if (ch) channelSet.add(ch);
+      }
+    }
+  } catch {}
+
+  if (database) {
+    try {
+      const { data: rows } = await database
+        .from("site_settings")
+        .select("key, value")
+        .in("key", ["telegram_broadcast_channels", "telegram_channels", "telegram_channel_id", "telegram_channel"]);
+      for (const r of rows ?? []) {
+        if (!r?.value) continue;
+        const str = String(r.value).trim();
+        if (str.startsWith("[") && str.endsWith("]")) {
+          try {
+            const arr = JSON.parse(str);
+            if (Array.isArray(arr)) {
+              for (const item of arr) {
+                const s = String(item).trim().replace(/^["']|["']$/g, "");
+                if (s) channelSet.add(s);
+              }
+              continue;
+            }
+          } catch {}
+        }
+        for (const part of str.split(/[,\s]+/)) {
+          const s = part.trim().replace(/^["']|["']$/g, "");
+          if (s) channelSet.add(s);
+        }
+      }
+    } catch {}
+  }
+
+  if (channelSet.size === 0) {
+    channelSet.add("@zorushop");
+  }
+
+  return Array.from(channelSet);
+}
+
+async function registerBroadcastChannel(chat, sendGreeting = true) {
+  if (!db || !chat) return;
+  try {
+    const channelUsername = chat.username ? `@${chat.username}` : null;
+    const channelIdStr = String(chat.id);
+    const primaryId = channelUsername || channelIdStr;
+
+    const { data: row } = await db
+      .from("site_settings")
+      .select("value")
+      .eq("key", "telegram_broadcast_channels")
+      .maybeSingle();
+
+    const channelSet = new Set();
+    if (row?.value) {
+      const val = String(row.value).trim();
+      if (val.startsWith("[") && val.endsWith("]")) {
+        try {
+          const arr = JSON.parse(val);
+          if (Array.isArray(arr)) arr.forEach((x) => channelSet.add(String(x).trim()));
+        } catch {}
+      } else {
+        val.split(/[,\s]+/).forEach((x) => x.trim() && channelSet.add(x.trim()));
+      }
+    }
+
+    const wasAlreadyRegistered = channelSet.has(primaryId) || channelSet.has(channelIdStr);
+    channelSet.add(primaryId);
+    if (channelIdStr) channelSet.add(channelIdStr);
+
+    if (!wasAlreadyRegistered) {
+      await db.from("site_settings").upsert({
+        key: "telegram_broadcast_channels",
+        value: JSON.stringify(Array.from(channelSet)),
+      });
+      console.log(`[Update Bot] 📢 Successfully registered new broadcast channel: ${primaryId} (${chat.title || "Channel"})`);
+
+      if (sendGreeting) {
+        await tg("sendMessage", {
+          chat_id: chat.id,
+          text: [
+            `⚡ <b>ZORU SHOP — BASE UPDATE BOT CONNECTED!</b> ⚡`,
+            `━━━━━━━━━━━━━━━━━━━━━━`,
+            `✅ <b>Channel Registered:</b> <code>${esc(chat.title || primaryId)}</code>`,
+            `🔔 This channel will now automatically receive real-time base restocks, drops & verified card alerts.`,
+            ``,
+            `🛒 <b>Storefront:</b> <a href="${BASE}/shop">zoru.cc/shop</a>`,
+            `🤖 <b>Card Checker:</b> <a href="https://t.me/${CHECKER_BOT_USERNAME}">@${CHECKER_BOT_USERNAME}</a>`,
+            `💬 <b>Support:</b> @${SUPPORT_USERNAME}`,
+            `━━━━━━━━━━━━━━━━━━━━━━`,
+          ].join("\n"),
+          parse_mode: "HTML",
+          disable_web_page_preview: true,
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "🛒 Open Shop", url: `${BASE}/shop` },
+                { text: "🤖 Checker Bot", url: `https://t.me/${CHECKER_BOT_USERNAME}` },
+              ],
+              [
+                { text: "💬 Support", url: `https://t.me/${SUPPORT_USERNAME}` },
+              ],
+            ],
+          },
+        }).catch((err) => {
+          console.warn(`[Update Bot] Greeting message skipped for ${primaryId}:`, err.message);
+        });
+      }
+    }
+  } catch (err) {
+    console.error(`[Update Bot] Error registering channel:`, err.message);
+  }
+}
+
+async function unregisterBroadcastChannel(chat) {
+  if (!db || !chat) return;
+  try {
+    const channelUsername = chat.username ? `@${chat.username}` : null;
+    const channelIdStr = String(chat.id);
+
+    const { data: row } = await db
+      .from("site_settings")
+      .select("value")
+      .eq("key", "telegram_broadcast_channels")
+      .maybeSingle();
+
+    if (!row?.value) return;
+    const channelSet = new Set();
+    const val = String(row.value).trim();
+    if (val.startsWith("[") && val.endsWith("]")) {
+      try {
+        const arr = JSON.parse(val);
+        if (Array.isArray(arr)) arr.forEach((x) => channelSet.add(String(x).trim()));
+      } catch {}
+    } else {
+      val.split(/[,\s]+/).forEach((x) => x.trim() && channelSet.add(x.trim()));
+    }
+
+    if (channelUsername) channelSet.delete(channelUsername);
+    if (channelIdStr) channelSet.delete(channelIdStr);
+
+    await db.from("site_settings").upsert({
+      key: "telegram_broadcast_channels",
+      value: JSON.stringify(Array.from(channelSet)),
+    });
+    console.log(`[Update Bot] 🔕 Channel unregistered: ${channelUsername || channelIdStr}`);
+  } catch (err) {
+    console.error(`[Update Bot] Error unregistering channel:`, err.message);
+  }
+}
+
 /* ── UI Keyboards ── */
 function buildMenuKeyboard(isSubscribed = true) {
   const notifLabel = isSubscribed ? "🔔 Notifications: ON" : "🔕 Notifications: MUTED";
@@ -475,12 +649,26 @@ async function handleMessage(msg) {
         `/subscribe — Enable private drop notifications`,
         `/unsubscribe — Mute private drop notifications`,
         `/channel — Official announcements channel`,
+        `/channels — View registered broadcast channels`,
         `/checker — Switch to Card Checker Bot`,
         `/shop — Open official card store`,
         `/support — Contact 24/7 customer service`,
         `━━━━━━━━━━━━━━━━━━━`,
       ].join("\n"));
       return;
+
+    case "/channels":
+    case "/broadcast_channels": {
+      const bChannels = await getAllBroadcastChannels(db);
+      await send(chat, [
+        `📢 <b>Active Broadcast Channels:</b>`,
+        `━━━━━━━━━━━━━━━━━━━`,
+        ...bChannels.map((c) => `• <code>${esc(c)}</code>`),
+        `━━━━━━━━━━━━━━━━━━━`,
+        `<i>All base restocks and drop notices are automatically delivered to every channel above.</i>`,
+      ].join("\n"));
+      return;
+    }
   }
 
   // Reply Keyboard Clicks
@@ -549,9 +737,10 @@ async function handleCallback(q) {
 /* ------------------------------------------------------------------ */
 async function main() {
   const identity = await tg("getMe", {});
+  const activeChannels = await getAllBroadcastChannels(db);
   console.log("=================================================");
   console.log(`🤖 Zoru Update Bot Authenticated: @${identity.username} (ID: ${identity.id})`);
-  console.log(`Channel: ${CHANNEL}`);
+  console.log(`Broadcast Channels: ${activeChannels.join(", ")}`);
   console.log(`Storefront: ${BASE}`);
   console.log("=================================================");
 
@@ -563,6 +752,7 @@ async function main() {
       { command: "latest", description: "📦 View latest base restocks" },
       { command: "subscribe", description: "🔔 Enable drop notifications" },
       { command: "unsubscribe", description: "🔕 Mute drop notifications" },
+      { command: "channels", description: "📢 View broadcast channels" },
       { command: "checker", description: "💳 Card Checker Bot (@ZoruCheckerbot)" },
       { command: "shop", description: "🛒 Official card shop" },
       { command: "channel", description: "📢 Official announcements channel" },
@@ -576,11 +766,44 @@ async function main() {
     try {
       const updates = await tg(
         "getUpdates",
-        { offset, timeout: TELEGRAM_POLL_TIMEOUT_SECONDS, allowed_updates: ["message", "callback_query"] },
+        {
+          offset,
+          timeout: TELEGRAM_POLL_TIMEOUT_SECONDS,
+          allowed_updates: [
+            "message",
+            "callback_query",
+            "channel_post",
+            "edited_channel_post",
+            "my_chat_member",
+            "chat_member",
+          ],
+        },
         TELEGRAM_POLL_REQUEST_TIMEOUT_MS
       );
       for (const u of updates ?? []) {
         offset = u.update_id + 1;
+
+        // Auto-detect bot being added to channel or group as administrator / member
+        if (u.my_chat_member) {
+          const mChat = u.my_chat_member.chat;
+          const status = u.my_chat_member.new_chat_member?.status;
+          if (mChat && (mChat.type === "channel" || mChat.type === "supergroup" || mChat.type === "group")) {
+            if (status === "administrator" || status === "member") {
+              registerBroadcastChannel(mChat, true).catch(console.error);
+            } else if (status === "left" || status === "kicked") {
+              unregisterBroadcastChannel(mChat).catch(console.error);
+            }
+          }
+        }
+
+        // Auto-detect channel posts
+        if (u.channel_post?.chat) {
+          const pChat = u.channel_post.chat;
+          if (pChat && (pChat.type === "channel" || pChat.type === "supergroup")) {
+            registerBroadcastChannel(pChat, false).catch(console.error);
+          }
+        }
+
         const chat = u.message?.chat?.id ?? u.callback_query?.message?.chat?.id;
         if (chat) {
           if (u.message) handleMessage(u.message).catch(console.error);

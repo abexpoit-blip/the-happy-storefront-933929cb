@@ -30,6 +30,7 @@ export interface BotSettings {
   referral_bonus: number;
   bot_admin_contact: string;
   bot_website_url: string;
+  telegram_broadcast_channels: string;
 }
 
 export interface BroadcastRow {
@@ -83,10 +84,20 @@ export const getBotSettings = createServerFn({ method: "GET" })
       "bot_maintenance", "bot_maintenance_msg", "bot_notice",
       "checker_enabled", "min_deposit", "check_credit_cost", "credits_per_usd",
       "bot_referral_bonus", "referral_bonus", "bot_admin_contact", "bot_website_url",
+      "telegram_broadcast_channels",
     ];
     const { data: rows } = await db.from("site_settings").select("key, value").in("key", keys);
     const map: Record<string, string> = {};
     for (const r of rows ?? []) map[(r as { key: string; value: string }).key] = (r as { key: string; value: string }).value;
+
+    let channelsStr = map["telegram_broadcast_channels"] || "@zorushop";
+    if (channelsStr.startsWith("[") && channelsStr.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(channelsStr);
+        if (Array.isArray(parsed)) channelsStr = parsed.join(", ");
+      } catch {}
+    }
+
     return {
       bot_maintenance: map["bot_maintenance"] === "true",
       bot_maintenance_msg: map["bot_maintenance_msg"] ?? "🔧 Under maintenance.",
@@ -98,6 +109,7 @@ export const getBotSettings = createServerFn({ method: "GET" })
       referral_bonus: Number(map["bot_referral_bonus"] ?? 0.10),
       bot_admin_contact: map["bot_admin_contact"] ?? "https://t.me/Zorushop_service",
       bot_website_url: map["bot_website_url"] ?? "https://zoru.cc/",
+      telegram_broadcast_channels: channelsStr,
     };
   });
 
@@ -115,6 +127,7 @@ export const saveBotSettings = createServerFn({ method: "POST" })
       referral_bonus: z.number().min(0).optional(),
       bot_admin_contact: z.string().max(300).optional(),
       bot_website_url: z.string().max(300).optional(),
+      telegram_broadcast_channels: z.string().max(1000).optional(),
     }).parse(input ?? {})
   )
   .handler(async ({ data, context }) => {
@@ -133,6 +146,14 @@ export const saveBotSettings = createServerFn({ method: "POST" })
     if (data.referral_bonus !== undefined) pairs.push(["bot_referral_bonus", String(data.referral_bonus)]);
     if (data.bot_admin_contact !== undefined) pairs.push(["bot_admin_contact", data.bot_admin_contact]);
     if (data.bot_website_url !== undefined) pairs.push(["bot_website_url", data.bot_website_url]);
+    if (data.telegram_broadcast_channels !== undefined) {
+      // Normalize into clean list
+      const chList = data.telegram_broadcast_channels
+        .split(/[,\s]+/)
+        .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+        .filter(Boolean);
+      pairs.push(["telegram_broadcast_channels", JSON.stringify(chList)]);
+    }
     await Promise.all(
       pairs.map(([k, v]) =>
         db.from("site_settings").upsert({ key: k, value: v }, { onConflict: "key" })

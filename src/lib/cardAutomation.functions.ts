@@ -36,6 +36,69 @@ export function getTelegramChannelId(): string {
   return ch || "@zorushop";
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getAllBroadcastChannels(db?: any): Promise<string[]> {
+  const channelSet = new Set<string>();
+
+  const envChannels = [
+    process.env.TELEGRAM_CHANNELS,
+    process.env.TELEGRAM_CHANNEL_ID,
+  ].filter(Boolean).join(",");
+
+  for (const raw of envChannels.split(/[,\s]+/)) {
+    const ch = raw.trim().replace(/^["']|["']$/g, "");
+    if (ch) channelSet.add(ch);
+  }
+
+  try {
+    if (fs.existsSync("/etc/zoru/telegram.env")) {
+      const content = fs.readFileSync("/etc/zoru/telegram.env", "utf8");
+      const m1 = content.match(/TELEGRAM_CHANNELS\s*=\s*["']?([^"'\r\n]+)/);
+      const m2 = content.match(/TELEGRAM_CHANNEL_ID\s*=\s*["']?([^"'\r\n]+)/);
+      const fileVals = [m1?.[1], m2?.[1]].filter(Boolean).join(",");
+      for (const raw of fileVals.split(/[,\s]+/)) {
+        const ch = raw.trim().replace(/^["']|["']$/g, "");
+        if (ch) channelSet.add(ch);
+      }
+    }
+  } catch {}
+
+  if (db) {
+    try {
+      const { data: rows } = await db
+        .from("site_settings")
+        .select("key, value")
+        .in("key", ["telegram_broadcast_channels", "telegram_channels", "telegram_channel_id", "telegram_channel"]);
+      for (const r of rows ?? []) {
+        if (!r?.value) continue;
+        const str = String(r.value).trim();
+        if (str.startsWith("[") && str.endsWith("]")) {
+          try {
+            const arr = JSON.parse(str);
+            if (Array.isArray(arr)) {
+              for (const item of arr) {
+                const s = String(item).trim().replace(/^["']|["']$/g, "");
+                if (s) channelSet.add(s);
+              }
+              continue;
+            }
+          } catch {}
+        }
+        for (const part of str.split(/[,\s]+/)) {
+          const s = part.trim().replace(/^["']|["']$/g, "");
+          if (s) channelSet.add(s);
+        }
+      }
+    } catch {}
+  }
+
+  if (channelSet.size === 0) {
+    channelSet.add("@zorushop");
+  }
+
+  return Array.from(channelSet);
+}
+
 export interface DripQueueRow {
   id: string;
   name: string;
@@ -104,7 +167,11 @@ export const broadcastChannelAlert = createServerFn({ method: "POST" })
       return { ok: false, error: "TELEGRAM_BOT_TOKEN not configured on server" };
     }
 
-    const channelId = getTelegramChannelId();
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabaseAdmin as any;
+    const channels = await getAllBroadcastChannels(db);
+
     const pBase = publicBase(data.baseName);
     const brandStr = data.brand || "VISA/MC";
     const countryStr = data.country || "MIX";
@@ -122,7 +189,7 @@ export const broadcastChannelAlert = createServerFn({ method: "POST" })
       data.customNote ? `📝 <b>Note:</b> ${data.customNote}\n` : ``,
       `🛒 <b>Shop Now:</b> <a href="https://zoru.cc/shop">zoru.cc/shop</a>`,
       `🤖 <b>Checker Bot:</b> <a href="https://t.me/ZoruCheckerbot">@ZoruCheckerbot</a>`,
-      `📢 <b>Official Channel:</b> ${channelId}`,
+      `📢 <b>Official Channel:</b> ${channels[0] || "@zorushop"}`,
       `💬 <b>Support:</b> @Zorushop_service`,
       `━━━━━━━━━━━━━━━━━━━━━━`,
     ]
@@ -142,53 +209,77 @@ export const broadcastChannelAlert = createServerFn({ method: "POST" })
       ],
     };
 
-    try {
-      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: channelId,
-          text,
-          parse_mode: "HTML",
-          disable_web_page_preview: true,
-          reply_markup: replyMarkup,
-        }),
-        signal: AbortSignal.timeout(10000),
-      });
+    let delivered = 0;
+    const errors: string[] = [];
 
-      const json = await res.json();
-      
-      // Also push to update bot subscribers
+    // 1. Broadcast to ALL channels
+    for (const ch of channels) {
       try {
-        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: subs } = await (supabaseAdmin as any)
-          .from("update_bot_subscribers")
-          .select("telegram_id")
-          .eq("subscribed", true)
-          .limit(500);
-        for (const s of subs ?? []) {
-          fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: s.telegram_id,
-              text,
-              parse_mode: "HTML",
-              disable_web_page_preview: true,
-              reply_markup: replyMarkup,
-            }),
-          }).catch(() => {});
+        const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: ch,
+            text,
+            parse_mode: "HTML",
+            disable_web_page_preview: true,
+            reply_markup: replyMarkup,
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (res.ok && json.ok) {
+          delivered++;
+        } else {
+          errors.push(`${ch}: ${json.description || res.statusText}`);
         }
-      } catch {}
-
-      if (!res.ok || !json.ok) {
-        return { ok: false, error: json.description || `Telegram API error: ${res.status}` };
+      } catch (e: unknown) {
+        errors.push(`${ch}: ${e instanceof Error ? e.message : String(e)}`);
       }
-      return { ok: true };
-    } catch (e: unknown) {
-      return { ok: false, error: e instanceof Error ? e.message : "Failed to broadcast to Telegram" };
     }
+
+    // 2. Also push to update bot subscribers & active bot users
+    try {
+      const subscriberIds = new Set<string | number>();
+      const { data: subs } = await db
+        .from("update_bot_subscribers")
+        .select("telegram_id")
+        .eq("subscribed", true)
+        .limit(2000);
+      for (const s of subs ?? []) {
+        if (s.telegram_id) subscriberIds.add(s.telegram_id);
+      }
+
+      const { data: tgUsers } = await db
+        .from("telegram_accounts")
+        .select("telegram_id")
+        .eq("banned", false)
+        .limit(3000);
+      for (const u of tgUsers ?? []) {
+        if (u.telegram_id) subscriberIds.add(u.telegram_id);
+      }
+
+      for (const tid of subscriberIds) {
+        fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: tid,
+            text,
+            parse_mode: "HTML",
+            disable_web_page_preview: true,
+            reply_markup: replyMarkup,
+          }),
+          signal: AbortSignal.timeout(6000),
+        }).catch(() => {});
+        await new Promise((r) => setTimeout(r, 40));
+      }
+    } catch {}
+
+    if (delivered > 0) {
+      return { ok: true, delivered, channelsCount: channels.length };
+    }
+    return { ok: false, error: errors.join(", ") || "Failed to broadcast to Telegram" };
   });
 
 /**
@@ -206,10 +297,11 @@ export const broadcastAllExistingBasesAlert = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabaseAdmin as any;
 
     // Fetch active products with stock > 0 that have a base
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: prods, error: pErr } = await (supabaseAdmin as any)
+    const { data: prods, error: pErr } = await db
       .from("products")
       .select("base, brand, country, price, stock, active")
       .eq("active", true)
@@ -218,14 +310,12 @@ export const broadcastAllExistingBasesAlert = createServerFn({ method: "POST" })
       .limit(10000);
 
     if (pErr) return { ok: false, error: pErr.message };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (!prods || (prods as any[]).length === 0) {
       return { ok: false, error: "No active products with bases found in shop." };
     }
 
     // Group by base
     const baseMap = new Map<string, { count: number; brands: Set<string>; countries: Set<string>; totalPrice: number }>();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const p of prods as any[]) {
       if (!p.base) continue;
       const b = p.base;
@@ -261,7 +351,29 @@ export const broadcastAllExistingBasesAlert = createServerFn({ method: "POST" })
 
     const token = getTelegramBotToken();
     if (!token) return { ok: false, error: "TELEGRAM_BOT_TOKEN not configured on server" };
-    const channelId = getTelegramChannelId();
+    const channels = await getAllBroadcastChannels(db);
+
+    // Fetch subscribers once
+    const subscriberIds = new Set<string | number>();
+    try {
+      const { data: subs } = await db
+        .from("update_bot_subscribers")
+        .select("telegram_id")
+        .eq("subscribed", true)
+        .limit(2000);
+      for (const s of subs ?? []) {
+        if (s.telegram_id) subscriberIds.add(s.telegram_id);
+      }
+
+      const { data: tgUsers } = await db
+        .from("telegram_accounts")
+        .select("telegram_id")
+        .eq("banned", false)
+        .limit(3000);
+      for (const u of tgUsers ?? []) {
+        if (u.telegram_id) subscriberIds.add(u.telegram_id);
+      }
+    } catch {}
 
     let sentCount = 0;
     let failedCount = 0;
@@ -280,7 +392,7 @@ export const broadcastAllExistingBasesAlert = createServerFn({ method: "POST" })
         `⚡ <b>Delivery:</b> Instant Automated Delivery`,
         `🛒 <b>Shop Now:</b> <a href="https://zoru.cc/shop">zoru.cc/shop</a>`,
         `🤖 <b>Checker Bot:</b> <a href="https://t.me/ZoruCheckerbot">@ZoruCheckerbot</a>`,
-        `📢 <b>Official Channel:</b> ${channelId}`,
+        `📢 <b>Official Channel:</b> ${channels[0] || "@zorushop"}`,
         `💬 <b>Support:</b> @Zorushop_service`,
         `━━━━━━━━━━━━━━━━━━━━━━`,
       ].join("\n");
@@ -298,46 +410,42 @@ export const broadcastAllExistingBasesAlert = createServerFn({ method: "POST" })
         ],
       };
 
-      try {
-        const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      // Broadcast to all channels
+      for (const ch of channels) {
+        try {
+          const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: ch,
+              text,
+              parse_mode: "HTML",
+              disable_web_page_preview: true,
+              reply_markup: replyMarkup,
+            }),
+            signal: AbortSignal.timeout(10000),
+          });
+          if (res.ok) sentCount++;
+          else failedCount++;
+        } catch {
+          failedCount++;
+        }
+      }
+
+      // Push to subscribers
+      for (const tid of subscriberIds) {
+        fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            chat_id: channelId,
+            chat_id: tid,
             text,
             parse_mode: "HTML",
             disable_web_page_preview: true,
             reply_markup: replyMarkup,
           }),
-          signal: AbortSignal.timeout(10000),
-        });
-        if (res.ok) sentCount++;
-        else failedCount++;
-
-        // Push to update bot subscribers
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: subs } = await (supabaseAdmin as any)
-            .from("update_bot_subscribers")
-            .select("telegram_id")
-            .eq("subscribed", true)
-            .limit(500);
-          for (const s of subs ?? []) {
-            fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                chat_id: s.telegram_id,
-                text,
-                parse_mode: "HTML",
-                disable_web_page_preview: true,
-                reply_markup: replyMarkup,
-              }),
-            }).catch(() => {});
-          }
-        } catch {}
-      } catch {
-        failedCount++;
+        }).catch(() => {});
+        await new Promise((r) => setTimeout(r, 40));
       }
 
       if (i < toBroadcast.length - 1) {
@@ -345,7 +453,7 @@ export const broadcastAllExistingBasesAlert = createServerFn({ method: "POST" })
       }
     }
 
-    return { ok: true, totalBases: baseList.length, broadcasted: sentCount, failed: failedCount };
+    return { ok: true, totalBases: baseList.length, broadcasted: sentCount, failed: failedCount, channelsCount: channels.length };
   });
 
 /**
@@ -359,7 +467,11 @@ export const testTelegramAlert = createServerFn({ method: "POST" })
     if (!token) {
       return { ok: false, error: "TELEGRAM_BOT_TOKEN is missing on server in /etc/zoru/telegram.env" };
     }
-    const channelId = getTelegramChannelId();
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabaseAdmin as any;
+    const channels = await getAllBroadcastChannels(db);
 
     // 1. Verify Bot identity
     let botUser = "unknown";
@@ -374,60 +486,50 @@ export const testTelegramAlert = createServerFn({ method: "POST" })
       return { ok: false, error: `Failed to connect to Telegram API: ${err instanceof Error ? err.message : String(err)}` };
     }
 
-    // 2. Try sending test message to channel
+    // 2. Try sending test message to ALL channels
     const text = [
       `⚡ <b>ZORU SHOP — BOT ALERT DIAGNOSTIC</b> ⚡`,
       `━━━━━━━━━━━━━━━━━━━━━━`,
       `✅ <b>Status:</b> Alert system is active & functioning!`,
       `🤖 <b>Bot:</b> @${botUser}`,
-      `📢 <b>Channel:</b> ${channelId}`,
+      `📢 <b>Channels (${channels.length}):</b> ${channels.join(", ")}`,
       `🕒 <b>Time:</b> ${new Date().toUTCString()}`,
       `━━━━━━━━━━━━━━━━━━━━━━`,
     ].join("\n");
 
-    try {
-      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: channelId,
-          text,
-          parse_mode: "HTML",
-          disable_web_page_preview: true,
-        }),
-        signal: AbortSignal.timeout(10000),
-      });
-
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        const desc = json.description || `HTTP ${res.status}`;
-        let hint = "";
-        if (json.error_code === 400 || json.error_code === 403) {
-          hint = `Make sure the bot @${botUser} has been added to channel ${channelId} as an Administrator with "Post Messages" permission!`;
+    let sent = 0;
+    const errors: string[] = [];
+    for (const ch of channels) {
+      try {
+        const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: ch,
+            text,
+            parse_mode: "HTML",
+            disable_web_page_preview: true,
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (res.ok && json.ok) {
+          sent++;
+        } else {
+          errors.push(`${ch}: ${json.description || res.statusText}`);
         }
-        return {
-          ok: false,
-          botUser,
-          channelId,
-          error: desc,
-          hint,
-        };
+      } catch (err: unknown) {
+        errors.push(`${ch}: ${err instanceof Error ? err.message : String(err)}`);
       }
-
-      return {
-        ok: true,
-        botUser,
-        channelId,
-        messageId: json.result?.message_id,
-      };
-    } catch (e: unknown) {
-      return {
-        ok: false,
-        botUser,
-        channelId,
-        error: e instanceof Error ? e.message : "Failed to send message to Telegram",
-      };
     }
+
+    const channelId = channels.join(", ");
+    const hint = `Make sure the bot @${botUser} has been added to channel(s) as an Administrator with "Post Messages" permission!`;
+
+    if (sent > 0) {
+      return { ok: true as const, botUser, channelId, channelsSent: sent, totalChannels: channels.length, hint };
+    }
+    return { ok: false as const, botUser, channelId, error: errors.join(", ") || "Failed to reach any Telegram channels", hint };
   });
 
 /**
@@ -953,7 +1055,7 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
     if (queue.telegram_broadcast) {
       const token = getTelegramBotToken();
       if (token) {
-        const channelId = getTelegramChannelId();
+        const channels = await getAllBroadcastChannels(db);
         const cleanBases = distinctBases.map(publicBase).join(" / ");
         const brandsList = [...new Set(products.map((p) => p.brand))].join(", ");
         const countries = [...new Set(stagedItems.map((it) => it.country).filter(Boolean))].join(", ") || "MIX";
@@ -963,42 +1065,85 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
           `📦 <b>Base:</b> <code>${cleanBases}</code>`,
           `🏷 <b>Brand:</b> ${brandsList}`,
           `🌍 <b>Country:</b> ${countries}`,
+          `💳 <b>Cards Added:</b> ${items.length} Verified Cards`,
           `⚡ <b>Delivery:</b> Instant Automated Delivery`,
           ``,
           `🛒 <b>Shop Now:</b> <a href="https://zoru.cc/shop">zoru.cc/shop</a>`,
           `🤖 <b>Checker Bot:</b> <a href="https://t.me/ZoruCheckerbot">@ZoruCheckerbot</a>`,
-          `📢 <b>Official Channel:</b> ${channelId}`,
+          `📢 <b>Official Channel:</b> ${channels[0] || "@zorushop"}`,
           `💬 <b>Support:</b> @Zorushop_service`,
           `━━━━━━━━━━━━━━━━━━━━━━`,
         ].join("\n");
 
-        try {
-          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: channelId,
-              text,
-              parse_mode: "HTML",
-              disable_web_page_preview: true,
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    { text: "🛒 Buy Cards Now", url: "https://zoru.cc/shop" },
-                    { text: "🤖 Telegram Checker Bot", url: "https://t.me/ZoruCheckerbot" },
-                  ],
-                  [
-                    { text: "💬 Support", url: "https://t.me/Zorushop_service" },
-                    { text: "📢 Official Channel", url: "https://t.me/zorushop" },
-                  ],
-                ],
-              },
-            }),
-          });
-          tgStatus = "sent";
-        } catch {
-          tgStatus = "failed";
+        const replyMarkup = {
+          inline_keyboard: [
+            [
+              { text: "🛒 Buy Cards Now", url: "https://zoru.cc/shop" },
+              { text: "🤖 Telegram Checker Bot", url: "https://t.me/ZoruCheckerbot" },
+            ],
+            [
+              { text: "💬 Support", url: "https://t.me/Zorushop_service" },
+              { text: "📢 Official Channel", url: "https://t.me/zorushop" },
+            ],
+          ],
+        };
+
+        // Broadcast to all channels
+        for (const ch of channels) {
+          try {
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: ch,
+                text,
+                parse_mode: "HTML",
+                disable_web_page_preview: true,
+                reply_markup: replyMarkup,
+              }),
+            });
+            tgStatus = "sent";
+          } catch {
+            if (tgStatus !== "sent") tgStatus = "failed";
+          }
         }
+
+        // Push to subscribers
+        try {
+          const subscriberIds = new Set<string | number>();
+          const { data: subs } = await db
+            .from("update_bot_subscribers")
+            .select("telegram_id")
+            .eq("subscribed", true)
+            .limit(2000);
+          for (const s of subs ?? []) {
+            if (s.telegram_id) subscriberIds.add(s.telegram_id);
+          }
+
+          const { data: tgUsers } = await db
+            .from("telegram_accounts")
+            .select("telegram_id")
+            .eq("banned", false)
+            .limit(3000);
+          for (const u of tgUsers ?? []) {
+            if (u.telegram_id) subscriberIds.add(u.telegram_id);
+          }
+
+          for (const tid of subscriberIds) {
+            fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: tid,
+                text,
+                parse_mode: "HTML",
+                disable_web_page_preview: true,
+                reply_markup: replyMarkup,
+              }),
+            }).catch(() => {});
+            await new Promise((r) => setTimeout(r, 40));
+          }
+        } catch {}
       }
     }
 

@@ -228,6 +228,69 @@ async function detectBinMeta(rawCC) {
   return res;
 }
 
+/* ── Multi-Channel Management ── */
+async function getAllBroadcastChannels(database = db) {
+  const channelSet = new Set();
+
+  const envChannels = [
+    process.env.TELEGRAM_CHANNELS,
+    process.env.TELEGRAM_CHANNEL_ID,
+  ].filter(Boolean).join(",");
+
+  for (const raw of envChannels.split(/[,\s]+/)) {
+    const ch = raw.trim().replace(/^["']|["']$/g, "");
+    if (ch) channelSet.add(ch);
+  }
+
+  try {
+    if (existsSync("/etc/zoru/telegram.env")) {
+      const content = readFileSync("/etc/zoru/telegram.env", "utf8");
+      const m1 = content.match(/TELEGRAM_CHANNELS\s*=\s*["']?([^"'\r\n]+)/);
+      const m2 = content.match(/TELEGRAM_CHANNEL_ID\s*=\s*["']?([^"'\r\n]+)/);
+      const fileVals = [m1?.[1], m2?.[1]].filter(Boolean).join(",");
+      for (const raw of fileVals.split(/[,\s]+/)) {
+        const ch = raw.trim().replace(/^["']|["']$/g, "");
+        if (ch) channelSet.add(ch);
+      }
+    }
+  } catch {}
+
+  if (database) {
+    try {
+      const { data: rows } = await database
+        .from("site_settings")
+        .select("key, value")
+        .in("key", ["telegram_broadcast_channels", "telegram_channels", "telegram_channel_id", "telegram_channel"]);
+      for (const r of rows ?? []) {
+        if (!r?.value) continue;
+        const str = String(r.value).trim();
+        if (str.startsWith("[") && str.endsWith("]")) {
+          try {
+            const arr = JSON.parse(str);
+            if (Array.isArray(arr)) {
+              for (const item of arr) {
+                const s = String(item).trim().replace(/^["']|["']$/g, "");
+                if (s) channelSet.add(s);
+              }
+              continue;
+            }
+          } catch {}
+        }
+        for (const part of str.split(/[,\s]+/)) {
+          const s = part.trim().replace(/^["']|["']$/g, "");
+          if (s) channelSet.add(s);
+        }
+      }
+    } catch {}
+  }
+
+  if (channelSet.size === 0) {
+    channelSet.add("@zorushop");
+  }
+
+  return Array.from(channelSet);
+}
+
 async function sendTelegramBroadcast(baseName, count, brand, country, price) {
   if (!telegramToken) {
     console.log("[Drip Worker] TELEGRAM_BOT_TOKEN not set, skipping TG broadcast.");
@@ -236,6 +299,8 @@ async function sendTelegramBroadcast(baseName, count, brand, country, price) {
 
   const cleanBase = baseName.replace(/^\s*(admin|seller)[\s_\-.:]+/i, "");
   const priceStr = price ? `$${Number(price).toFixed(2)}` : "$1.50";
+  const channels = await getAllBroadcastChannels(db);
+
   const text = [
     `⚡ <b>ZORU SHOP — NEW BASE UPDATE!</b> ⚡`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
@@ -248,79 +313,92 @@ async function sendTelegramBroadcast(baseName, count, brand, country, price) {
     ``,
     `🛒 <b>Shop Now:</b> <a href="https://zoru.cc/shop">zoru.cc/shop</a>`,
     `🤖 <b>Checker Bot:</b> <a href="https://t.me/ZoruCheckerbot">@ZoruCheckerbot</a>`,
-    `📢 <b>Official Channel:</b> ${telegramChannel}`,
+    `📢 <b>Official Channel:</b> ${channels[0] || "@zorushop"}`,
     `💬 <b>Support:</b> @Zorushop_service`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
   ]
     .filter(Boolean)
     .join("\n");
 
+  const replyMarkup = {
+    inline_keyboard: [
+      [
+        { text: "🛒 Buy Cards Now", url: "https://zoru.cc/shop" },
+        { text: "🤖 Checker Bot", url: "https://t.me/ZoruCheckerbot" },
+      ],
+      [
+        { text: "💬 Support", url: "https://t.me/Zorushop_service" },
+        { text: "📢 Official Channel", url: "https://t.me/zorushop" },
+      ],
+    ],
+  };
+
+  // 1. Broadcast to ALL channels
+  for (const ch of channels) {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: ch,
+          text,
+          parse_mode: "HTML",
+          disable_web_page_preview: true,
+          reply_markup: replyMarkup,
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.ok) {
+        console.log(`[Drip Worker] ✅ Telegram alert sent to channel ${ch}`);
+      } else {
+        console.warn(`[Drip Worker] ⚠️ Telegram alert to ${ch} failed:`, json.description || res.statusText);
+      }
+    } catch (err) {
+      console.warn(`[Drip Worker] ❌ Telegram broadcast network error for ${ch}:`, err.message);
+    }
+  }
+
+  // 2. Also push to all registered update bot subscribers & active bot users
   try {
-    const res = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: telegramChannel,
-        text,
-        parse_mode: "HTML",
-        disable_web_page_preview: true,
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: "🛒 Buy Cards Now", url: "https://zoru.cc/shop" },
-              { text: "🤖 Checker Bot", url: "https://t.me/ZoruCheckerbot" },
-            ],
-            [
-              { text: "💬 Support", url: "https://t.me/Zorushop_service" },
-              { text: "📢 Official Channel", url: "https://t.me/zorushop" },
-            ],
-          ],
-        },
-      }),
-    });
-    const json = await res.json();
-    if (res.ok && json.ok) {
-      console.log(`[Drip Worker] Telegram alert sent to ${telegramChannel}`);
-    } else {
-      console.error(`[Drip Worker] Telegram alert error:`, json.description || res.statusText);
+    const subscriberIds = new Set();
+
+    const { data: subs } = await db
+      .from("update_bot_subscribers")
+      .select("telegram_id")
+      .eq("subscribed", true)
+      .limit(2000);
+    for (const s of subs ?? []) {
+      if (s.telegram_id) subscriberIds.add(s.telegram_id);
     }
 
-    // Also push to all registered update bot subscribers
-    try {
-      const { data: subs } = await db
-        .from("update_bot_subscribers")
-        .select("telegram_id")
-        .eq("subscribed", true)
-        .limit(500);
+    const { data: tgUsers } = await db
+      .from("telegram_accounts")
+      .select("telegram_id")
+      .eq("banned", false)
+      .limit(3000);
+    for (const u of tgUsers ?? []) {
+      if (u.telegram_id) subscriberIds.add(u.telegram_id);
+    }
 
-      for (const s of subs ?? []) {
-        fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: s.telegram_id,
-            text,
-            parse_mode: "HTML",
-            disable_web_page_preview: true,
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  { text: "🛒 Buy Cards Now", url: "https://zoru.cc/shop" },
-                  { text: "🤖 Checker Bot", url: "https://t.me/ZoruCheckerbot" },
-                ],
-                [
-                  { text: "💬 Support", url: "https://t.me/Zorushop_service" },
-                  { text: "📢 Official Channel", url: "https://t.me/zorushop" },
-                ],
-              ],
-            },
-          }),
-        }).catch(() => {});
-      }
-    } catch {}
-  } catch (err) {
-    console.error(`[Drip Worker] Telegram broadcast exception:`, err.message);
-  }
+    for (const tid of subscriberIds) {
+      fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: tid,
+          text,
+          parse_mode: "HTML",
+          disable_web_page_preview: true,
+          reply_markup: replyMarkup,
+        }),
+        signal: AbortSignal.timeout(6000),
+      }).catch(() => {});
+
+      // Rate limit protection for private chats
+      await new Promise((r) => setTimeout(r, 40));
+    }
+  } catch {}
 }
 
 function getDhakaDateAndHour(date = new Date()) {

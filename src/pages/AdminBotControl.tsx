@@ -633,6 +633,22 @@ const AdminBotControl = () => {
                   Website URL opened when users tap "🌐 Website" in the bot.
                 </p>
               </div>
+
+              {/* Broadcast Channels */}
+              <div className="sm:col-span-2">
+                <Label className="text-[10px] uppercase font-bold tracking-widest text-[#38bdf8]">
+                  Telegram Broadcast Channels / Groups
+                </Label>
+                <Input
+                  value={settings.telegram_broadcast_channels}
+                  onChange={(e) => setS("telegram_broadcast_channels", e.target.value)}
+                  placeholder="@zorushop, @your_new_channel, -1001234567890"
+                  className="mt-1.5 bg-[#131f40] border-slate-600 text-white font-medium font-mono text-xs"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Comma-separated channel usernames or chat IDs (e.g. <code>@zorushop, @channel2, -100xxxxxxxxxx</code>). Base updates and restock notices will be sent to all channels listed here. Adding @Zorushopupdatebot as admin in any channel also auto-registers it.
+                </p>
+              </div>
             </div>
 
             <Button onClick={handleSaveSettings} disabled={saving} className="bg-blue-600 hover:bg-blue-500 text-white font-bold">
