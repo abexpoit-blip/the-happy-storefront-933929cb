@@ -636,13 +636,17 @@ async function processActiveQueues() {
       const distinctBases = [...new Set(products.map((p) => p.base))];
       if (queue.auto_announce) {
         for (const bName of distinctBases) {
-          const pub = bName.replace(/^\s*(admin|seller)[\s_\-.:]+/i, "");
-          await db.from("announcements").insert({
-            title: `Base Update: ${pub}`,
-            body: `Fresh batch of verified cards added for base ${pub}. Available in shop now.`,
-            kind: "update",
-            created_at: now.toISOString(),
-          }).catch((e) => console.error("Announcement insert error:", e.message));
+          try {
+            const pub = bName.replace(/^\s*(admin|seller)[\s_\-.:]+/i, "");
+            await db.from("announcements").insert({
+              title: `Base Update: ${pub}`,
+              body: `Fresh batch of verified cards added for base ${pub}. Available in shop now.`,
+              kind: "update",
+              created_at: now.toISOString(),
+            });
+          } catch (e) {
+            console.error("Announcement insert error:", e?.message || e);
+          }
         }
       }
 
@@ -800,7 +804,9 @@ async function reconcilePendingDeposits() {
 
         if (settleResult === "approved") {
           console.log(`[Deposit Reconciler] Successfully credited $${dep.amount} to user ${dep.user_id}!`);
-          await db.rpc("award_referral_bonus", { _referee_id: dep.user_id }).catch(() => {});
+          try {
+            await db.rpc("award_referral_bonus", { _referee_id: dep.user_id });
+          } catch {}
 
           // Fetch user's updated balance & notify Telegram if linked
           try {

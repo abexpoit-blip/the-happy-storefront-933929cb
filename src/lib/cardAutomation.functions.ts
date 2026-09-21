@@ -936,13 +936,15 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
     const distinctBases = [...new Set(products.map((p) => p.base))];
     if (queue.auto_announce) {
       for (const bName of distinctBases) {
-        const pub = publicBase(bName);
-        await db.from("announcements").insert({
-          title: `Base Update: ${pub}`,
-          body: `Fresh batch of verified cards added for base ${pub}. Available in shop now.`,
-          kind: "update",
-          created_at: today.toISOString(),
-        }).catch(() => {});
+        try {
+          const pub = publicBase(bName);
+          await db.from("announcements").insert({
+            title: `Base Update: ${pub}`,
+            body: `Fresh batch of verified cards added for base ${pub}. Available in shop now.`,
+            kind: "update",
+            created_at: today.toISOString(),
+          });
+        } catch {}
       }
     }
 

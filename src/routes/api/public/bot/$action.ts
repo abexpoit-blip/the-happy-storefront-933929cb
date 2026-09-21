@@ -670,12 +670,14 @@ export const Route = createFileRoute("/api/public/bot/$action")({
               }
 
               // Log the broadcast
-              await db.from("bot_broadcasts").insert({
-                text: broadcastText,
-                sent_count: sent,
-                failed_count: failed,
-                target: "all",
-              }).catch(() => {});
+              try {
+                await db.from("bot_broadcasts").insert({
+                  text: broadcastText,
+                  sent_count: sent,
+                  failed_count: failed,
+                  target: "all",
+                });
+              } catch {}
 
               return json({ status: "success", sent, failed });
             }
