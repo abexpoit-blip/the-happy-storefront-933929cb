@@ -568,22 +568,42 @@ export async function lookupBinLive(raw: string): Promise<BinDetectionResult> {
 }
 
 /**
- * Enriches a list of BINs concurrently with deduplication and caching.
+ * Enriches a list of BINs with deduplication and caching.
+ * Optimized for bulk uploads (up to 50k+ cards) without crashing browser network pool.
  */
 export async function enrichBinsBatch(bins: string[]): Promise<Map<string, BinDetectionResult>> {
   const map = new Map<string, BinDetectionResult>();
   const cleanBins = Array.from(new Set(bins.map((b) => b.replace(/\D/g, "").slice(0, 6)).filter((b) => b.length === 6)));
 
-  await Promise.all(
-    cleanBins.map(async (bin) => {
-      try {
-        const info = await lookupBinLive(bin);
-        map.set(bin, info);
-      } catch {
-        map.set(bin, detectOfflineBin(bin));
-      }
-    })
-  );
+  // 1. Immediately resolve all BINs offline / from memory cache (0ms, 100% reliable)
+  for (const bin of cleanBins) {
+    if (liveCache.has(bin)) {
+      map.set(bin, liveCache.get(bin)!);
+    } else {
+      const offline = detectOfflineBin(bin);
+      map.set(bin, offline);
+    }
+  }
+
+  // 2. For small uploads (<= 50 distinct BINs), selectively enrich live in small controlled batches
+  // For bulk uploads (> 50 BINs), skip external rate-limited HTTP spam to prevent browser network crash
+  if (cleanBins.length > 0 && cleanBins.length <= 50) {
+    const toEnrich = cleanBins.filter((b) => !liveCache.has(b));
+    const BATCH = 5;
+    for (let i = 0; i < toEnrich.length; i += BATCH) {
+      const slice = toEnrich.slice(i, i + BATCH);
+      await Promise.all(
+        slice.map(async (bin) => {
+          try {
+            const info = await lookupBinLive(bin);
+            if (info) map.set(bin, info);
+          } catch {
+            // Keep the already set offline detection
+          }
+        })
+      );
+    }
+  }
 
   return map;
 }

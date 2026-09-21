@@ -580,10 +580,10 @@ const chunk = <T,>(arr: T[], size: number): T[][] => {
   return out;
 };
 
-const CHUNK = 200;
+const CHUNK = 100;
 
 /** Retries a chunk on transient network / timeout failures so a big upload never dies half-way silently. */
-const withRetry = async <T,>(fn: () => Promise<T>, attempts = 3): Promise<T> => {
+const withRetry = async <T,>(fn: () => Promise<T>, attempts = 4): Promise<T> => {
   let last: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
@@ -591,7 +591,14 @@ const withRetry = async <T,>(fn: () => Promise<T>, attempts = 3): Promise<T> => 
     } catch (e) {
       last = e;
       const msg = e instanceof Error ? e.message.toLowerCase() : "";
-      const transient = msg.includes("fetch") || msg.includes("network") || msg.includes("timeout") || msg.includes("504") || msg.includes("502");
+      const transient =
+        msg.includes("fetch") ||
+        msg.includes("network") ||
+        msg.includes("timeout") ||
+        msg.includes("504") ||
+        msg.includes("502") ||
+        msg.includes("503") ||
+        msg.includes("connection");
       if (!transient || i === attempts - 1) throw e;
       await new Promise((r) => setTimeout(r, 600 * (i + 1)));
     }
@@ -659,9 +666,11 @@ export interface FullCardInput {
 
 export const adminPublishFullCards = async (
   cards: FullCardInput[],
-  onProgress?: (done: number, total: number) => void,
+  onProgress?: (done: number, total: number, stage?: string, percent?: number) => void,
 ) => {
   if (!cards.length) return 0;
+
+  onProgress?.(0, cards.length, "Deduplicating cards in batch...", 2);
 
   // 1. Deduplicate within the uploaded batch
   const seenInBatch = new Set<string>();
@@ -676,24 +685,39 @@ export const adminPublishFullCards = async (
   }
   if (!dedupedBatch.length) return 0;
 
-  // 2. Check existing cards in database (product_keys)
+  // 2. Check existing cards in database (product_keys) safely with safe chunk size (80)
+  onProgress?.(0, dedupedBatch.length, "Checking database for existing cards...", 5);
   const existingPans = new Set<string>();
   const pansToCheck = dedupedBatch
     .map((c) => (c.cc || "").replace(/\D/g, ""))
     .filter((p) => p.length >= 12);
 
-  for (const pChunk of chunk(pansToCheck, 250)) {
-    try {
-      const { data: rows } = await supabase
-        .from("product_keys")
-        .select("pan")
-        .in("pan", pChunk);
-      for (const r of (rows ?? []) as { pan?: string }[]) {
-        if (r?.pan) existingPans.add(r.pan);
-      }
-    } catch {
-      // ignore
-    }
+  const PAN_CHUNK = 80;
+  const panChunks = chunk(pansToCheck, PAN_CHUNK);
+  let checkedCount = 0;
+
+  // Process in small parallel groups of 3 to stay fast and avoid overloading connection pool
+  const CONCURRENCY = 3;
+  for (let i = 0; i < panChunks.length; i += CONCURRENCY) {
+    const group = panChunks.slice(i, i + CONCURRENCY);
+    await Promise.all(
+      group.map(async (pChunk) => {
+        try {
+          const { data: rows } = await supabase
+            .from("product_keys")
+            .select("pan")
+            .in("pan", pChunk);
+          for (const r of (rows ?? []) as { pan?: string }[]) {
+            if (r?.pan) existingPans.add(r.pan);
+          }
+        } catch {
+          // ignore
+        }
+        checkedCount += pChunk.length;
+      })
+    );
+    const dbPct = Math.min(25, Math.round(5 + (checkedCount / Math.max(1, pansToCheck.length)) * 20));
+    onProgress?.(checkedCount, pansToCheck.length, `Checked ${checkedCount}/${pansToCheck.length} against database`, dbPct);
   }
 
   // Filter out any card whose PAN already exists in database
@@ -702,6 +726,8 @@ export const adminPublishFullCards = async (
     return !existingPans.has(pan);
   });
   if (!finalCards.length) return 0;
+
+  onProgress?.(0, finalCards.length, `Preparing ${finalCards.length} verified products...`, 28);
 
   const clean = (s: string | null | undefined) => (!s || s.toLowerCase() === "null" ? "" : s);
   const stamp = Date.now().toString(36);
@@ -742,8 +768,10 @@ export const adminPublishFullCards = async (
 
   const bySlug = new Map(products.map((p, i) => [p.slug, finalCards[i]]));
   let created = 0;
+  const productChunks = chunk(products, CHUNK);
 
-  for (const part of chunk(products, CHUNK)) {
+  for (let cIdx = 0; cIdx < productChunks.length; cIdx++) {
+    const part = productChunks[cIdx];
     const { data, error } = await withRetry(async () =>
       await supabase.from("products").insert(part as never).select("id, slug"),
     );
@@ -761,9 +789,11 @@ export const adminPublishFullCards = async (
       if (kerr) throw kerr;
     }
     created += data?.length ?? 0;
-    onProgress?.(created, products.length);
+    const uploadPct = Math.min(99, Math.round(30 + (created / products.length) * 69));
+    onProgress?.(created, products.length, `Uploaded ${created} / ${products.length} cards (${cIdx + 1}/${productChunks.length} chunks)`, uploadPct);
   }
 
+  onProgress?.(created, products.length, `Completed! ${created} cards published successfully.`, 100);
   invalidateProductCache();
   return created;
 };

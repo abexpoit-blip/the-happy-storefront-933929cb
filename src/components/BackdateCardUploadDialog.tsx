@@ -389,6 +389,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
   const [dripAutoAnnounce, setDripAutoAnnounce] = useState(true);
   const [dripTgBroadcast, setDripTgBroadcast] = useState(true);
   const [dripCreating, setDripCreating] = useState(false);
+  const [dripProgress, setDripProgress] = useState<{ done: number; total: number; stage: string; percent: number } | null>(null);
 
   const [dripQueues, setDripQueues] = useState<DripQueueRow[]>([]);
   const [loadingQueues, setLoadingQueues] = useState(false);
@@ -480,6 +481,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
       return toast.error("No valid cards to enqueue");
     }
     setDripCreating(true);
+    setDripProgress({ done: 0, total: dripPreview.valid, stage: "Structuring card records...", percent: 5 });
     try {
       const items = dripPreview.cards.map((c) => {
         const binInfo = detectOfflineBin(c.cc);
@@ -506,6 +508,13 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
       const BATCH_SIZE = 500;
       const firstBatch = items.slice(0, BATCH_SIZE);
 
+      setDripProgress({
+        done: Math.min(BATCH_SIZE, items.length),
+        total: items.length,
+        stage: `Saving initial batch of ${Math.min(BATCH_SIZE, items.length)} cards...`,
+        percent: Math.round((Math.min(BATCH_SIZE, items.length) / items.length) * 100),
+      });
+
       const res = await createDripQueue({
         data: {
           name: dripName.trim() || `Drip Queue ${new Date().toLocaleDateString()}`,
@@ -525,15 +534,30 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
       if (items.length > BATCH_SIZE) {
         for (let i = BATCH_SIZE; i < items.length; i += BATCH_SIZE) {
           const slice = items.slice(i, i + BATCH_SIZE);
+          const currentDone = Math.min(i + BATCH_SIZE, items.length);
+          const pct = Math.round((currentDone / items.length) * 100);
+          setDripProgress({
+            done: currentDone,
+            total: items.length,
+            stage: `Staging cards into database (${currentDone.toLocaleString()} / ${items.length.toLocaleString()})...`,
+            percent: pct,
+          });
           await appendDripItems({
             data: {
               queue_id: res.queue_id,
               items: slice,
             },
           });
-          toast.info(`Staged ${Math.min(i + BATCH_SIZE, items.length)} / ${items.length} cards...`);
+          toast.info(`Staged ${currentDone} / ${items.length} cards...`);
         }
       }
+
+      setDripProgress({
+        done: items.length,
+        total: items.length,
+        stage: "Queue created successfully!",
+        percent: 100,
+      });
 
       toast.success(`Drip queue created with ${items.length} cards!`);
       setDripRaw("");
@@ -542,6 +566,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
       toast.error(e instanceof Error ? e.message : "Failed to create drip queue");
     } finally {
       setDripCreating(false);
+      setDripProgress(null);
     }
   };
 
@@ -1273,6 +1298,25 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                   )}
                 </div>
               </div>
+
+              {dripProgress && (
+                <div className="p-3.5 rounded-xl bg-blue-500/10 border border-[#38bdf8]/50 space-y-2 shadow-md">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-mono text-[#38bdf8] font-bold flex items-center gap-1.5">
+                      <span className="inline-block h-2 w-2 rounded-full bg-[#38bdf8] animate-ping" />
+                      {dripProgress.stage}
+                    </span>
+                    <span className="font-mono text-emerald-400 font-bold">
+                      {dripProgress.percent}%
+                    </span>
+                  </div>
+                  <Progress value={dripProgress.percent} className="h-2 bg-[#162348]" />
+                  <div className="text-[11px] text-slate-300 flex justify-between">
+                    <span>Staged: {dripProgress.done.toLocaleString()} / {dripProgress.total.toLocaleString()} cards</span>
+                    <span className="text-amber-400/90">Please do not close this window</span>
+                  </div>
+                </div>
+              )}
 
               {dripPreview && (
                 <div className="p-3.5 rounded-xl bg-[#162348] border border-[#38bdf8]/40 flex items-center justify-between text-xs flex-wrap gap-2 shadow-md">

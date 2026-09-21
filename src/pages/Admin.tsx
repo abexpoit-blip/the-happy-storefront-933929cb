@@ -62,7 +62,7 @@ const Admin = () => {
   const [cardMaxPrice, setCardMaxPrice] = useState("10.00");
   const [cardRefundable, setCardRefundable] = useState<"yes" | "no" | "mixed">("mixed");
   const [uploadBusy, setUploadBusy] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number; stage?: string; percent?: number } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [showBackdateModal, setShowBackdateModal] = useState(false);
@@ -236,14 +236,38 @@ const Admin = () => {
     toast.error(`Login-as is not available on this backend (${u.username})`);
   };
 
+  // Prevent accidental navigation/tab close while uploading bulk cards
+  useEffect(() => {
+    if (!uploadBusy) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [uploadBusy]);
+
   // Card upload
   const publishCards = async () => {
     if (!cardRaw.trim()) return toast.error("Paste cards first");
     setUploadBusy(true);
+    setUploadProgress({ done: 0, total: 0, stage: "Parsing cards & verifying format...", percent: 2 });
     try {
       const { lines, failed } = parseAndFormat(cardRaw);
       const { unique, dropped } = dedupe(lines);
-      if (unique.length === 0) { toast.error("No valid cards parsed"); setUploadBusy(false); return; }
+      if (unique.length === 0) {
+        toast.error("No valid cards parsed");
+        setUploadBusy(false);
+        setUploadProgress(null);
+        return;
+      }
+
+      setUploadProgress({
+        done: 0,
+        total: unique.length,
+        stage: `Analyzing & enriching ${unique.length.toLocaleString()} cards...`,
+        percent: 6,
+      });
 
       const fixedPriceVal = Number(cardPrice) || 1.5;
       const minPriceVal = Number(cardMinPrice) || 0.20;
@@ -258,6 +282,13 @@ const Admin = () => {
 
       const distinctBins = Array.from(new Set(unique.map((p) => p.cc.replace(/\D/g, "").slice(0, 6)).filter((b) => b.length === 6)));
       const enrichedBinMap = await enrichBinsBatch(distinctBins);
+
+      setUploadProgress({
+        done: 0,
+        total: unique.length,
+        stage: `Calculating smart levels & prices for ${unique.length.toLocaleString()} cards...`,
+        percent: 12,
+      });
 
       const rows = unique.map((p) => {
         const b6 = p.cc.replace(/\D/g, "").slice(0, 6);
@@ -308,7 +339,9 @@ const Admin = () => {
         };
       });
 
-      const count = await adminPublishFullCards(rows, (done, total) => setUploadProgress({ done, total }));
+      const count = await adminPublishFullCards(rows, (done, total, stage, percent) => {
+        setUploadProgress({ done, total, stage, percent });
+      });
       
       // Auto-post site announcement
       const baseLabel = rows[0]?.base?.replace(/^\s*admin[\s_\-.:]+/i, "") || "NEW_BASE";
@@ -320,6 +353,13 @@ const Admin = () => {
 
       // Telegram Channel & Bot Broadcast for each distinct base uploaded
       if (tgBroadcastCardUpload && rows.length > 0) {
+        setUploadProgress({
+          done: count,
+          total: count,
+          stage: "Broadcasting base alerts to Telegram @zorushop & update bot...",
+          percent: 98,
+        });
+
         const basesMap = new Map<string, typeof rows>();
         for (const r of rows) {
           const b = r.base || "NEW_BASE";
@@ -950,6 +990,35 @@ const Admin = () => {
               <Textarea rows={10} value={cardRaw} onChange={e => setCardRaw(e.target.value)}
                 placeholder="4111111111111111|12|28|123|John Smith|123 Main St|New York|NY|10001|US|+15555551234|john@x.com"
                 className="bg-input/60 font-mono text-xs mb-3" />
+
+              {/* DEDICATED VISUAL PROGRESS BAR */}
+              {uploadBusy && (
+                <div className="mb-4 p-4 rounded-xl border border-primary/50 bg-secondary/80 backdrop-blur-md shadow-neon space-y-2.5 animate-in fade-in">
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span className="flex items-center gap-2 text-primary-glow">
+                      <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                      {uploadProgress?.stage || "Processing upload..."}
+                    </span>
+                    <span className="font-mono text-emerald-400 text-sm font-bold">
+                      {uploadProgress?.percent ?? (uploadProgress && uploadProgress.total > 0 ? Math.round((uploadProgress.done / uploadProgress.total) * 100) : 0)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-background/80 rounded-full h-3.5 overflow-hidden border border-border/50 p-0.5">
+                    <div
+                      className="bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 h-full transition-all duration-300 rounded-full shadow-[0_0_12px_rgba(52,211,153,0.6)]"
+                      style={{
+                        width: `${Math.min(100, Math.max(0, uploadProgress?.percent ?? (uploadProgress && uploadProgress.total > 0 ? Math.round((uploadProgress.done / uploadProgress.total) * 100) : 0)))}%`
+                      }}
+                    />
+                  </div>
+                  <div className="text-[11px] text-muted-foreground flex items-center justify-between flex-wrap gap-2">
+                    <span>
+                      Cards processed: <b className="text-foreground">{uploadProgress?.done?.toLocaleString() ?? 0}</b> / <b className="text-foreground">{uploadProgress?.total?.toLocaleString() ?? formatPreview.valid.toLocaleString()}</b>
+                    </span>
+                    <span className="text-amber-400/90 font-medium">⚠️ Please do not close or refresh this tab</span>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center gap-2 flex-wrap">
                 <Button onClick={publishCards} disabled={uploadBusy || formatPreview.valid === 0} className="bg-gradient-primary shadow-neon">

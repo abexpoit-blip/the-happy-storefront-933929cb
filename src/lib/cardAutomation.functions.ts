@@ -617,7 +617,7 @@ export const createDripQueue = createServerFn({ method: "POST" })
       .map((it) => (it.cc || "").replace(/\D/g, ""))
       .filter((p) => p.length >= 12);
 
-    const CHUNK_CHECK = 300;
+    const CHUNK_CHECK = 80;
     for (let i = 0; i < pansToCheck.length; i += CHUNK_CHECK) {
       const slice = pansToCheck.slice(i, i + CHUNK_CHECK);
       try {
@@ -758,7 +758,7 @@ export const appendDripItems = createServerFn({ method: "POST" })
       .map((it) => (it.cc || "").replace(/\D/g, ""))
       .filter((p) => p.length >= 12);
 
-    const CHUNK_CHECK = 300;
+    const CHUNK_CHECK = 80;
     for (let i = 0; i < pansToCheck.length; i += CHUNK_CHECK) {
       const slice = pansToCheck.slice(i, i + CHUNK_CHECK);
       try {
