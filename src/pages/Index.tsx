@@ -29,7 +29,7 @@ const Index = () => {
           .select("id, title, stock, base, created_at")
           .eq("active", true)
           .order("created_at", { ascending: false })
-          .limit(300),
+          .limit(3000),
       ]);
 
       const baseCandidates: { id: string; label: string; count: number }[] = [];

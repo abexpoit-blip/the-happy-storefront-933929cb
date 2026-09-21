@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import Seo from "@/components/Seo";
 import { toast } from "sonner";
 import { Search, RotateCcw, Loader2, Copy, CheckCircle2, X, ShoppingCart, ChevronLeft, ChevronRight, Lock, AlertTriangle, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { listProducts, type Product } from "@/lib/store";
+import { listProducts, listAllShopBases, type Product } from "@/lib/store";
 import { addToCart, cartCount, onCartChange } from "@/lib/cart";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -149,16 +149,55 @@ const Shop = () => {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
-  // Newest base first — buyers want the latest upload date on top.
+  const [dbBases, setDbBases] = useState<string[]>([]);
+  useEffect(() => {
+    listAllShopBases().then(setDbBases).catch(() => {});
+  }, []);
+
+  // Newest base first — includes all database bases, announcements, loaded products, and URL params.
   const bases = useMemo(() => {
     const rawSet = new Set<string>();
+    for (const b of dbBases) {
+      if (b) rawSet.add(publicBase(b));
+    }
     for (const p of all) {
       if (p.base) rawSet.add(publicBase(p.base));
     }
     const bParam = searchParams.get("base");
     if (bParam && bParam !== "all") rawSet.add(publicBase(bParam));
     return sortBasesLatestFirst(Array.from(rawSet));
-  }, [all, searchParams]);
+  }, [dbBases, all, searchParams]);
+
+  const loadingBases = useRef(new Set<string>());
+  const ensureBaseLoaded = useCallback(async (targetBase: string) => {
+    if (!targetBase || targetBase === "all") return;
+    const norm = publicBase(targetBase);
+    // Check if we already have cards for this base in `all`
+    const hasCards = all.some(
+      (p) => publicBase(p.base ?? "") === norm || (p.base ?? "") === targetBase
+    );
+    if (hasCards) return;
+    if (loadingBases.current.has(norm)) return;
+
+    loadingBases.current.add(norm);
+    try {
+      const baseCards = await listProducts({
+        base: targetBase,
+        forceFresh: true,
+      });
+      if (baseCards && baseCards.length > 0) {
+        setAll((prev) => {
+          const seen = new Set(prev.map((p) => p.id));
+          const toAdd = baseCards.filter((p) => !seen.has(p.id));
+          return toAdd.length > 0 ? [...toAdd, ...prev] : prev;
+        });
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      loadingBases.current.delete(norm);
+    }
+  }, [all]);
 
   // Sync with URL query params (?base=... & ?bin=...)
   useEffect(() => {
@@ -169,6 +208,7 @@ const Shop = () => {
         const normBase = publicBase(bParam);
         setBase(normBase);
         setQ((s) => ({ ...s, base: normBase }));
+        void ensureBaseLoaded(normBase);
       }
       if (binParam) {
         if (hasDeposited === false) {
@@ -180,7 +220,7 @@ const Shop = () => {
       }
       setSearched(true);
     }
-  }, [searchParams, hasDeposited]);
+  }, [searchParams, hasDeposited, ensureBaseLoaded]);
 
   // Countries actually in stock (with counts), plus the full ISO list below it.
   const stockCountries = useMemo(() => {
@@ -241,6 +281,9 @@ const Shop = () => {
     setLastBin(effectiveBin);
     setSearched(true);
     setSelected(new Set());
+    if (base !== "all") {
+      void ensureBaseLoaded(base);
+    }
     if (hasDeposited && bin.trim().length >= 6) {
       trackBinSearch(bin.trim());
     }
@@ -420,6 +463,9 @@ const Shop = () => {
               setBase(v);
               setQ((s) => ({ ...s, base: v }));
               setSearched(true);
+              if (v !== "all") {
+                void ensureBaseLoaded(v);
+              }
             }}
             className="h-8 w-full min-w-0 lg:w-[160px] rounded-md border border-[#dcdcdc] px-2 text-[13px] outline-none bg-white focus:border-[#2196f3] focus:ring-2 focus:ring-[#2196f3]/15 transition"
           >

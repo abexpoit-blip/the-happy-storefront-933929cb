@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { AdminLayout } from "@/components/AdminLayout";
 import {
   adminListCards, adminUpdateCards, adminDeleteCards, adminHideExpiredCards,
-  listCategories, type AdminCardRow, type Category,
+  adminReactivateUnsoldProducts, listCategories, type AdminCardRow, type Category,
 } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CreditCard, Trash2, Search, EyeOff, Eye, DollarSign, Check, X, ChevronLeft, ChevronRight, AlertTriangle, LayoutGrid, Layers, Calendar, Sparkles } from "lucide-react";
+import { CreditCard, Trash2, Search, EyeOff, Eye, DollarSign, Check, X, ChevronLeft, ChevronRight, AlertTriangle, LayoutGrid, Layers, Calendar, Sparkles, RefreshCw } from "lucide-react";
 import { publicBase, sortBasesLatestFirst } from "@/lib/baseLabel";
 import { BackdateCardUploadDialog } from "@/components/BackdateCardUploadDialog";
 import { toast } from "sonner";
@@ -55,6 +55,20 @@ const AdminCards = () => {
       toast.success(`Hid ${n} expired card${n === 1 ? "" : "s"}`);
       load();
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Failed"); }
+  };
+
+  const [resyncing, setResyncing] = useState(false);
+  const handleResyncStock = async () => {
+    setResyncing(true);
+    try {
+      const count = await adminReactivateUnsoldProducts();
+      toast.success(`Resynced stock & reactivated ${count} unsold cards!`);
+      load();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Resync failed");
+    } finally {
+      setResyncing(false);
+    }
   };
 
   const toggleOne = (id: string) =>
@@ -170,6 +184,17 @@ const AdminCards = () => {
             </Button>
             <Button size="sm" variant="outline" onClick={cleanupExpired} className="border-warning/40 text-warning hover:bg-warning/10">
               <AlertTriangle className="h-3.5 w-3.5 mr-1" />Auto-expire old cards
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={resyncing}
+              onClick={handleResyncStock}
+              className="border-primary/40 text-primary-glow hover:bg-primary/10"
+              title="Resync stock and reactivate older unsold cards"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${resyncing ? "animate-spin" : ""}`} />
+              {resyncing ? "Resyncing..." : "🔄 Resync & Reactivate Stock"}
             </Button>
           </div>
         </div>

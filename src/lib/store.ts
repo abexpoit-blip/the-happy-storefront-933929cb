@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { publicBase, sortBasesLatestFirst } from "@/lib/baseLabel";
 
 export type DeliveryType = "key" | "download" | "instant";
 
@@ -120,11 +121,12 @@ export const invalidateProductCache = () => {
 };
 
 /** Performance cap: keeps client and Supabase DB snappy and resilient even under huge traffic */
-export const PRODUCT_FETCH_LIMIT = 3000;
+export const PRODUCT_FETCH_LIMIT = 10000;
 
 export const listProducts = async (
   opts: {
     categoryId?: string | null;
+    base?: string;
     search?: string;
     includeInactive?: boolean;
     limit?: number;
@@ -132,7 +134,7 @@ export const listProducts = async (
     onBatchProgress?: (batch: Product[], isFinal: boolean) => void;
   } = {},
 ) => {
-  const isDefaultFetch = !opts.categoryId && !opts.search && !opts.includeInactive && !opts.limit;
+  const isDefaultFetch = !opts.categoryId && !opts.base && !opts.search && !opts.includeInactive && !opts.limit;
   
   // Fast in-memory cache check (0ms) - only if not forced fresh
   if (isDefaultFetch && !opts.forceFresh && productCache && Date.now() - productCache.at < CACHE_TTL_MS) {
@@ -154,6 +156,14 @@ export const listProducts = async (
     if (!opts.includeInactive) q = q.eq("active", true).or("delivery_type.neq.key,stock.gt.0");
     if (opts.categoryId) q = q.eq("category_id", opts.categoryId);
     if (opts.search?.trim()) q = q.ilike("title", `%${opts.search.trim()}%`);
+    if (opts.base && opts.base !== "all") {
+      const pub = publicBase(opts.base).replace(/[,()]/g, "").trim();
+      if (pub) {
+        q = q.or(`base.ilike.%${pub}%,base.eq.${opts.base}`);
+      } else {
+        q = q.eq("base", opts.base);
+      }
+    }
     return q;
   };
 
@@ -1352,4 +1362,107 @@ export const getMyReferralSummary = async (): Promise<ReferralSummary> => {
     earned,
     pendingCount: Math.max(0, (invited ?? 0) - rows.length),
   };
+};
+
+/**
+ * Discovers all unique card bases from products and announcements,
+ * normalized with publicBase and sorted newest-dated first.
+ */
+export const listAllShopBases = async (): Promise<string[]> => {
+  try {
+    const [prodRes, annRes] = await Promise.allSettled([
+      supabase
+        .from("products")
+        .select("base")
+        .eq("active", true)
+        .not("base", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(10000),
+      supabase
+        .from("announcements")
+        .select("title, kind")
+        .order("created_at", { ascending: false })
+        .limit(300),
+    ]);
+
+    const baseSet = new Set<string>();
+
+    if (prodRes.status === "fulfilled" && prodRes.value.data) {
+      for (const p of prodRes.value.data) {
+        if (p?.base) {
+          const pb = publicBase(p.base);
+          if (pb) baseSet.add(pb);
+        }
+      }
+    }
+
+    if (annRes.status === "fulfilled" && annRes.value.data) {
+      for (const a of annRes.value.data) {
+        const isBase =
+          a.kind === "update" ||
+          /^base update:/i.test(a.title?.trim() || "") ||
+          /^\d{4}[_\-]\d{2}[_\-]\d{2}/i.test(a.title?.trim() || "");
+        if (isBase && a.title) {
+          const raw = a.title.replace(/^base update:\s*/i, "").trim();
+          const pb = publicBase(raw);
+          if (pb) baseSet.add(pb);
+        }
+      }
+    }
+
+    return sortBasesLatestFirst(Array.from(baseSet));
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * Resyncs & reactivates any products that have unsold keys in `product_keys`.
+ * Ensures older products that were accidentally marked inactive or stock=0 are revived.
+ */
+export const adminReactivateUnsoldProducts = async (): Promise<number> => {
+  try {
+    // 1. Try server RPC if installed
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc("reactivate_unsold_products");
+    if (!error && typeof data === "number") {
+      invalidateProductCache();
+      return data;
+    }
+  } catch {
+    /* fallback to client-side resync */
+  }
+
+  // 2. Client-side fallback: check inactive key-delivery products
+  let reactivated = 0;
+  try {
+    const { data: inactiveProds } = await supabase
+      .from("products")
+      .select("id, delivery_type, stock, active")
+      .eq("delivery_type", "key")
+      .or("active.eq.false,stock.eq.0")
+      .limit(2000);
+
+    if (inactiveProds && inactiveProds.length > 0) {
+      for (const p of inactiveProds) {
+        const { count } = await supabase
+          .from("product_keys")
+          .select("id", { count: "exact", head: true })
+          .eq("product_id", p.id)
+          .eq("is_sold", false);
+
+        if (count && count > 0) {
+          await supabase
+            .from("products")
+            .update({ active: true, stock: count })
+            .eq("id", p.id);
+          reactivated++;
+        }
+      }
+    }
+    invalidateProductCache();
+  } catch (err) {
+    console.warn("adminReactivateUnsoldProducts error:", err);
+  }
+  return reactivated;
 };
