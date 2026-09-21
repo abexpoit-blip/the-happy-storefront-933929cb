@@ -436,17 +436,17 @@ async function processActiveQueues() {
           console.log(`[Drip Worker] Queue '${queue.name}' (${queue.id}) already released for today (${dhakaNow.dateStr}) in Dhaka timezone. Skipping.`);
           continue;
         }
+
+        // 2. Check if current time in Asia/Dhaka has reached 10:00 AM (for recurring runs)
+        if (dhakaNow.hour < TARGET_RELEASE_HOUR_DHAKA) {
+          console.log(
+            `[Drip Worker] Queue '${queue.name}' scheduled for 10:00 AM Asia/Dhaka (current Dhaka time: ${String(dhakaNow.hour).padStart(2, "0")}:${String(dhakaNow.minute).padStart(2, "0")}). Waiting.`
+          );
+          continue;
+        }
       }
 
-      // 2. Check if current time in Asia/Dhaka has reached 10:00 AM
-      if (dhakaNow.hour < TARGET_RELEASE_HOUR_DHAKA) {
-        console.log(
-          `[Drip Worker] Queue '${queue.name}' scheduled for 10:00 AM Asia/Dhaka (current Dhaka time: ${String(dhakaNow.hour).padStart(2, "0")}:${String(dhakaNow.minute).padStart(2, "0")}). Waiting.`
-        );
-        continue;
-      }
-
-      console.log(`[Drip Worker] Triggering 10:00 AM daily release for queue '${queue.name}' (${queue.id}) on Dhaka date ${dhakaNow.dateStr}...`);
+      console.log(`[Drip Worker] Triggering daily release for queue '${queue.name}' (${queue.id}) on Dhaka date ${dhakaNow.dateStr}...`);
       const countToRelease = Math.min(queue.per_day, queue.cards_remaining);
 
       const { data: items, error: iErr } = await db
@@ -468,15 +468,19 @@ async function processActiveQueues() {
 
       // Format today's base date with Dhaka local date (e.g. 2026_09_19)
       const baseDateStr = dhakaNow.dateStr.replace(/-/g, "_");
-      // Check existing keys to strictly avoid duplicate cards in shop
+      // Check existing keys in safe chunks to avoid URL length limit
       const itemPans = items.map((c) => String(c.cc || "").replace(/\D/g, "")).filter((p) => p.length >= 12);
       const existingKeyPans = new Set();
-      try {
-        const { data: exKeys } = await db.from("product_keys").select("pan").in("pan", itemPans);
-        for (const k of exKeys ?? []) {
-          if (k?.pan) existingKeyPans.add(k.pan);
-        }
-      } catch {}
+      const CHUNK_PAN = 200;
+      for (let pIdx = 0; pIdx < itemPans.length; pIdx += CHUNK_PAN) {
+        const slice = itemPans.slice(pIdx, pIdx + CHUNK_PAN);
+        try {
+          const { data: exKeys } = await db.from("product_keys").select("pan").in("pan", slice);
+          for (const k of exKeys ?? []) {
+            if (k?.pan) existingKeyPans.add(k.pan);
+          }
+        } catch {}
+      }
 
       const cleanItems = [];
       const skippedIds = [];
@@ -490,7 +494,10 @@ async function processActiveQueues() {
       }
 
       if (skippedIds.length > 0) {
-        await db.from("card_drip_items").update({ status: "released", released_at: now.toISOString() }).in("id", skippedIds);
+        for (let sIdx = 0; sIdx < skippedIds.length; sIdx += 100) {
+          const sSlice = skippedIds.slice(sIdx, sIdx + 100);
+          await db.from("card_drip_items").update({ status: "released", released_at: now.toISOString() }).in("id", sSlice);
+        }
         console.log(`[Drip Worker] Skipped ${skippedIds.length} duplicate cards already in shop for queue '${queue.name}'.`);
       }
 
@@ -532,6 +539,14 @@ async function processActiveQueues() {
             else if (lvl.includes("PLATINUM") || lvl.includes("TITANIUM")) weight = 0.58;
             else if (lvl.includes("GOLD") || lvl.includes("PREPAID")) weight = 0.35;
 
+            // Small deterministic variance based on last 4 digits
+            let variance = 0;
+            if (c.cc) {
+              const digits = String(c.cc).replace(/\D/g, "");
+              const seed = parseInt(digits.slice(-4) || "5555", 10) % 100;
+              variance = ((seed - 50) / 100) * (range * 0.12);
+            }
+
             const boost = (isRef ? range * 0.06 : 0) + (meta.type === "CREDIT" ? range * 0.04 : 0);
             cardPrice = Math.round(Math.max(minP, Math.min(maxP, minP + range * weight + variance + boost)) * 100) / 100;
           }
@@ -570,39 +585,41 @@ async function processActiveQueues() {
         })
       );
 
-      const { data: inserted, error: pErr } = await db
-        .from("products")
-        .insert(products)
-        .select("id, slug");
+      // Safe batch chunk insertion (100 rows per chunk)
+      const CHUNK_INSERT = 100;
+      const allInserted = [];
+      for (let i = 0; i < products.length; i += CHUNK_INSERT) {
+        const pSlice = products.slice(i, i + CHUNK_INSERT);
+        const { data: insSlice, error: pErr } = await db
+          .from("products")
+          .insert(pSlice)
+          .select("id, slug");
 
-      if (pErr) {
-        console.error(`[Drip Worker] Failed to insert products for queue ${queue.id}:`, pErr.message);
-        continue;
+        if (pErr) {
+          console.error(`[Drip Worker] Failed to insert products chunk for queue ${queue.id}:`, pErr.message);
+          continue;
+        }
+
+        const keys = (insSlice ?? []).map((prod, kIdx) => ({
+          product_id: prod.id,
+          content: cleanItems[i + kIdx].card_line,
+          pan: String(cleanItems[i + kIdx].cc || "").replace(/\D/g, "") || null,
+        }));
+        const { error: kErr } = await db.from("product_keys").insert(keys);
+        if (kErr) console.error(`[Drip Worker] Failed to insert keys chunk:`, kErr.message);
+
+        const rIds = cleanItems.slice(i, i + CHUNK_INSERT).map((it) => it.id);
+        const { error: rErr } = await db
+          .from("card_drip_items")
+          .update({ status: "released", released_at: now.toISOString() })
+          .in("id", rIds);
+        if (rErr) console.error(`[Drip Worker] Failed to update released status chunk:`, rErr.message);
+
+        if (insSlice) allInserted.push(...insSlice);
       }
-
-      // Insert keys
-      const keys = (inserted ?? []).map((prod, idx) => ({
-        product_id: prod.id,
-        content: cleanItems[idx].card_line,
-        pan: String(cleanItems[idx].cc || "").replace(/\D/g, "") || null,
-      }));
-      const { error: kErr } = await db.from("product_keys").insert(keys);
-      if (kErr) {
-        console.error(`[Drip Worker] Failed to insert keys:`, kErr.message);
-      }
-
-      // Mark items as released
-      const releasedIds = cleanItems.map((it) => it.id);
-      await db
-        .from("card_drip_items")
-        .update({
-          status: "released",
-          released_at: now.toISOString(),
-        })
-        .in("id", releasedIds);
 
       // Update queue stats
-      const remainingAfter = Math.max(0, queue.cards_remaining - items.length);
+      const remainingAfter = Math.max(0, queue.cards_remaining - cleanItems.length);
       await db
         .from("card_drip_queues")
         .update({

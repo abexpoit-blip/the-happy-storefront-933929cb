@@ -885,35 +885,40 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
       };
     });
 
-    // 4. Insert into products
-    const { data: insertedProducts, error: pErr } = await db
-      .from("products")
-      .insert(products)
-      .select("id, slug");
+    // 4. Safe batch chunk insertion into products & product_keys (100 rows per chunk)
+    const CHUNK_SIZE = 100;
+    const insertedRows: InsertedProduct[] = [];
 
-    if (pErr) throw new Error(pErr.message);
+    for (let i = 0; i < products.length; i += CHUNK_SIZE) {
+      const pSlice = products.slice(i, i + CHUNK_SIZE);
+      const { data: insertedSlice, error: pErr } = await db
+        .from("products")
+        .insert(pSlice)
+        .select("id, slug");
 
-    const insertedRows = (insertedProducts ?? []) as unknown as InsertedProduct[];
+      if (pErr) throw new Error(pErr.message);
+      const sliceRows = (insertedSlice ?? []) as unknown as InsertedProduct[];
+      insertedRows.push(...sliceRows);
 
-    // 5. Insert keys into product_keys
-    const keyRows = insertedRows.map((prod, idx: number) => ({
-      product_id: prod.id,
-      content: stagedItems[idx].card_line,
-      pan: (stagedItems[idx].cc || "").replace(/\D/g, "") || null,
-    }));
+      const keyRows = sliceRows.map((prod, idx: number) => ({
+        product_id: prod.id,
+        content: stagedItems[i + idx].card_line,
+        pan: (stagedItems[i + idx].cc || "").replace(/\D/g, "") || null,
+      }));
 
-    const { error: kErr } = await db.from("product_keys").insert(keyRows);
-    if (kErr) throw new Error(kErr.message);
+      const { error: kErr } = await db.from("product_keys").insert(keyRows);
+      if (kErr) throw new Error(kErr.message);
 
-    // 6. Mark items as released
-    const releasedIds = stagedItems.map((it) => it.id);
-    await db
-      .from("card_drip_items")
-      .update({
-        status: "released",
-        released_at: today.toISOString(),
-      })
-      .in("id", releasedIds);
+      const rIds = stagedItems.slice(i, i + CHUNK_SIZE).map((it) => it.id);
+      const { error: rErr } = await db
+        .from("card_drip_items")
+        .update({
+          status: "released",
+          released_at: today.toISOString(),
+        })
+        .in("id", rIds);
+      if (rErr) throw new Error(rErr.message);
+    }
 
     // 7. Update queue remaining count and last_run_at
     const remainingAfter = Math.max(0, queue.cards_remaining - stagedItems.length);
