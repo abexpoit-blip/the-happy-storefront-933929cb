@@ -582,15 +582,25 @@ const chunk = <T,>(arr: T[], size: number): T[][] => {
 
 const CHUNK = 100;
 
-/** Retries a chunk on transient network / timeout failures so a big upload never dies half-way silently. */
-const withRetry = async <T,>(fn: () => Promise<T>, attempts = 4): Promise<T> => {
-  let last: unknown;
+/** Retries a database chunk on transient network, 502/504, or timeout errors */
+const withRetry = async <T,>(
+  fn: () => Promise<{ data: T; error: { message?: string; code?: string; details?: string; hint?: string } | null }>,
+  attempts = 4
+): Promise<{ data: T; error: null }> => {
+  let lastError: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
-      return await fn();
-    } catch (e) {
-      last = e;
-      const msg = e instanceof Error ? e.message.toLowerCase() : "";
+      const res = await fn();
+      if (!res.error) {
+        return res as { data: T; error: null };
+      }
+      lastError = res.error;
+      const code = res.error.code || "";
+      const msg = (res.error.message || "").toLowerCase();
+      // If duplicate constraint on product_keys, throw immediately without useless retry
+      if (code === "23505" || msg.includes("duplicate key") || msg.includes("unique constraint")) {
+        throw res.error;
+      }
       const transient =
         msg.includes("fetch") ||
         msg.includes("network") ||
@@ -598,12 +608,34 @@ const withRetry = async <T,>(fn: () => Promise<T>, attempts = 4): Promise<T> => 
         msg.includes("504") ||
         msg.includes("502") ||
         msg.includes("503") ||
-        msg.includes("connection");
+        msg.includes("500") ||
+        msg.includes("connection") ||
+        msg.includes("bad gateway") ||
+        msg.includes("gateway time-out") ||
+        msg.includes("statement timeout");
+      if (!transient || i === attempts - 1) {
+        throw res.error;
+      }
+    } catch (e) {
+      lastError = e;
+      const msg = e instanceof Error ? e.message.toLowerCase() : typeof e === "object" && e && "message" in e ? String((e as { message: string }).message).toLowerCase() : "";
+      const transient =
+        msg.includes("fetch") ||
+        msg.includes("network") ||
+        msg.includes("timeout") ||
+        msg.includes("504") ||
+        msg.includes("502") ||
+        msg.includes("503") ||
+        msg.includes("500") ||
+        msg.includes("connection") ||
+        msg.includes("bad gateway") ||
+        msg.includes("gateway time-out") ||
+        msg.includes("statement timeout");
       if (!transient || i === attempts - 1) throw e;
-      await new Promise((r) => setTimeout(r, 600 * (i + 1)));
     }
+    await new Promise((r) => setTimeout(r, 600 * (i + 1)));
   }
-  throw last;
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 };
 
 
@@ -627,8 +659,7 @@ export const adminBulkCreateCards = async (rows: BulkCardRow[], categoryId: stri
     exp_year: r.exp_year || null,
   }));
   for (const part of chunk(payload, CHUNK)) {
-    const { error } = await supabase.from("products").insert(part);
-    if (error) throw error;
+    await withRetry(async () => await supabase.from("products").insert(part));
   }
   return payload.length;
 };
@@ -702,16 +733,22 @@ export const adminPublishFullCards = async (
     const group = panChunks.slice(i, i + CONCURRENCY);
     await Promise.all(
       group.map(async (pChunk) => {
-        try {
-          const { data: rows } = await supabase
-            .from("product_keys")
-            .select("pan")
-            .in("pan", pChunk);
-          for (const r of (rows ?? []) as { pan?: string }[]) {
-            if (r?.pan) existingPans.add(r.pan);
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const { data: rows, error: rErr } = await supabase
+              .from("product_keys")
+              .select("pan")
+              .in("pan", pChunk);
+            if (!rErr && rows) {
+              for (const r of rows as { pan?: string }[]) {
+                if (r?.pan) existingPans.add(r.pan);
+              }
+              break;
+            }
+          } catch {
+            // retry
           }
-        } catch {
-          // ignore
+          await new Promise((r) => setTimeout(r, 150 * (attempt + 1)));
         }
         checkedCount += pChunk.length;
       })
@@ -732,33 +769,36 @@ export const adminPublishFullCards = async (
   const clean = (s: string | null | undefined) => (!s || s.toLowerCase() === "null" ? "" : s);
   const stamp = Date.now().toString(36);
 
-  const products = finalCards.map((c, i) => ({
-    category_id: c.category_id ?? null,
-    title: `${c.brand} ${c.bin} · ${clean(c.city) || clean(c.state) || clean(c.country) || "—"}`,
-    slug: `${c.bin}-${stamp}-${i}-${Math.random().toString(36).slice(2, 8)}`,
-    price: c.price,
-    delivery_type: "key" as DeliveryType,
-    active: true,
-    // Exactly one key per product, so stock is known up front — no extra round-trips.
-    stock: 1,
-    bin: c.bin,
-    brand: c.brand || null,
-    country: clean(c.country) || null,
-    state: clean(c.state) || null,
-    city: clean(c.city) || null,
-    zip: clean(c.zip) || null,
-    exp_month: clean(c.month) || null,
-    exp_year: clean(c.year) || null,
-    base: c.base,
-    refundable: c.refundable,
-    card_type: c.card_type ?? null,
-    card_level: c.card_level ?? null,
-    bank: c.bank ?? null,
-    last_digits: (c.cc || "").replace(/\D/g, "").slice(-3) || null,
-    has_phone: !!clean(c.tel),
-    has_email: !!clean(c.email),
-    ...(c.created_at ? { created_at: c.created_at } : {}),
-  }));
+  const products = finalCards.map((c, i) => {
+    const cleanBin = (c.bin || "").replace(/\D/g, "").slice(0, 6) || (c.cc || "").replace(/\D/g, "").slice(0, 6) || "000000";
+    return {
+      category_id: c.category_id ?? null,
+      title: `${c.brand || "CARD"} ${cleanBin} · ${clean(c.city) || clean(c.state) || clean(c.country) || "—"}`,
+      slug: `${cleanBin}-${stamp}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+      price: Number(c.price) || 1.5,
+      delivery_type: "key" as DeliveryType,
+      active: true,
+      // Exactly one key per product, so stock is known up front — no extra round-trips.
+      stock: 1,
+      bin: cleanBin,
+      brand: c.brand || null,
+      country: clean(c.country) || null,
+      state: clean(c.state) || null,
+      city: clean(c.city) || null,
+      zip: clean(c.zip) || null,
+      exp_month: clean(c.month) || null,
+      exp_year: clean(c.year) || null,
+      base: c.base,
+      refundable: c.refundable,
+      card_type: c.card_type ?? null,
+      card_level: c.card_level ?? null,
+      bank: c.bank ?? null,
+      last_digits: (c.cc || "").replace(/\D/g, "").slice(-3) || null,
+      has_phone: !!clean(c.tel),
+      has_email: !!clean(c.email),
+      ...(c.created_at ? { created_at: c.created_at } : {}),
+    };
+  });
 
   const lineFor = (c: FullCardInput) => [
     c.base, c.price, c.cc, clean(c.month), clean(c.year), clean(c.cvv),
@@ -772,10 +812,9 @@ export const adminPublishFullCards = async (
 
   for (let cIdx = 0; cIdx < productChunks.length; cIdx++) {
     const part = productChunks[cIdx];
-    const { data, error } = await withRetry(async () =>
+    const { data } = await withRetry(async () =>
       await supabase.from("products").insert(part as never).select("id, slug"),
     );
-    if (error) throw error;
     const keys = (data ?? [])
       .map((row) => {
         const card = bySlug.get(row.slug as string);
@@ -785,8 +824,23 @@ export const adminPublishFullCards = async (
       })
       .filter(Boolean) as { product_id: string; content: string; pan?: string }[];
     if (keys.length) {
-      const { error: kerr } = await withRetry(async () => await supabase.from("product_keys").insert(keys));
-      if (kerr) throw kerr;
+      try {
+        await withRetry(async () => await supabase.from("product_keys").insert(keys));
+      } catch (kerr: unknown) {
+        const errObj = kerr as { code?: string; message?: string };
+        // If a duplicate card slipped through into keys, insert individually to rescue non-duplicate cards
+        if (errObj?.code === "23505" || (errObj?.message || "").toLowerCase().includes("duplicate") || (errObj?.message || "").toLowerCase().includes("unique")) {
+          for (const k of keys) {
+            try {
+              await supabase.from("product_keys").insert(k);
+            } catch {
+              // ignore duplicate card
+            }
+          }
+        } else {
+          throw kerr;
+        }
+      }
     }
     created += data?.length ?? 0;
     const uploadPct = Math.min(99, Math.round(30 + (created / products.length) * 69));

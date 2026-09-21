@@ -79,6 +79,10 @@ function parseExpBlob(s: string): { month: string; year: string } | null {
     if (Number(sep[1]) < 1 || Number(sep[1]) > 12) return null;
     return normExp(sep[1], sep[2]);
   }
+  const yfirst = t.match(/^(\d{4})\s*[\/\-.\s]\s*(0?[1-9]|1[0-2])$/);
+  if (yfirst) {
+    return normExp(yfirst[2], yfirst[1]);
+  }
   const d = digitsOnly(t);
   if (t.replace(/\D/g, "") !== t.replace(/[^0-9]/g, "")) return null;
   if ((d.length === 4 || d.length === 6) && /^(0[1-9]|1[0-2])/.test(d)) {

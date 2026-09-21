@@ -329,7 +329,7 @@ const Admin = () => {
           tel: p.tel,
           email: p.email,
           brand,
-          bin: p.cc.slice(0, 6),
+          bin: b6,
           base: `ADMIN_${new Date().toISOString().slice(0, 10).replace(/-/g, "_")}_${brand}`,
           price: calculatedPrice,
           refundable: isRefundable,
