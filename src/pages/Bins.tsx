@@ -61,6 +61,15 @@ function slidingPageNumbers(page: number, maxAvailable: number): number[] {
   return list;
 }
 
+function maskBin(raw?: string | null): string {
+  if (!raw) return "—";
+  const clean = raw.trim();
+  if (!clean) return "—";
+  const prefix = clean.slice(0, 2);
+  const starsCount = Math.max(4, clean.length - prefix.length);
+  return `${prefix}${"*".repeat(starsCount)}`;
+}
+
 const Bins = () => {
   const { profile } = useAuth();
   const [rows, setRows] = useState<SectionProduct[]>([]);
@@ -142,10 +151,10 @@ const Bins = () => {
     try {
       await purchaseProduct(p.id, 1);
       setDelivered({
-        title: `BIN ${p.bin || ""}`.trim(),
-        content: p.instant_content ?? "Delivered — see Orders",
+        title: `Unlocked BIN: ${p.bin || ""}`.trim(),
+        content: p.instant_content || p.bin || "Delivered — see Orders",
       });
-      toast.success("Purchased successfully");
+      toast.success("Purchased & Unlocked successfully");
       void load();
     } catch (e) {
       toast.error(translatePurchaseError(e instanceof Error ? e.message : "Purchase failed"));
@@ -334,10 +343,10 @@ const Bins = () => {
                   key={p.id}
                   className="border-b border-[#eef1f4] odd:bg-white even:bg-[#fafbfc] hover:bg-[#f2f8ff] transition"
                 >
-                  {/* BIN CHIP */}
+                  {/* BIN CHIP (MASKED: 1-2 DIGITS + ASTERISKS) */}
                   <td className="px-3 py-2.5 align-middle whitespace-nowrap">
                     <span className="inline-block rounded-lg bg-gradient-to-b from-[#455a64] to-[#1f2d3d] px-2.5 py-1 font-mono text-[12px] font-bold tracking-wider text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_5px_12px_-7px_rgba(31,45,61,1)]">
-                      {p.bin || "—"}
+                      {maskBin(p.bin)}
                     </span>
                   </td>
 
