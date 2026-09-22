@@ -65,8 +65,8 @@ function maskBin(raw?: string | null): string {
   if (!raw) return "—";
   const clean = raw.trim();
   if (!clean) return "—";
-  const prefix = clean.slice(0, 2);
-  const starsCount = Math.max(4, clean.length - prefix.length);
+  const prefix = clean.slice(0, 1);
+  const starsCount = Math.max(5, clean.length - 1);
   return `${prefix}${"*".repeat(starsCount)}`;
 }
 
