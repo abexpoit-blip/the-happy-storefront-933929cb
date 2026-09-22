@@ -32,27 +32,44 @@ const mapRows = (rows: unknown[]): SectionProduct[] =>
 
 /** Public list for a section. Sold-out key products are hidden. */
 export const listSection = async (section: Section, limit = 2000): Promise<SectionProduct[]> => {
-  const { data, error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let q: any = (supabase as any)
     .from("products")
     .select("*")
     .eq("active", true)
     .order("created_at", { ascending: false })
     .limit(limit);
+
+  if (section === "bin" || section === "dump") {
+    q = q.eq("section", section);
+  } else {
+    q = q.or("section.is.null,section.eq.card");
+  }
+
+  const { data, error } = await q;
   if (error) throw error;
   return mapRows(data ?? [])
-    .filter((p) => sectionOf(p) === section)
     .filter((p) => p.delivery_type !== "key" || (p.stock ?? 0) > 0);
 };
 
 /** Admin list (includes hidden / sold out). */
 export const adminListSection = async (section: Section, limit = 2000): Promise<SectionProduct[]> => {
-  const { data, error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let q: any = (supabase as any)
     .from("products")
     .select("*")
     .order("created_at", { ascending: false })
     .limit(limit);
+
+  if (section === "bin" || section === "dump") {
+    q = q.eq("section", section);
+  } else {
+    q = q.or("section.is.null,section.eq.card");
+  }
+
+  const { data, error } = await q;
   if (error) throw error;
-  return mapRows(data ?? []).filter((p) => sectionOf(p) === section);
+  return mapRows(data ?? []);
 };
 
 /* ---------------- BIN upload ---------------- */

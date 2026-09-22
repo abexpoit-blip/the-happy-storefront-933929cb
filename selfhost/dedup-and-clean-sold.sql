@@ -99,10 +99,14 @@ DECLARE
   _left integer;
 BEGIN
   _pid := COALESCE(NEW.product_id, OLD.product_id);
+  IF _pid IS NULL THEN
+    RETURN NULL;
+  END IF;
+
   SELECT count(*) INTO _left FROM product_keys k WHERE k.product_id = _pid AND k.is_sold = false;
   UPDATE products p
      SET stock = COALESCE(_left, 0),
-         active = CASE WHEN COALESCE(_left, 0) <= 0 THEN false ELSE p.active END
+         active = CASE WHEN COALESCE(_left, 0) <= 0 THEN false ELSE true END
    WHERE p.id = _pid;
   RETURN NULL;
 END;
@@ -113,22 +117,23 @@ CREATE TRIGGER trg_keys_stock
 AFTER INSERT OR UPDATE OR DELETE ON public.product_keys
 FOR EACH ROW EXECUTE FUNCTION public.sync_product_stock();
 
--- 8. Remove/deactivate all sold cards from shop listing
+-- 8. Correctly sync products with their actual product_keys stock
+-- Reactivate any product that has unsold keys!
+UPDATE public.products p
+   SET active = true,
+       stock = (SELECT count(*) FROM public.product_keys k WHERE k.product_id = p.id AND k.is_sold = false)
+ WHERE p.delivery_type = 'key'
+   AND EXISTS (
+     SELECT 1 FROM public.product_keys k WHERE k.product_id = p.id AND k.is_sold = false
+   );
+
+-- Only deactivate products that have ZERO unsold keys left
 UPDATE public.products p
    SET active = false, stock = 0
  WHERE p.delivery_type = 'key'
-   AND (
-     p.stock <= 0
-     OR NOT EXISTS (
-       SELECT 1 FROM public.product_keys k
-        WHERE k.product_id = p.id AND k.is_sold = false
-     )
+   AND NOT EXISTS (
+     SELECT 1 FROM public.product_keys k WHERE k.product_id = p.id AND k.is_sold = false
    );
-
--- Resync all active products stock
-UPDATE public.products p
-   SET stock = (SELECT count(*) FROM public.product_keys k WHERE k.product_id = p.id AND k.is_sold = false)
- WHERE p.delivery_type = 'key' AND p.active = true;
 
 -- 9. Update bot subscribers registry
 CREATE TABLE IF NOT EXISTS public.update_bot_subscribers (

@@ -172,14 +172,17 @@ const Shop = () => {
   const ensureBaseLoaded = useCallback(async (targetBase: string) => {
     if (!targetBase || targetBase === "all") return;
     const norm = publicBase(targetBase);
-    // Check if we already have cards for this base in `all`
-    const hasCards = all.some(
-      (p) => publicBase(p.base ?? "") === norm || (p.base ?? "") === targetBase
-    );
-    if (hasCards) return;
-    if (loadingBases.current.has(norm)) return;
+    const cNorm = norm.replace(/[-_\s]+/g, "").toUpperCase();
+    if (loadingBases.current.has(cNorm)) return;
 
-    loadingBases.current.add(norm);
+    // Check if we already have cards for this base in `all`
+    const matchingLoaded = all.filter((p) => {
+      const pNorm = publicBase(p.base ?? "").replace(/[-_\s]+/g, "").toUpperCase();
+      return pNorm === cNorm || (pNorm && cNorm && (pNorm.includes(cNorm) || cNorm.includes(pNorm)));
+    });
+    if (matchingLoaded.length >= 10) return;
+
+    loadingBases.current.add(cNorm);
     try {
       const baseCards = await listProducts({
         base: targetBase,
@@ -195,7 +198,7 @@ const Shop = () => {
     } catch {
       /* ignore */
     } finally {
-      loadingBases.current.delete(norm);
+      loadingBases.current.delete(cNorm);
     }
   }, [all]);
 
@@ -247,9 +250,18 @@ const Shop = () => {
       if (p.delivery_type === "key" && (p.stock ?? 0) <= 0) return false;
       if (q.bin && !(p.bin ?? "").startsWith(q.bin)) return false;
       if (q.base && q.base !== "all") {
-        const cardBase = publicBase(p.base ?? "");
-        const queryBase = publicBase(q.base);
-        if (cardBase !== queryBase && (p.base ?? "") !== q.base) return false;
+        const cRaw = (p.base ?? "").trim();
+        const qRaw = q.base.trim();
+        const cardBase = publicBase(cRaw);
+        const queryBase = publicBase(qRaw);
+        const norm = (s: string) => s.replace(/[-_\s]+/g, "").toUpperCase();
+        const cNorm = norm(cardBase);
+        const qNorm = norm(queryBase);
+        const match =
+          cardBase === queryBase ||
+          cRaw === qRaw ||
+          (cNorm && qNorm && (cNorm === qNorm || cNorm.includes(qNorm) || qNorm.includes(cNorm)));
+        if (!match) return false;
       }
       if (q.country && resolveCountryCode(p.country) !== q.country) return false;
       if (q.zip && !(p.zip ?? "").startsWith(q.zip)) return false;

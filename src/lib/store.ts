@@ -159,7 +159,7 @@ export const listProducts = async (
     if (opts.base && opts.base !== "all") {
       const pub = publicBase(opts.base).replace(/[,()]/g, "").trim();
       if (pub) {
-        q = q.or(`base.ilike.%${pub}%,base.eq.${opts.base}`);
+        q = q.ilike("base", `%${pub}%`);
       } else {
         q = q.eq("base", opts.base);
       }

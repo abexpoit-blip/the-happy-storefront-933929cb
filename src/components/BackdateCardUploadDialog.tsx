@@ -299,7 +299,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
               card_level: binInfo.level,
               bank: binInfo.bank,
               category_id: backdateCategoryId || null,
-              created_at: new Date().toISOString(),
+              created_at: curDate.toISOString(),
             };
           });
 
