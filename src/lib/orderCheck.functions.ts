@@ -87,7 +87,6 @@ export const startOrderCardCheck = createServerFn({ method: "POST" })
       }
     }
 
-...
     const texts: string[] = [];
     if (check.product_id) {
       const { data: keys } = await db
