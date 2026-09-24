@@ -7,21 +7,44 @@ const digits = (s: string) => s.replace(/\D/g, "");
 /** Buyers can only run the refund check for 1 minute (60 seconds) after the purchase. */
 export const CHECK_WINDOW_MS = 1 * 60 * 1000;
 
-/** Turn a stored card line (pipe format) into `PAN|MM|YYYY|CVV`. */
-function toCardLine(content: string): { line: string; pan: string } | null {
-  const first = content.split(/\r?\n/).map((l) => l.trim()).find(Boolean);
-  if (!first) return null;
-  const p = first.split("|").map((x) => x.trim());
-  let pan = "", mm = "", yy = "", cvv = "";
-  if (p.length >= 6 && digits(p[2] ?? "").length >= 12) {
-    [pan, mm, yy, cvv] = [digits(p[2] ?? ""), digits(p[3] ?? ""), digits(p[4] ?? ""), digits(p[5] ?? "")];
-  } else if (p.length >= 4 && digits(p[0] ?? "").length >= 12) {
-    [pan, mm, yy, cvv] = [digits(p[0] ?? ""), digits(p[1] ?? ""), digits(p[2] ?? ""), digits(p[3] ?? "")];
-  } else return null;
-  if (!pan || !mm || !yy || !cvv) return null;
-  if (mm.length === 1) mm = `0${mm}`;
-  if (yy.length === 2) yy = `20${yy}`;
-  return { line: `${pan}|${mm}|${yy}|${cvv}`, pan };
+/** Parse ONE line: find the PAN anywhere, then MM, YY(YY), CVV after it (MM/YY combos allowed). */
+function parseOne(raw: string): { line: string; pan: string } | null {
+  const p = raw.trim().split(/[|;,\s]+/).map((x) => x.trim()).filter(Boolean);
+  for (let i = 0; i < p.length; i++) {
+    const pan = digits(p[i] ?? "");
+    if (pan.length < 12 || pan.length > 19 || pan !== (p[i] ?? "").replace(/[\s-]/g, "")) continue;
+    const rest = p.slice(i + 1);
+    let mm = "", yy = "", cvv = "";
+    const combo = (rest[0] ?? "").match(/^(\d{1,2})[/\-](\d{2}|\d{4})$/);
+    if (combo) {
+      [mm, yy, cvv] = [combo[1]!, combo[2]!, digits(rest[1] ?? "")];
+    } else {
+      [mm, yy, cvv] = [digits(rest[0] ?? ""), digits(rest[1] ?? ""), digits(rest[2] ?? "")];
+    }
+    if (mm.length === 1) mm = `0${mm}`;
+    if (yy.length === 2) yy = `20${yy}`;
+    const m = Number(mm);
+    if (!(m >= 1 && m <= 12) || yy.length !== 4 || cvv.length < 3 || cvv.length > 4) continue;
+    return { line: `${pan}|${mm}|${yy}|${cvv}`, pan };
+  }
+  return null;
+}
+
+/** Search every line of the given texts; prefer a PAN ending with `last`. */
+function toCardLine(texts: string[], last?: string | null): { line: string; pan: string } | null {
+  const found: { line: string; pan: string }[] = [];
+  for (const t of texts) {
+    for (const l of String(t ?? "").split(/\r?\n/)) {
+      const r = parseOne(l);
+      if (r) found.push(r);
+    }
+  }
+  const tail = digits(String(last ?? ""));
+  if (tail) {
+    const hit = found.find((f) => f.pan.endsWith(tail));
+    if (hit) return hit;
+  }
+  return found[0] ?? null;
 }
 
 /**
@@ -38,14 +61,13 @@ export const startOrderCardCheck = createServerFn({ method: "POST" })
 
     const { data: check } = await db
       .from("card_checks")
-      .select("id, product_id, order_id, status, created_at")
+      .select("id, product_id, order_id, status, created_at, last_digits")
       .eq("id", data.checkId)
       .eq("user_id", context.userId)
       .maybeSingle();
     if (!check) throw new Error("check_not_found");
     if (check.status !== "pending") throw new Error("already_checked");
 
-    // Refund checking is only allowed inside the 2 minute window after purchase.
     const boughtAt = new Date(String(check.created_at ?? "")).getTime();
     if (!Number.isFinite(boughtAt) || Date.now() - boughtAt > CHECK_WINDOW_MS) {
       throw new Error("check_window_expired");
@@ -65,14 +87,23 @@ export const startOrderCardCheck = createServerFn({ method: "POST" })
       }
     }
 
-    const { data: key } = await db
-      .from("product_keys")
-      .select("content")
-      .eq("product_id", check.product_id)
-      .eq("sold_to", context.userId)
-      .limit(1)
-      .maybeSingle();
-    const parsed = toCardLine(String((key as { content?: string } | null)?.content ?? ""));
+    const texts: string[] = [];
+    if (check.product_id) {
+      const { data: keys } = await db
+        .from("product_keys")
+        .select("content")
+        .eq("product_id", check.product_id)
+        .eq("sold_to", context.userId)
+        .limit(50);
+      for (const k of (keys ?? []) as { content?: string }[]) texts.push(String(k.content ?? ""));
+    }
+    if (check.order_id) {
+      let q = db.from("order_items").select("delivered_content").eq("order_id", check.order_id);
+      if (check.product_id) q = q.eq("product_id", check.product_id);
+      const { data: items } = await q.limit(50);
+      for (const it of (items ?? []) as { delivered_content?: string }[]) texts.push(String(it.delivered_content ?? ""));
+    }
+    const parsed = toCardLine(texts, check.last_digits);
     if (!parsed) throw new Error("no_card_data");
 
     // pay the fee (bonus balance first) — throws insufficient_balance
