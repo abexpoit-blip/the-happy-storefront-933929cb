@@ -537,7 +537,7 @@ export const adminAddKeys = async (productId: string, lines: string[]) => {
       return { product_id: productId, content, pan: match ? match[0] : null };
     });
   if (rows.length === 0) return 0;
-  const { error } = await supabase.from("product_keys").insert(rows);
+  const { error } = await supabase.from("product_keys").insert(rows as never);
   if (error) throw error;
   await adminSyncStock(productId);
   return rows.length;
@@ -854,14 +854,14 @@ export const adminPublishFullCards = async (
       .filter(Boolean) as { product_id: string; content: string; pan?: string }[];
     if (keys.length) {
       try {
-        await withRetry(async () => await supabase.from("product_keys").insert(keys));
+        await withRetry(async () => await supabase.from("product_keys").insert(keys as never));
       } catch (kerr: unknown) {
         const errObj = kerr as { code?: string; message?: string };
         // If a duplicate card slipped through into keys, insert individually to rescue non-duplicate cards
         if (errObj?.code === "23505" || (errObj?.message || "").toLowerCase().includes("duplicate") || (errObj?.message || "").toLowerCase().includes("unique")) {
           for (const k of keys) {
             try {
-              await supabase.from("product_keys").insert(k);
+              await supabase.from("product_keys").insert(k as never);
             } catch {
               // ignore duplicate card
             }
