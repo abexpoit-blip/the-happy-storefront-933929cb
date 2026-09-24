@@ -401,10 +401,10 @@ const OrderDetail = ({
 
   const [expiredWarningOpen, setExpiredWarningOpen] = useState(false);
 
-  const runCheck = async (checkId: string) => {
+  const runCheck = async (checkId: string, rawCard: string) => {
     setBusy(checkId);
     try {
-      const { taskId } = await start({ data: { checkId } });
+      const { taskId } = await start({ data: { checkId, rawCard } });
       for (let i = 0; i < 40; i++) {
         await new Promise((r) => setTimeout(r, i === 0 ? 6000 : 11000));
         try {
@@ -442,7 +442,7 @@ const OrderDetail = ({
   const checkAll = async () => {
     for (const p of pairs) {
       if (p.check && p.check.status === "pending" && leftMs(p.check.created_at) > 0) {
-        await runCheck(p.check.id);
+        await runCheck(p.check.id, p.card.raw);
       }
     }
   };
@@ -602,7 +602,7 @@ const OrderDetail = ({
                       </button>
                       {check && status === "pending" && leftMs(check.created_at) > 0 && (
                         <button
-                          onClick={() => void runCheck(check.id)}
+                          onClick={() => void runCheck(check.id, card.raw)}
                           disabled={!!busy}
                           className="rounded-md bg-gradient-to-r from-[#2196f3] to-[#5ac8fa] px-3 py-1 text-[11.5px] font-semibold text-white hover:brightness-110 disabled:opacity-50 inline-flex items-center gap-1"
                         >

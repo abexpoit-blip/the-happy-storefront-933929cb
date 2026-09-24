@@ -5,3 +5,4 @@
 - [x] Verify balance, deposit, checker, task, referral, and API-key flows.
 - [x] Run syntax, type, build, and integration checks.
 - [x] Provide exact VPS deploy and log-check commands.
+- [x] Fix purchased-card CHECK lookup without changing other features.
