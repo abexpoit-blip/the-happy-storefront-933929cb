@@ -73,6 +73,9 @@ const Recharge = () => {
 
   const loadHistory = async () => {
     try {
+      try {
+        await supabase.rpc("expire_stale_deposits");
+      } catch {}
       const { data } = await supabase.from("deposits").select("*").order("created_at", { ascending: false }).limit(20);
       setHistory((data ?? []) as unknown as Deposit[]);
     } catch { /* ignore */ }

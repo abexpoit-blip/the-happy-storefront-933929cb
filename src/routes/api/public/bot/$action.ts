@@ -583,6 +583,21 @@ export const Route = createFileRoute("/api/public/bot/$action")({
                 }
               }
 
+              // If not approved and expired (either past expires_at or older than 30 minutes), auto-reject in DB
+              const isExpired =
+                (dep.expires_at && new Date(dep.expires_at).getTime() < Date.now()) ||
+                (dep.created_at && new Date(dep.created_at).getTime() + 30 * 60 * 1000 < Date.now());
+              if (dep.status === "pending" && isExpired) {
+                await db
+                  .from("deposits")
+                  .update({
+                    status: "rejected",
+                    admin_note: "Expired: unpaid after 30 minutes",
+                  })
+                  .eq("id", dep.id);
+                dep.status = "rejected";
+              }
+
               return json({
                 status: "success",
                 deposit_status: dep.status,

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { AdminLayout } from "@/components/AdminLayout";
 import { adminListDeposits, adminSetDepositStatus } from "@/lib/store";
+import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -20,11 +21,15 @@ interface Deposit {
   crypto_currency?: string;
   crypto_amount?: number;
   plisio_invoice_id?: string;
+  invoice_id?: string;
   plisio_wallet?: string;
+  wallet_address?: string;
   txid?: string;
   confirmations?: number;
   admin_notes?: string;
+  admin_note?: string;
   created_at: string;
+  expires_at?: string;
   reviewed_at?: string;
 }
 
@@ -34,12 +39,14 @@ const STATUS_COLORS: Record<string, string> = {
   pending: "bg-warning/15 text-warning border-warning/30",
   approved: "bg-success/15 text-success border-success/30",
   rejected: "bg-destructive/15 text-destructive border-destructive/30",
+  expired: "bg-destructive/15 text-destructive border-destructive/30",
 };
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
   pending: <Clock className="h-3.5 w-3.5" />,
   approved: <CheckCircle2 className="h-3.5 w-3.5" />,
   rejected: <XCircle className="h-3.5 w-3.5" />,
+  expired: <XCircle className="h-3.5 w-3.5" />,
 };
 
 const AdminPayments = () => {
@@ -104,6 +111,20 @@ const AdminPayments = () => {
     }
   };
 
+  const handleCleanExpired = async () => {
+    setActionLoading("clean");
+    try {
+      const { data, error } = await supabase.rpc("expire_stale_deposits");
+      if (error) throw error;
+      toast.success(`Cleaned ${data ?? 0} expired unpaid deposit(s)`);
+      load();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to clean expired deposits");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const filters: { key: StatusFilter; label: string; icon: React.ReactNode }[] = [
     { key: "all", label: "All", icon: <ArrowUpDown className="h-3.5 w-3.5" /> },
     { key: "pending", label: "Pending", icon: <Clock className="h-3.5 w-3.5" /> },
@@ -157,7 +178,17 @@ const AdminPayments = () => {
               className="pl-9 bg-input/60"
             />
           </div>
-          <Button variant="outline" size="icon" onClick={load} className="shrink-0">
+          <Button
+            variant="outline"
+            onClick={handleCleanExpired}
+            disabled={actionLoading === "clean"}
+            className="shrink-0 text-xs gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+            title="Auto-reject all unpaid deposits older than 30 minutes"
+          >
+            {actionLoading === "clean" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+            Clean Expired
+          </Button>
+          <Button variant="outline" size="icon" onClick={load} className="shrink-0" title="Refresh">
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
         </div>

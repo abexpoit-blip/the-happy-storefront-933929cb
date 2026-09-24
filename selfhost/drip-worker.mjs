@@ -807,14 +807,19 @@ async function checkLtcBlockchainWorker(address) {
 
 async function reconcilePendingDeposits() {
   try {
+    // 0. Run database-level auto-expire for any stale pending deposits older than 30 minutes
+    try {
+      await db.rpc("expire_stale_deposits");
+    } catch {}
+
     const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
     const { data: pendings, error: pErr } = await db
       .from("deposits")
-      .select("id, invoice_id, wallet_address, amount, crypto_amount, currency, status, user_id, created_at")
+      .select("id, invoice_id, wallet_address, amount, crypto_amount, currency, status, user_id, created_at, expires_at")
       .eq("status", "pending")
       .gt("created_at", since)
       .order("created_at", { ascending: false })
-      .limit(30);
+      .limit(50);
 
     if (pErr || !pendings || pendings.length === 0) return;
 
@@ -917,6 +922,22 @@ async function reconcilePendingDeposits() {
           } catch (notifErr) {
             console.error(`[Deposit Reconciler] Notif error:`, notifErr.message);
           }
+        }
+      } else {
+        // If not approved and older than 30 minutes (or past expires_at), automatically reject as expired!
+        const isExpired =
+          (dep.expires_at && new Date(dep.expires_at).getTime() < Date.now()) ||
+          (dep.created_at && new Date(dep.created_at).getTime() + 30 * 60 * 1000 < Date.now());
+
+        if (isExpired) {
+          console.log(`[Deposit Reconciler] Auto-rejecting expired unpaid deposit ${dep.id} (created at ${dep.created_at})`);
+          await db
+            .from("deposits")
+            .update({
+              status: "rejected",
+              admin_note: "Expired: unpaid after 30 minutes",
+            })
+            .eq("id", dep.id);
         }
       }
     }

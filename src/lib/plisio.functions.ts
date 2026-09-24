@@ -97,7 +97,7 @@ export const checkDepositStatus = createServerFn({ method: "POST" })
 
     const { data: dep } = await supabaseAdmin
       .from("deposits")
-      .select("id, user_id, amount, status, invoice_id, confirmations, expires_at, wallet_address, crypto_amount")
+      .select("id, user_id, amount, status, invoice_id, confirmations, expires_at, created_at, wallet_address, crypto_amount")
       .eq("id", data.deposit_id)
       .maybeSingle();
     if (!dep || dep.user_id !== context.userId) throw new Error("not_found");
@@ -136,7 +136,9 @@ export const checkDepositStatus = createServerFn({ method: "POST" })
       }
     }
 
-    const expired = !!dep.expires_at && Date.parse(dep.expires_at) < Date.now();
+    const expired =
+      (!!dep.expires_at && Date.parse(dep.expires_at) < Date.now()) ||
+      (!!dep.created_at && Date.now() - new Date(dep.created_at).getTime() > 30 * 60 * 1000);
     if (status === "pending" && expired && rawStatus !== "mismatch") status = "rejected";
 
     await supabaseAdmin

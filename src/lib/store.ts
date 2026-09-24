@@ -386,13 +386,32 @@ export const adminSetBlocked = async (userId: string, blocked: boolean) => {
 };
 
 export const adminListDeposits = async (): Promise<(Deposit & { username?: string })[]> => {
+  try {
+    await supabase.rpc("expire_stale_deposits");
+  } catch {
+    // ignore
+  }
   const { data, error } = await supabase.from("deposits").select("*").order("created_at", { ascending: false });
   if (error) throw error;
   const ids = [...new Set((data ?? []).map((d) => d.user_id))];
   if (ids.length === 0) return [];
   const { data: profs } = await supabase.from("profiles").select("id, username").in("id", ids);
   const nameById = new Map((profs ?? []).map((p) => [p.id, p.username]));
-  return (data ?? []).map((d) => ({ ...d, amount: num(d.amount), username: nameById.get(d.user_id) })) as (Deposit & { username?: string })[];
+  return (data ?? []).map((d) => {
+    const raw = d as Record<string, unknown>;
+    const expiresAt = typeof raw.expires_at === "string" ? raw.expires_at : null;
+    const createdAt = typeof d.created_at === "string" ? d.created_at : null;
+    const isExpired =
+      d.status === "pending" &&
+      ((expiresAt && new Date(expiresAt).getTime() < Date.now()) ||
+        (createdAt && new Date(createdAt).getTime() + 30 * 60 * 1000 < Date.now()));
+    return {
+      ...d,
+      status: isExpired ? "rejected" : d.status,
+      amount: num(d.amount),
+      username: nameById.get(d.user_id),
+    };
+  }) as (Deposit & { username?: string })[];
 };
 
 export const adminSetDepositStatus = async (id: string, status: string, note?: string) => {
