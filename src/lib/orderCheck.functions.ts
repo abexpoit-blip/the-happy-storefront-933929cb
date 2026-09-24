@@ -53,7 +53,10 @@ function toCardLine(texts: string[], last?: string | null): { line: string; pan:
  */
 export const startOrderCardCheck = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ checkId: z.string().min(1) }).parse(input))
+  .inputValidator((input) => z.object({
+    checkId: z.string().min(1),
+    rawCard: z.string().trim().min(1).max(4000).optional(),
+  }).parse(input))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -88,6 +91,7 @@ export const startOrderCardCheck = createServerFn({ method: "POST" })
     }
 
     const texts: string[] = [];
+    const deliveredTexts: string[] = [];
     if (check.product_id) {
       const { data: keys } = await db
         .from("product_keys")
@@ -98,12 +102,31 @@ export const startOrderCardCheck = createServerFn({ method: "POST" })
       for (const k of (keys ?? []) as { content?: string }[]) texts.push(String(k.content ?? ""));
     }
     if (check.order_id) {
-      let q = db.from("order_items").select("delivered_content").eq("order_id", check.order_id);
-      if (check.product_id) q = q.eq("product_id", check.product_id);
-      const { data: items } = await q.limit(50);
-      for (const it of (items ?? []) as { delivered_content?: string }[]) texts.push(String(it.delivered_content ?? ""));
+      // Use the signed-in client's owner policy here. Do not filter by product_id:
+      // old/cart orders can legitimately have a null or changed product reference.
+      const { data: items, error: itemsError } = await context.supabase
+        .from("order_items")
+        .select("delivered_content")
+        .eq("order_id", check.order_id)
+        .limit(50);
+      if (itemsError) throw new Error(`order_data_read_failed: ${itemsError.message}`);
+      for (const it of (items ?? []) as { delivered_content?: string | null }[]) {
+        const content = String(it.delivered_content ?? "");
+        deliveredTexts.push(content);
+        texts.push(content);
+      }
     }
-    const parsed = toCardLine(texts, check.last_digits);
+
+    // The visible order row supplies an exact fallback. Accept it only when its PAN
+    // is also present in this user's saved delivered content for this same order.
+    const supplied = data.rawCard ? parseOne(data.rawCard) : null;
+    const deliveredCards = deliveredTexts.flatMap((text) =>
+      text.split(/\r?\n/).map(parseOne).filter((card): card is { line: string; pan: string } => card !== null),
+    );
+    const verifiedSupplied = supplied && deliveredCards.some((card) => card.pan === supplied.pan)
+      ? supplied
+      : null;
+    const parsed = verifiedSupplied ?? toCardLine(texts, check.last_digits);
     if (!parsed) throw new Error("no_card_data");
 
     // pay the fee (bonus balance first) — throws insufficient_balance
