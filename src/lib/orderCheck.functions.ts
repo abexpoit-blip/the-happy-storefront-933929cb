@@ -62,6 +62,31 @@ export const startOrderCardCheck = createServerFn({ method: "POST" })
     const { data: check } = await db
       .from("card_checks")
       .select("id, product_id, order_id, status, created_at, last_digits")
+      .eq("id", data.checkId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (!check) throw new Error("check_not_found");
+    if (check.status !== "pending") throw new Error("already_checked");
+
+    const boughtAt = new Date(String(check.created_at ?? "")).getTime();
+    if (!Number.isFinite(boughtAt) || Date.now() - boughtAt > CHECK_WINDOW_MS) {
+      throw new Error("check_window_expired");
+    }
+
+    // resume an already-running task for this card instead of paying twice
+    const { data: running } = await db
+      .from("checker_tasks")
+      .select("task_id, mapping")
+      .eq("user_id", context.userId)
+      .eq("status", "running")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    for (const row of (running ?? []) as { task_id: string; mapping: Record<string, string> }[]) {
+      if (Object.values(row.mapping ?? {}).includes(data.checkId)) {
+        return { taskId: row.task_id, resumed: true };
+      }
+    }
+
 ...
     const texts: string[] = [];
     if (check.product_id) {
