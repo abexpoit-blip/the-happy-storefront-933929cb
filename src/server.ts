@@ -97,14 +97,23 @@ function isScraperRequest(request: Request, pathname: string): boolean {
 }
 
 function applySecurityHeaders(res: Response): Response {
-  res.headers.set("X-Frame-Options", "DENY");
-  res.headers.set("X-Content-Type-Options", "nosniff");
-  res.headers.set("X-XSS-Protection", "1; mode=block");
-  res.headers.set("Referrer-Policy", "no-referrer");
-  res.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet, noimageindex");
-  res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), browsing-topics=()");
-  res.headers.set("X-Permitted-Cross-Domain-Policies", "none");
-  return res;
+  try {
+    const headers = new Headers(res.headers);
+    headers.set("X-Frame-Options", "DENY");
+    headers.set("X-Content-Type-Options", "nosniff");
+    headers.set("X-XSS-Protection", "1; mode=block");
+    headers.set("Referrer-Policy", "no-referrer");
+    headers.set("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet, noimageindex");
+    headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), browsing-topics=()");
+    headers.set("X-Permitted-Cross-Domain-Policies", "none");
+    return new Response(res.body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
+    });
+  } catch {
+    return res;
+  }
 }
 
 export default {
