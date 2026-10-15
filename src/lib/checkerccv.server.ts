@@ -19,21 +19,34 @@ export interface CheckerResultRow {
 const creds = () => {
   const key = (process.env["CHECKERCCV_API_KEY"] ?? "").trim();
   const token = (process.env["CHECKERCCV_TOKEN"] ?? "").trim();
-  if (!key || !token) throw new Error("checker_not_configured");
+  // New CheckerCCV API: Bearer token only — the API key is optional legacy.
+  if (!token) throw new Error("checker_not_configured");
   return { key, token };
 };
 
-async function call(url: string, body: Record<string, unknown>) {
+async function call(url: string, body: Record<string, unknown>, method: "GET" | "POST" = "POST") {
   const { token } = creds();
-  const res = await fetch(url, {
-    method: "POST",
+  let finalUrl = url;
+  const init: RequestInit = {
+    method,
     headers: {
       Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify(body),
-  });
+  };
+  if (method === "GET") {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(body)) {
+      if (v === undefined || v === null || v === "") continue;
+      qs.set(k, Array.isArray(v) ? JSON.stringify(v) : String(v));
+    }
+    const s = qs.toString();
+    if (s) finalUrl = `${url}?${s}`;
+  } else {
+    (init.headers as Record<string, string>)["Content-Type"] = "application/json";
+    init.body = JSON.stringify(body);
+  }
+  const res = await fetch(finalUrl, init);
   const text = await res.text();
   let payload: unknown;
   try {
