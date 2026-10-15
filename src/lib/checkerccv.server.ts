@@ -148,7 +148,7 @@ export async function getResults(taskId: string, cursor = 0, limit = 500) {
   let raw: unknown;
   for (let attempt = 0; ; attempt++) {
     try {
-      raw = await call(`${API_BASE}/tasks/result.php`, { task_id: taskId, cursor, limit });
+      raw = await callSmart(`${API_BASE}/tasks/result.php`, { task_id: taskId, cursor, limit });
       break;
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
