@@ -111,7 +111,7 @@ export async function listGates(enabledOnly = true): Promise<CheckerGate[]> {
 
   try {
     const { key } = creds();
-    let p = (await call(GATES_URL, { key })) as unknown;
+    let p = (await callSmart(GATES_URL, key ? { key } : {})) as unknown;
     if (p && typeof p === "object" && Array.isArray((p as { data?: unknown[] }).data)) {
       p = (p as { data: unknown[] }).data;
     }
@@ -136,7 +136,7 @@ export async function listGates(enabledOnly = true): Promise<CheckerGate[]> {
 
 export async function createTask(gatecode: string, listcc: string[]) {
   const { key } = creds();
-  const p = (await call(`${API_BASE}/tasks/create.php`, { key, gatecode, listcc })) as {
+  const p = (await callSmart(`${API_BASE}/tasks/create.php`, { ...(key ? { key } : {}), gatecode, listcc })) as {
     task_id?: string;
   };
   if (!p?.task_id) throw new Error("checker_no_task_id");
