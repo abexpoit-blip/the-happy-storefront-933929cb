@@ -13,13 +13,14 @@ echo "============================================="
 echo "🔍 CheckerCCV Provider Diagnostic Check"
 echo "============================================="
 
-if [ -z "$KEY" ] || [ -z "$TOKEN" ]; then
-  echo "❌ FAILED: Missing CheckerCCV credentials!"
-  echo "   Run: bash selfhost/set-secrets.sh checkerccv CHECKERCCV_API_KEY=your_key CHECKERCCV_TOKEN=your_token"
+# New CheckerCCV API: Bearer token only (API key optional legacy).
+if [ -z "$TOKEN" ]; then
+  echo "❌ FAILED: Missing CHECKERCCV_TOKEN!"
+  echo "   Run: bash selfhost/set-secrets.sh checkerccv CHECKERCCV_TOKEN=your_token"
   exit 1
 fi
 
-echo "✔ API Key configured: ${KEY:0:8}********"
+[ -n "$KEY" ] && echo "✔ API Key configured: ${KEY:0:8}********"
 echo "✔ Token configured:   ${TOKEN:0:8}********"
 
 API_BASE="https://server.checkerccv.tv"
@@ -35,19 +36,17 @@ else
 fi
 
 echo ""
-echo "--> Verifying API Key and Credit Balance (/check_credit.php)..."
-curl -s -X POST "$API_BASE/check_credit.php" \
+echo "--> Verifying Token and Credit Balance (GET /check_credit.php)..."
+curl -s -X GET "$API_BASE/check_credit.php" \
   -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"key\":\"$KEY\"}" || true
+  -H "Accept: application/json" || true
 echo ""
 
 echo ""
-echo "--> Verifying Available Checker Gates (/auth/gates.php)..."
-curl -s -X POST "$API_BASE/auth/gates.php" \
+echo "--> Verifying Available Checker Gates (GET /auth/gates.php)..."
+curl -s -X GET "$API_BASE/auth/gates.php" \
   -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"key\":\"$KEY\"}" | head -c 300 || true
+  -H "Accept: application/json" | head -c 300 || true
 echo ""
 
 echo ""
