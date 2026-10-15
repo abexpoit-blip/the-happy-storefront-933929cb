@@ -71,9 +71,22 @@ async function call(url: string, body: Record<string, unknown>, method: "GET" | 
   return payload;
 }
 
+/** New API is GET + Bearer only; fall back to legacy POST if GET is rejected. */
+async function callSmart(url: string, body: Record<string, unknown>) {
+  try {
+    return await call(url, body, "GET");
+  } catch (e) {
+    const m = e instanceof Error ? e.message : String(e);
+    if (/\b(404|405)\b/.test(m) || m.includes("checker_bad_response")) {
+      return await call(url, body, "POST");
+    }
+    throw e;
+  }
+}
+
 export async function checkCredit(): Promise<number> {
   const { key } = creds();
-  const p = (await call(`${API_BASE}/check_credit.php`, { key })) as {
+  const p = (await callSmart(`${API_BASE}/check_credit.php`, key ? { key } : {})) as {
     data?: { credit?: number };
   };
   return Number(p?.data?.credit ?? 0);
