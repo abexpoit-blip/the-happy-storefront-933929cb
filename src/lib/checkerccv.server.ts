@@ -19,21 +19,34 @@ export interface CheckerResultRow {
 const creds = () => {
   const key = (process.env["CHECKERCCV_API_KEY"] ?? "").trim();
   const token = (process.env["CHECKERCCV_TOKEN"] ?? "").trim();
-  if (!key || !token) throw new Error("checker_not_configured");
+  // New CheckerCCV API: Bearer token only — the API key is optional legacy.
+  if (!token) throw new Error("checker_not_configured");
   return { key, token };
 };
 
-async function call(url: string, body: Record<string, unknown>) {
+async function call(url: string, body: Record<string, unknown>, method: "GET" | "POST" = "POST") {
   const { token } = creds();
-  const res = await fetch(url, {
-    method: "POST",
+  let finalUrl = url;
+  const init: RequestInit = {
+    method,
     headers: {
       Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify(body),
-  });
+  };
+  if (method === "GET") {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(body)) {
+      if (v === undefined || v === null || v === "") continue;
+      qs.set(k, Array.isArray(v) ? JSON.stringify(v) : String(v));
+    }
+    const s = qs.toString();
+    if (s) finalUrl = `${url}?${s}`;
+  } else {
+    (init.headers as Record<string, string>)["Content-Type"] = "application/json";
+    init.body = JSON.stringify(body);
+  }
+  const res = await fetch(finalUrl, init);
   const text = await res.text();
   let payload: unknown;
   try {
@@ -58,9 +71,22 @@ async function call(url: string, body: Record<string, unknown>) {
   return payload;
 }
 
+/** New API is GET + Bearer only; fall back to legacy POST if GET is rejected. */
+async function callSmart(url: string, body: Record<string, unknown>) {
+  try {
+    return await call(url, body, "GET");
+  } catch (e) {
+    const m = e instanceof Error ? e.message : String(e);
+    if (/\b(404|405)\b/.test(m) || m.includes("checker_bad_response")) {
+      return await call(url, body, "POST");
+    }
+    throw e;
+  }
+}
+
 export async function checkCredit(): Promise<number> {
   const { key } = creds();
-  const p = (await call(`${API_BASE}/check_credit.php`, { key })) as {
+  const p = (await callSmart(`${API_BASE}/check_credit.php`, key ? { key } : {})) as {
     data?: { credit?: number };
   };
   return Number(p?.data?.credit ?? 0);
@@ -85,7 +111,7 @@ export async function listGates(enabledOnly = true): Promise<CheckerGate[]> {
 
   try {
     const { key } = creds();
-    let p = (await call(GATES_URL, { key })) as unknown;
+    let p = (await callSmart(GATES_URL, key ? { key } : {})) as unknown;
     if (p && typeof p === "object" && Array.isArray((p as { data?: unknown[] }).data)) {
       p = (p as { data: unknown[] }).data;
     }
@@ -110,7 +136,7 @@ export async function listGates(enabledOnly = true): Promise<CheckerGate[]> {
 
 export async function createTask(gatecode: string, listcc: string[]) {
   const { key } = creds();
-  const p = (await call(`${API_BASE}/tasks/create.php`, { key, gatecode, listcc })) as {
+  const p = (await callSmart(`${API_BASE}/tasks/create.php`, { ...(key ? { key } : {}), gatecode, listcc })) as {
     task_id?: string;
   };
   if (!p?.task_id) throw new Error("checker_no_task_id");
@@ -122,7 +148,7 @@ export async function getResults(taskId: string, cursor = 0, limit = 500) {
   let raw: unknown;
   for (let attempt = 0; ; attempt++) {
     try {
-      raw = await call(`${API_BASE}/tasks/result.php`, { task_id: taskId, cursor, limit });
+      raw = await callSmart(`${API_BASE}/tasks/result.php`, { task_id: taskId, cursor, limit });
       break;
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
