@@ -663,9 +663,9 @@ async function processActiveQueues() {
             has_phone: !!clean(c.tel),
             has_email: !!clean(c.email),
             created_at: now.toISOString(),
-          };
-        })
-      );
+          });
+        }
+      }
 
       // Safe batch chunk insertion (100 rows per chunk)
       const CHUNK_INSERT = 100;
@@ -714,39 +714,39 @@ async function processActiveQueues() {
 
       console.log(`[Drip Worker] Successfully released ${cleanItems.length} cards for '${queue.name}'! (${remainingAfter} left)`);
 
-      // Announcements for all distinct bases released
+      // ONE combined announcement for the whole daily batch
       const distinctBases = [...new Set(products.map((p) => p.base))];
-      if (queue.auto_announce) {
-        for (const bName of distinctBases) {
-          try {
-            const pub = bName.replace(/^\s*(admin|seller)[\s_\-.:]+/i, "");
-            await db.from("announcements").insert({
-              title: `Base Update: ${pub}`,
-              body: `Fresh batch of verified cards added for base ${pub}. Available in shop now.`,
-              kind: "update",
-              created_at: now.toISOString(),
-            });
-          } catch (e) {
-            console.error("Announcement insert error:", e?.message || e);
-          }
+      if (queue.auto_announce && distinctBases.length > 0) {
+        try {
+          const baseLines = distinctBases
+            .map((bName) => `• ${bName.replace(/^\s*(admin|seller)[\s_\-.:]+/i, "")}`)
+            .join("\n");
+          await db.from("announcements").insert({
+            title: `Base Update: ${products.length} Fresh Cards Added`,
+            body: `Fresh batch of verified cards added across ${distinctBases.length} base(s):\n\n${baseLines}\n\nAvailable in shop now.`,
+            kind: "update",
+            created_at: now.toISOString(),
+          });
+        } catch (e) {
+          console.error("Announcement insert error:", e?.message || e);
         }
       }
 
-      // Telegram Broadcast (Option 2: Individual alert for every distinct base)
-      if (queue.telegram_broadcast) {
-        for (let bIdx = 0; bIdx < distinctBases.length; bIdx++) {
-          const bName = distinctBases[bIdx];
-          const bProds = products.filter((p) => p.base === bName);
-          const bBrands = [...new Set(bProds.map((p) => p.brand))].join(", ") || "VISA/MC";
-          const bCountries = [...new Set(bProds.map((it) => it.country).filter(Boolean))].join(", ") || "MIX";
-          const avgP = bProds.length > 0
-            ? (bProds.reduce((acc, x) => acc + (Number(x.price) || 1.5), 0) / bProds.length).toFixed(2)
-            : queue.price;
-          await sendTelegramBroadcast(bName, bProds.length, bBrands, bCountries, avgP);
-          if (bIdx < distinctBases.length - 1) {
-            await new Promise((r) => setTimeout(r, 600)); // 600ms rate limit protection
-          }
-        }
+      // ONE combined Telegram alert listing every base in the batch
+      if (queue.telegram_broadcast && distinctBases.length > 0) {
+        const allBrands = [...new Set(products.map((p) => p.brand))].join(", ") || "VISA/MC";
+        const allCountries = [...new Set(products.map((it) => it.country).filter(Boolean))].join(", ") || "MIX";
+        const avgP = products.length > 0
+          ? (products.reduce((acc, x) => acc + (Number(x.price) || 1.5), 0) / products.length).toFixed(2)
+          : queue.price;
+        const baseSummary = distinctBases
+          .map((bName) => {
+            const bProds = products.filter((p) => p.base === bName);
+            const cleanName = bName.replace(/^\s*(admin|seller)[\s_\-.:]+/i, "");
+            return `${cleanName} (${bProds.length} cards)`;
+          })
+          .join(" / ");
+        await sendTelegramBroadcast(baseSummary, products.length, allBrands, allCountries, avgP);
       }
     } catch (qErr) {
       console.error(`[Drip Worker] Error processing queue '${queue.name}' (${queue.id}):`, qErr.message);
