@@ -597,8 +597,11 @@ async function processActiveQueues() {
       const stamp = Date.now().toString(36);
       const clean = (s) => (!s || String(s).toLowerCase() === "null" ? "" : s);
 
-      const products = await Promise.all(
-        cleanItems.map(async (c, idx) => {
+      // Sequential BIN enrichment (cached) — avoids hammering external BIN APIs in parallel
+      const products = [];
+      for (let idx = 0; idx < cleanItems.length; idx++) {
+        const c = cleanItems[idx];
+        {
           const meta = await detectBinMeta(c.cc || c.bin);
           const isRef = queue.refundable === true ? true : meta.refundable;
           const cardCountry = clean(c.country) || meta.country || null;
@@ -697,8 +700,8 @@ async function processActiveQueues() {
         if (insSlice) allInserted.push(...insSlice);
       }
 
-      // Update queue stats
-      const remainingAfter = Math.max(0, queue.cards_remaining - cleanItems.length);
+      // Update queue stats — subtract ALL processed items (released + skipped duplicates)
+      const remainingAfter = Math.max(0, queue.cards_remaining - items.length);
       await db
         .from("card_drip_queues")
         .update({
