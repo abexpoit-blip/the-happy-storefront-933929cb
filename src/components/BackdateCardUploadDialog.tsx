@@ -138,9 +138,10 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
     const daysNeeded = Math.ceil(unique.length / perDayNum);
 
     // Date range simulation
-    const s = new Date(startDate || defaultSixMonthsAgo);
-    s.setHours(12, 0, 0, 0);
-    const endDate = new Date(s.getTime() + (daysNeeded - 1) * 86_400_000);
+    const [y, m, d] = (startDate || defaultSixMonthsAgo).split('-').map(Number);
+    const s = new Date(Date.UTC(y || 2026, ((m || 1) - 1), d || 1, 6, 0, 0));
+    const rawEnd = new Date(s.getTime() + (daysNeeded - 1) * 86_400_000);
+    const endDate = rawEnd.getTime() > Date.now() ? new Date() : rawEnd;
 
     return {
       totalLines: backdateRaw.split("\n").filter((l) => l.trim()).length,
@@ -205,14 +206,15 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
     }> = [];
 
     try {
-      const s = new Date(startDate || defaultSixMonthsAgo);
-      s.setHours(12, 0, 0, 0);
+      const [y, m, d] = (startDate || defaultSixMonthsAgo).split('-').map(Number);
+      const s = new Date(Date.UTC(y || 2026, ((m || 1) - 1), d || 1, 6, 0, 0));
 
       for (let dayIdx = 0; dayIdx < totalDays; dayIdx++) {
         const curDate = new Date(s.getTime() + dayIdx * 86_400_000);
-        const yyyy = curDate.getUTCFullYear();
-        const mm = String(curDate.getUTCMonth() + 1).padStart(2, "0");
-        const dd = String(curDate.getUTCDate()).padStart(2, "0");
+        const effectiveDate = curDate.getTime() > Date.now() ? new Date() : curDate;
+        const yyyy = effectiveDate.getUTCFullYear();
+        const mm = String(effectiveDate.getUTCMonth() + 1).padStart(2, "0");
+        const dd = String(effectiveDate.getUTCDate()).padStart(2, "0");
         const dateStr = `${yyyy}_${mm}_${dd}`;
         const dayCards = allCards.slice(dayIdx * perDay, (dayIdx + 1) * perDay);
 
@@ -667,6 +669,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                 <Input
                   type="date"
                   value={startDate}
+                  max={new Date().toISOString().slice(0, 10)}
                   onChange={(e) => setStartDate(e.target.value)}
                   className="bg-[#121c3b] border-slate-700 text-white font-medium text-xs rounded-lg h-10 px-3 focus:border-[#38bdf8] shadow-inner"
                 />
