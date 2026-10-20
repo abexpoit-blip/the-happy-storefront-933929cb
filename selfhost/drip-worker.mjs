@@ -40,7 +40,8 @@ const serviceKey =
 
 const telegramToken = (
   process.env.TELEGRAM_UPDATE_BOT_TOKEN ||
-  "8883627548:AAGrYhz6FNQXr5NRetLVbbke6lJ4EJEIk8g"
+  process.env.TELEGRAM_BOT_TOKEN ||
+  ""
 ).trim();
 const telegramChannel = (process.env.TELEGRAM_CHANNEL_ID || "@zorushop").trim();
 
@@ -514,14 +515,14 @@ async function processActiveQueues() {
           console.log(`[Drip Worker] Queue '${queue.name}' (${queue.id}) already released for today (${dhakaNow.dateStr}) in Dhaka timezone. Skipping.`);
           continue;
         }
+      }
 
-        // 2. Check if current time in Asia/Dhaka has reached 10:00 AM (for recurring runs)
-        if (dhakaNow.hour < TARGET_RELEASE_HOUR_DHAKA) {
-          console.log(
-            `[Drip Worker] Queue '${queue.name}' scheduled for 10:00 AM Asia/Dhaka (current Dhaka time: ${String(dhakaNow.hour).padStart(2, "0")}:${String(dhakaNow.minute).padStart(2, "0")}). Waiting.`
-          );
-          continue;
-        }
+      // 2. Never release before 10:00 AM Asia/Dhaka — applies to new AND recurring queues
+      if (dhakaNow.hour < TARGET_RELEASE_HOUR_DHAKA) {
+        console.log(
+          `[Drip Worker] Queue '${queue.name}' scheduled for 10:00 AM Asia/Dhaka (current Dhaka time: ${String(dhakaNow.hour).padStart(2, "0")}:${String(dhakaNow.minute).padStart(2, "0")}). Waiting.`
+        );
+        continue;
       }
 
       console.log(`[Drip Worker] Triggering daily release for queue '${queue.name}' (${queue.id}) on Dhaka date ${dhakaNow.dateStr}...`);
@@ -596,8 +597,11 @@ async function processActiveQueues() {
       const stamp = Date.now().toString(36);
       const clean = (s) => (!s || String(s).toLowerCase() === "null" ? "" : s);
 
-      const products = await Promise.all(
-        cleanItems.map(async (c, idx) => {
+      // Sequential BIN enrichment (cached) — avoids hammering external BIN APIs in parallel
+      const products = [];
+      for (let idx = 0; idx < cleanItems.length; idx++) {
+        const c = cleanItems[idx];
+        {
           const meta = await detectBinMeta(c.cc || c.bin);
           const isRef = queue.refundable === true ? true : meta.refundable;
           const cardCountry = clean(c.country) || meta.country || null;
@@ -634,7 +638,7 @@ async function processActiveQueues() {
             cardPrice = 0.20;
           }
 
-          return {
+          products.push({
             category_id: queue.category_id || null,
             title: `${cardBrand} ${c.bin} · ${clean(c.city) || clean(c.state) || cardCountry || "—"}`,
             slug: `${c.bin}-${stamp}-${idx}-${Math.random().toString(36).slice(2, 8)}`,
@@ -659,9 +663,9 @@ async function processActiveQueues() {
             has_phone: !!clean(c.tel),
             has_email: !!clean(c.email),
             created_at: now.toISOString(),
-          };
-        })
-      );
+          });
+        }
+      }
 
       // Safe batch chunk insertion (100 rows per chunk)
       const CHUNK_INSERT = 100;
@@ -696,8 +700,8 @@ async function processActiveQueues() {
         if (insSlice) allInserted.push(...insSlice);
       }
 
-      // Update queue stats
-      const remainingAfter = Math.max(0, queue.cards_remaining - cleanItems.length);
+      // Update queue stats — subtract ALL processed items (released + skipped duplicates)
+      const remainingAfter = Math.max(0, queue.cards_remaining - items.length);
       await db
         .from("card_drip_queues")
         .update({
@@ -710,39 +714,39 @@ async function processActiveQueues() {
 
       console.log(`[Drip Worker] Successfully released ${cleanItems.length} cards for '${queue.name}'! (${remainingAfter} left)`);
 
-      // Announcements for all distinct bases released
+      // ONE combined announcement for the whole daily batch
       const distinctBases = [...new Set(products.map((p) => p.base))];
-      if (queue.auto_announce) {
-        for (const bName of distinctBases) {
-          try {
-            const pub = bName.replace(/^\s*(admin|seller)[\s_\-.:]+/i, "");
-            await db.from("announcements").insert({
-              title: `Base Update: ${pub}`,
-              body: `Fresh batch of verified cards added for base ${pub}. Available in shop now.`,
-              kind: "update",
-              created_at: now.toISOString(),
-            });
-          } catch (e) {
-            console.error("Announcement insert error:", e?.message || e);
-          }
+      if (queue.auto_announce && distinctBases.length > 0) {
+        try {
+          const baseLines = distinctBases
+            .map((bName) => `• ${bName.replace(/^\s*(admin|seller)[\s_\-.:]+/i, "")}`)
+            .join("\n");
+          await db.from("announcements").insert({
+            title: `Base Update: ${products.length} Fresh Cards Added`,
+            body: `Fresh batch of verified cards added across ${distinctBases.length} base(s):\n\n${baseLines}\n\nAvailable in shop now.`,
+            kind: "update",
+            created_at: now.toISOString(),
+          });
+        } catch (e) {
+          console.error("Announcement insert error:", e?.message || e);
         }
       }
 
-      // Telegram Broadcast (Option 2: Individual alert for every distinct base)
-      if (queue.telegram_broadcast) {
-        for (let bIdx = 0; bIdx < distinctBases.length; bIdx++) {
-          const bName = distinctBases[bIdx];
-          const bProds = products.filter((p) => p.base === bName);
-          const bBrands = [...new Set(bProds.map((p) => p.brand))].join(", ") || "VISA/MC";
-          const bCountries = [...new Set(bProds.map((it) => it.country).filter(Boolean))].join(", ") || "MIX";
-          const avgP = bProds.length > 0
-            ? (bProds.reduce((acc, x) => acc + (Number(x.price) || 1.5), 0) / bProds.length).toFixed(2)
-            : queue.price;
-          await sendTelegramBroadcast(bName, bProds.length, bBrands, bCountries, avgP);
-          if (bIdx < distinctBases.length - 1) {
-            await new Promise((r) => setTimeout(r, 600)); // 600ms rate limit protection
-          }
-        }
+      // ONE combined Telegram alert listing every base in the batch
+      if (queue.telegram_broadcast && distinctBases.length > 0) {
+        const allBrands = [...new Set(products.map((p) => p.brand))].join(", ") || "VISA/MC";
+        const allCountries = [...new Set(products.map((it) => it.country).filter(Boolean))].join(", ") || "MIX";
+        const avgP = products.length > 0
+          ? (products.reduce((acc, x) => acc + (Number(x.price) || 1.5), 0) / products.length).toFixed(2)
+          : queue.price;
+        const baseSummary = distinctBases
+          .map((bName) => {
+            const bProds = products.filter((p) => p.base === bName);
+            const cleanName = bName.replace(/^\s*(admin|seller)[\s_\-.:]+/i, "");
+            return `${cleanName} (${bProds.length} cards)`;
+          })
+          .join(" / ");
+        await sendTelegramBroadcast(baseSummary, products.length, allBrands, allCountries, avgP);
       }
     } catch (qErr) {
       console.error(`[Drip Worker] Error processing queue '${queue.name}' (${queue.id}):`, qErr.message);
