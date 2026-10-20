@@ -40,7 +40,8 @@ const serviceKey =
 
 const telegramToken = (
   process.env.TELEGRAM_UPDATE_BOT_TOKEN ||
-  "8883627548:AAGrYhz6FNQXr5NRetLVbbke6lJ4EJEIk8g"
+  process.env.TELEGRAM_BOT_TOKEN ||
+  ""
 ).trim();
 const telegramChannel = (process.env.TELEGRAM_CHANNEL_ID || "@zorushop").trim();
 
@@ -514,14 +515,14 @@ async function processActiveQueues() {
           console.log(`[Drip Worker] Queue '${queue.name}' (${queue.id}) already released for today (${dhakaNow.dateStr}) in Dhaka timezone. Skipping.`);
           continue;
         }
+      }
 
-        // 2. Check if current time in Asia/Dhaka has reached 10:00 AM (for recurring runs)
-        if (dhakaNow.hour < TARGET_RELEASE_HOUR_DHAKA) {
-          console.log(
-            `[Drip Worker] Queue '${queue.name}' scheduled for 10:00 AM Asia/Dhaka (current Dhaka time: ${String(dhakaNow.hour).padStart(2, "0")}:${String(dhakaNow.minute).padStart(2, "0")}). Waiting.`
-          );
-          continue;
-        }
+      // 2. Never release before 10:00 AM Asia/Dhaka — applies to new AND recurring queues
+      if (dhakaNow.hour < TARGET_RELEASE_HOUR_DHAKA) {
+        console.log(
+          `[Drip Worker] Queue '${queue.name}' scheduled for 10:00 AM Asia/Dhaka (current Dhaka time: ${String(dhakaNow.hour).padStart(2, "0")}:${String(dhakaNow.minute).padStart(2, "0")}). Waiting.`
+        );
+        continue;
       }
 
       console.log(`[Drip Worker] Triggering daily release for queue '${queue.name}' (${queue.id}) on Dhaka date ${dhakaNow.dateStr}...`);
