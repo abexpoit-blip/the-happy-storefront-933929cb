@@ -638,7 +638,7 @@ async function processActiveQueues() {
             cardPrice = 0.20;
           }
 
-          return {
+          products.push({
             category_id: queue.category_id || null,
             title: `${cardBrand} ${c.bin} · ${clean(c.city) || clean(c.state) || cardCountry || "—"}`,
             slug: `${c.bin}-${stamp}-${idx}-${Math.random().toString(36).slice(2, 8)}`,
