@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- VPS deployment must fast-forward the configured upstream and refuse dirty worktrees; never discard local changes or suppress build failures.
