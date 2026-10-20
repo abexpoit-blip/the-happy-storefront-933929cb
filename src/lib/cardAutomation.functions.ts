@@ -157,6 +157,19 @@ export const broadcastChannelAlert = createServerFn({ method: "POST" })
         country: z.string().nullable().optional(),
         price: z.number().nullable().optional(),
         customNote: z.string().nullable().optional(),
+        bases: z
+          .array(
+            z.object({
+              name: z.string(),
+              count: z.number(),
+              brand: z.string().nullable().optional(),
+              country: z.string().nullable().optional(),
+              price: z.number().nullable().optional(),
+            })
+          )
+          .max(50)
+          .nullable()
+          .optional(),
       })
       .parse(input)
   )
@@ -177,14 +190,29 @@ export const broadcastChannelAlert = createServerFn({ method: "POST" })
     const countryStr = data.country || "MIX";
     const priceStr = data.price ? `$${Number(data.price).toFixed(2)}` : "$1.50";
 
+    const multiBases = (data.bases ?? []).filter((b) => b && b.name);
+    const totalCards = multiBases.length
+      ? multiBases.reduce((sum, b) => sum + (Number(b.count) || 0), 0)
+      : Number(data.count ?? 0);
+
+    const baseLines = multiBases.length
+      ? multiBases.map(
+          (b) =>
+            `📦 <code>${publicBase(b.name)}</code> — ${b.count} cards · ${b.brand || "VISA/MC"} · ${b.country || "MIX"} · $${Number(b.price ?? 1.5).toFixed(2)}`
+        )
+      : [
+          `📦 <b>Base:</b> <code>${pBase}</code>`,
+          `🏷 <b>Brand:</b> ${brandStr}`,
+          `🌍 <b>Country:</b> ${countryStr}`,
+          data.count ? `💳 <b>Cards Added:</b> ${data.count} Verified Cards` : ``,
+          `💰 <b>Price:</b> ${priceStr}`,
+        ];
+
     const text = [
       `⚡ <b>ZORU SHOP — NEW BASE UPDATE!</b> ⚡`,
       `━━━━━━━━━━━━━━━━━━━━━━`,
-      `📦 <b>Base:</b> <code>${pBase}</code>`,
-      `🏷 <b>Brand:</b> ${brandStr}`,
-      `🌍 <b>Country:</b> ${countryStr}`,
-      data.count ? `💳 <b>Cards Added:</b> ${data.count} Verified Cards` : ``,
-      `💰 <b>Price:</b> ${priceStr}`,
+      ...baseLines,
+      multiBases.length ? `💳 <b>Total Cards Added:</b> ${totalCards} Verified Cards` : ``,
       `⚡ <b>Delivery:</b> Instant Automated Delivery`,
       data.customNote ? `📝 <b>Note:</b> ${data.customNote}\n` : ``,
       `🛒 <b>Shop Now:</b> <a href="https://zoru.cc/shop">zoru.cc/shop</a>`,
@@ -1034,20 +1062,18 @@ export const triggerDripRelease = createServerFn({ method: "POST" })
       })
       .eq("id", data.queue_id);
 
-    // 8. Auto-Announce if enabled (announce all distinct bases)
+    // 8. Auto-Announce if enabled — ONE combined announcement for the whole daily batch
     const distinctBases = [...new Set(products.map((p) => p.base))];
-    if (queue.auto_announce) {
-      for (const bName of distinctBases) {
-        try {
-          const pub = publicBase(bName);
-          await db.from("announcements").insert({
-            title: `Base Update: ${pub}`,
-            body: `Fresh batch of verified cards added for base ${pub}. Available in shop now.`,
-            kind: "update",
-            created_at: today.toISOString(),
-          });
-        } catch {}
-      }
+    if (queue.auto_announce && distinctBases.length > 0) {
+      try {
+        const baseLines = distinctBases.map((bName) => `• ${publicBase(bName)}`).join("\n");
+        await db.from("announcements").insert({
+          title: `Base Update: ${items.length} Fresh Cards Added`,
+          body: `Fresh batch of verified cards added across ${distinctBases.length} base(s):\n\n${baseLines}\n\nAvailable in shop now.`,
+          kind: "update",
+          created_at: today.toISOString(),
+        });
+      } catch {}
     }
 
     // 9. Telegram Channel Broadcast if enabled
