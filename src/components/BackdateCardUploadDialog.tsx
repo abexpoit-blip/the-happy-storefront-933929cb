@@ -317,47 +317,51 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
             });
           }
 
-          // 2. Post dated announcement if enabled
-          if (postAnnouncements && created > 0) {
-            const pubName = `${dateStr}_${brand}`;
-            await adminCreateAnnouncement({
-              title: `Base Update: ${pubName}`,
-              body: `Fresh batch of verified cards added for base ${pubName}. Available now in shop.`,
-              kind: "update",
-              created_at: curDate.toISOString(),
-            }).catch(() => {});
-          }
         }
       }
 
-      // 3. Telegram channel & Bot alerts for EVERY distinct base created (Option 2)
+      // 2. Post ONE combined announcement for the whole batch (dated to the last day)
+      if (postAnnouncements && createdBasesList.length > 0) {
+        const endDate = new Date(new Date(startDate || defaultSixMonthsAgo).getTime() + (totalDays - 1) * 86_400_000);
+        endDate.setHours(12, 0, 0, 0);
+        const totalCards = createdBasesList.reduce((sum, b) => sum + b.count, 0);
+        const baseLines = createdBasesList
+          .map((b) => `• ${b.baseName.replace(/^ADMIN_/, "")} — ${b.count} cards (${b.brand}, ${b.country}, $${b.price.toFixed(2)})`)
+          .join("\n");
+        await adminCreateAnnouncement({
+          title: `Base Update: ${totalCards} Fresh Cards Added`,
+          body: `Fresh batch of verified cards added across ${createdBasesList.length} base(s):\n\n${baseLines}\n\nAvailable now in shop.`,
+          kind: "update",
+          created_at: endDate.toISOString(),
+        }).catch(() => {});
+      }
+
+      // 3. ONE combined Telegram channel & Bot alert for the whole batch
       if (notifyTelegramLatest && createdBasesList.length > 0) {
-        for (let i = 0; i < createdBasesList.length; i++) {
-          const b = createdBasesList[i];
-          setBackdateProgress({
-            currentDay: i + 1,
-            totalDays: createdBasesList.length,
-            currentDate: `Broadcasting base alert: ${b.baseName} (${i + 1}/${createdBasesList.length})...`,
-            totalUploaded: uploadedCount,
-            totalExpected: allCards.length,
-          });
-          try {
-            await broadcastChannelAlert({
-              data: {
-                baseName: b.baseName,
+        setBackdateProgress({
+          currentDay: 1,
+          totalDays: 1,
+          currentDate: "Broadcasting combined batch alert to Telegram...",
+          totalUploaded: uploadedCount,
+          totalExpected: allCards.length,
+        });
+        try {
+          await broadcastChannelAlert({
+            data: {
+              baseName: createdBasesList[0].baseName,
+              count: createdBasesList.reduce((sum, b) => sum + b.count, 0),
+              bases: createdBasesList.map((b) => ({
+                name: b.baseName,
                 count: b.count,
                 brand: b.brand,
                 country: b.country,
                 price: b.price,
-                customNote: `Verified base update with ${b.count} fresh cards.`,
-              },
-            });
-          } catch (tgErr) {
-            console.warn("Telegram broadcast error for base:", b.baseName, tgErr);
-          }
-          if (i < createdBasesList.length - 1) {
-            await new Promise((r) => setTimeout(r, 600)); // 600ms rate limit protection
-          }
+              })),
+              customNote: `Verified batch update with ${createdBasesList.reduce((sum, b) => sum + b.count, 0)} fresh cards across ${createdBasesList.length} base(s).`,
+            },
+          });
+        } catch (tgErr) {
+          console.warn("Telegram broadcast error for batch:", tgErr);
         }
       }
 
