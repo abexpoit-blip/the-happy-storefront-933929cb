@@ -24,8 +24,11 @@ if [ -n "$SRC_URL" ]; then
   echo "==> Code updated."
 elif [ -d "$APP_DIR/.git" ]; then
   echo "==> Pulling latest code from git..."
-  git -C "$APP_DIR" fetch origin || true
-  git -C "$APP_DIR" reset --hard origin/main
+  if [ -n "$(git -C "$APP_DIR" status --porcelain)" ]; then
+    echo "ERROR: Local changes found. Save or sync them before deploying; nothing was overwritten." >&2
+    exit 1
+  fi
+  git -C "$APP_DIR" pull --ff-only
 else
   echo "==> No URL given and no git repo — using the code already in $APP_DIR"
 fi
@@ -36,12 +39,13 @@ chmod +x selfhost/*.sh
 echo "==> Installing dependencies..."
 if command -v npm >/dev/null 2>&1; then
   npm install --no-audit --no-fund
+  echo "==> Building..."
+  npm run build
 else
   bun install
+  echo "==> Building..."
+  bun run build
 fi
-
-echo "==> Building..."
-npm run build 2>/dev/null || bun run build
 
 echo "==> Restarting services (zoru-cc, zoru-drip, bots)..."
 bash selfhost/pm2-start.sh
