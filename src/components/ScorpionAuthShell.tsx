@@ -1,6 +1,6 @@
 import { ReactNode, useMemo } from "react";
 import dragonBg from "@/assets/dragon-bg.webp";
-import dragonLogo from "@/assets/dragon-logo.png";
+import dragonLogo from "@/assets/dragon-logo.webp";
 
 const heroBg = dragonBg;
 

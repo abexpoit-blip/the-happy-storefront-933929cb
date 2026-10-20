@@ -8,7 +8,7 @@ import { LanguageToggle, useLanguage } from "@/lib/i18n";
 import { useSessionTimeout } from "@/hooks/useSessionTimeout";
 import { cartCount, onCartChange } from "@/lib/cart";
 import { UserAvatar } from "@/components/UserAvatar";
-import dragonLogo from "@/assets/dragon-logo.png";
+import dragonLogo from "@/assets/dragon-logo.webp";
 
 
 interface BuyerNavItem {

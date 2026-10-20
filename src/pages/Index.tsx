@@ -22,14 +22,9 @@ const Index = () => {
 
   const loadData = useCallback(async () => {
     try {
-      const [annRes, prodRes] = await Promise.allSettled([
+      const [annRes, basesRes] = await Promise.allSettled([
         listAnnouncements(),
-        supabase
-          .from("products")
-          .select("id, title, stock, base, created_at")
-          .eq("active", true)
-          .order("created_at", { ascending: false })
-          .limit(3000),
+        supabase.rpc("get_shop_bases"),
       ]);
 
       const baseCandidates: { id: string; label: string; count: number }[] = [];
@@ -55,11 +50,26 @@ const Index = () => {
         setAnns(promoAnns);
       }
 
-      if (prodRes.status === "fulfilled" && prodRes.value.data) {
-        for (const p of prodRes.value.data) {
-          const label = p.base ? publicBase(p.base) : p.title;
-          if (label) {
-            baseCandidates.push({ id: p.id, label, count: Number(p.stock || 1) });
+      if (basesRes.status === "fulfilled" && Array.isArray(basesRes.value.data) && basesRes.value.data.length > 0) {
+        for (const b of basesRes.value.data as { base: string; count: number }[]) {
+          if (b?.base) {
+            const label = publicBase(b.base);
+            if (label) {
+              baseCandidates.push({ id: b.base, label, count: Number(b.count || 0) });
+            }
+          }
+        }
+      } else {
+        const { data: fallback } = await supabase
+          .from("products")
+          .select("base")
+          .eq("active", true)
+          .not("base", "is", null)
+          .limit(300);
+        for (const p of fallback ?? []) {
+          if (p?.base) {
+            const label = publicBase(p.base);
+            if (label) baseCandidates.push({ id: p.base, label, count: 1 });
           }
         }
       }
@@ -93,7 +103,7 @@ const Index = () => {
   }, [loadData]);
 
   useEffect(() => {
-    intervalRef.current = setInterval(loadData, 30000);
+    intervalRef.current = setInterval(() => { if (!document.hidden) void loadData(); }, 30000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [loadData]);
 

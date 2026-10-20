@@ -35,7 +35,7 @@ export const listSection = async (section: Section, limit = 2000): Promise<Secti
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q: any = (supabase as any)
     .from("products")
-    .select("*")
+    .select("id, category_id, title, slug, price, compare_at_price, active, stock, bin, brand, country, state, city, zip, exp_month, exp_year, base, refundable, section, card_type, card_level, bank, file_lines, created_at")
     .eq("active", true)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -57,7 +57,7 @@ export const adminListSection = async (section: Section, limit = 2000): Promise<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q: any = (supabase as any)
     .from("products")
-    .select("*")
+    .select("id, category_id, title, slug, price, compare_at_price, active, stock, bin, brand, country, state, city, zip, exp_month, exp_year, base, refundable, section, card_type, card_level, bank, file_lines, created_at")
     .order("created_at", { ascending: false })
     .limit(limit);
 

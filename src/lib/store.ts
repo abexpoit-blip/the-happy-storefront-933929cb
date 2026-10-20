@@ -114,14 +114,14 @@ const PRODUCT_COLUMNS =
   "id, category_id, title, slug, price, compare_at_price, active, stock, bin, brand, country, state, city, zip, exp_month, exp_year, base, refundable, card_type, card_level, bank, created_at";
 
 let productCache: { at: number; data: Product[] } | null = null;
-const CACHE_TTL_MS = 15_000; // 15s short RAM cache (prevents duplicate queries on tab switches without showing stale data)
+const CACHE_TTL_MS = 60_000; // 15s short RAM cache (prevents duplicate queries on tab switches without showing stale data)
 
 export const invalidateProductCache = () => {
   productCache = null;
 };
 
 /** Performance cap: keeps client and Supabase DB snappy and resilient even under huge traffic */
-export const PRODUCT_FETCH_LIMIT = 10000;
+export const PRODUCT_FETCH_LIMIT = 1000;
 
 export const listProducts = async (
   opts: {
@@ -1389,25 +1389,32 @@ export const getMyReferralSummary = async (): Promise<ReferralSummary> => {
  */
 export const listAllShopBases = async (): Promise<string[]> => {
   try {
-    const [prodRes, annRes] = await Promise.allSettled([
+    const baseSet = new Set<string>();
+    const [rpcRes, annRes] = await Promise.allSettled([
+      supabase.rpc("get_shop_bases"),
       supabase
+        .from("announcements")
+        .select("title, kind")
+        .order("created_at", { ascending: false })
+        .limit(200),
+    ]);
+
+    if (rpcRes.status === "fulfilled" && Array.isArray(rpcRes.value.data) && rpcRes.value.data.length > 0) {
+      for (const r of rpcRes.value.data as { base: string }[]) {
+        if (r?.base) {
+          const pb = publicBase(r.base);
+          if (pb) baseSet.add(pb);
+        }
+      }
+    } else {
+      const { data } = await supabase
         .from("products")
         .select("base")
         .eq("active", true)
         .not("base", "is", null)
         .order("created_at", { ascending: false })
-        .limit(10000),
-      supabase
-        .from("announcements")
-        .select("title, kind")
-        .order("created_at", { ascending: false })
-        .limit(300),
-    ]);
-
-    const baseSet = new Set<string>();
-
-    if (prodRes.status === "fulfilled" && prodRes.value.data) {
-      for (const p of prodRes.value.data) {
+        .limit(1000);
+      for (const p of data ?? []) {
         if (p?.base) {
           const pb = publicBase(p.base);
           if (pb) baseSet.add(pb);
