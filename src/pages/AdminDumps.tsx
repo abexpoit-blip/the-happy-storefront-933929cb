@@ -3,7 +3,7 @@ import { AdminLayout } from "@/components/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Loader2, Upload, Trash2, Eye, EyeOff } from "lucide-react";
+import { Loader2, Upload, Trash2, Eye, EyeOff, Crown } from "lucide-react";
 import { adminCreateDump, adminListSection, adminSetProductActive, type SectionProduct } from "@/lib/sections";
 import { adminDeleteProduct } from "@/lib/store";
 
@@ -136,7 +136,12 @@ const AdminDumps = () => {
             {!loading && rows.length === 0 && <tr><td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">No dumps yet.</td></tr>}
             {rows.map((p) => (
               <tr key={p.id} className="border-t border-border/40">
-                <td className="px-4 py-3 font-semibold">{p.file_name || p.title}</td>
+                <td className="px-4 py-3 font-semibold">
+                  <div className="flex items-center gap-2">
+                    <Crown className="h-4 w-4 text-amber-400" />
+                    <span>{p.file_name || p.title}</span>
+                  </div>
+                </td>
                 <td className="px-4 py-3 text-muted-foreground">{p.base || "—"}</td>
                 <td className="px-4 py-3">{p.country || "—"}</td>
                 <td className="px-4 py-3">{p.file_lines ?? 0}</td>
