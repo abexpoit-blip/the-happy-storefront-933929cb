@@ -187,7 +187,10 @@ const Dumps = () => {
           <div className="w-full max-w-md rounded-2xl border border-primary/30 bg-card p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-display text-lg font-bold mb-2">{delivered.name}</h3>
             <p className="text-sm text-muted-foreground">{delivered.content}</p>
-            <div className="mt-4 flex justify-end"><Button onClick={() => setDelivered(null)}>OK</Button></div>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDelivered(null)}>Close</Button>
+              <Button onClick={() => window.location.href = "/orders"}>Go to Orders</Button>
+            </div>
           </div>
         </div>
       )}

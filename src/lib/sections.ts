@@ -35,7 +35,7 @@ export const listSection = async (section: Section, limit = 2000): Promise<Secti
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q: any = (supabase as any)
     .from("products")
-    .select("id, category_id, title, slug, price, compare_at_price, active, stock, bin, brand, country, state, city, zip, exp_month, exp_year, base, refundable, section, card_type, card_level, bank, file_lines, created_at")
+    .select("id, category_id, title, slug, price, compare_at_price, active, stock, bin, brand, country, state, city, zip, exp_month, exp_year, base, refundable, section, card_type, card_level, bank, file_lines, file_name, expires_on, delivery_type, created_at")
     .eq("active", true)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -57,7 +57,7 @@ export const adminListSection = async (section: Section, limit = 2000): Promise<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q: any = (supabase as any)
     .from("products")
-    .select("id, category_id, title, slug, price, compare_at_price, active, stock, bin, brand, country, state, city, zip, exp_month, exp_year, base, refundable, section, card_type, card_level, bank, file_lines, created_at")
+    .select("id, category_id, title, slug, price, compare_at_price, active, stock, bin, brand, country, state, city, zip, exp_month, exp_year, base, refundable, section, card_type, card_level, bank, file_lines, file_name, expires_on, delivery_type, created_at")
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -172,11 +172,12 @@ export const adminCreateDump = async (input: DumpInput): Promise<string> => {
       slug: slugify(`dump-${input.file_name}-${Date.now()}`),
       price: input.price,
       delivery_type: "key",
+      instant_content: input.content,
       description: input.description ?? null,
       active: true,
       refundable: false,
-      country: input.country || null,
-      base: input.base || null,
+      country: input.country ? input.country.trim().toUpperCase() : null,
+      base: input.base ? input.base.trim() : null,
       file_name: input.file_name,
       file_lines: lines.length,
       expires_on: input.expires_on || null,
@@ -187,7 +188,11 @@ export const adminCreateDump = async (input: DumpInput): Promise<string> => {
   const id = (data as { id: string }).id;
 
   const body = lines.join("\n");
-  const keys = Array.from({ length: copies }, () => ({ product_id: id, content: body }));
+  const keys = Array.from({ length: copies }, () => ({
+    product_id: id,
+    content: body,
+    pan: null,
+  }));
   const { error: kErr } = await supabase.from("product_keys").insert(keys);
   if (kErr) throw kErr;
   await supabase.from("products").update({ stock: copies }).eq("id", id);

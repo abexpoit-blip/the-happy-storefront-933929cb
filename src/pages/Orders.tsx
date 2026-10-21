@@ -91,6 +91,13 @@ const cardsOfOrder = (o: Order): ParsedCard[] => {
   return out;
 };
 
+const countOfOrder = (o: Order) => {
+  const c = cardsOfOrder(o).length;
+  if (c > 0) return c;
+  const lines = o.items.reduce((sum, it) => sum + (it.content ? it.content.split(/\r?\n/).filter(Boolean).length : 0), 0);
+  return lines > 0 ? lines : o.items.length;
+};
+
 const fmtTime = (s: string) => {
   const dt = new Date(s);
   const p = (n: number) => String(n).padStart(2, "0");
@@ -175,6 +182,16 @@ const Orders = () => {
   );
 
   const exportOrders = (list: Order[], name: string, csv: boolean) => {
+    if (!csv) {
+      const rawText = list
+        .flatMap((o) => o.items.map((it) => it.content?.trim()).filter(Boolean))
+        .join("\n");
+      if (rawText) {
+        downloadFile(`${name}.txt`, rawText);
+        toast.success("Downloaded");
+        return;
+      }
+    }
     const cards = list.flatMap((o) => cardsOfOrder(o).map((c) => ({ o, c })));
     if (!cards.length) return toast.error("Nothing to download");
     if (csv) {
@@ -282,7 +299,7 @@ const Orders = () => {
               {rows.map((o) => (
                 <tr key={o.id} className="border-b border-[#f0f0f0] hover:bg-[#fafcff] transition">
                   <td className="p-3 font-mono text-[#333]">{orderNo(o.id)}</td>
-                  <td className="p-3 text-center">{cardsOfOrder(o).length}</td>
+                  <td className="p-3 text-center">{countOfOrder(o)}</td>
                   <td className="p-3 text-center font-mono">${o.total.toFixed(2)}</td>
                   <td className="p-3 text-center text-[#606266]">{fmtTime(o.created_at)}</td>
                   <td className="p-3 text-center">
@@ -537,6 +554,49 @@ const OrderDetail = ({
         </div>
       )}
 
+      {order.items.some((it) => (it.content ?? "").split(/\r?\n/).filter(Boolean).length > 1) && (
+        <div className="mt-4 space-y-3">
+          {order.items.map((it, idx) => {
+            const lines = (it.content ?? "").split(/\r?\n/).filter(Boolean);
+            if (lines.length <= 1) return null;
+            return (
+              <div key={it.id ?? idx} className="rounded-xl border border-emerald-500/30 bg-gradient-to-r from-[#0d2218] via-[#0d1526] to-[#0d1526] p-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="font-semibold text-white text-[15px] flex items-center gap-2">
+                    <Download className="h-4 w-4 text-emerald-400" />
+                    {it.product_title || "Bulk Dump File"}
+                  </div>
+                  <div className="text-[12px] text-white/60">
+                    <span className="font-mono text-emerald-300 font-bold">{lines.length} lines</span> · Unit Price: ${it.price.toFixed(2)}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (!it.content) return toast.error("File is empty");
+                      downloadFile(`${(it.product_title || "dump").replace(/[^a-zA-Z0-9_-]/g, "_")}.txt`, it.content);
+                      toast.success("Downloaded");
+                    }}
+                    className="h-8 px-3.5 rounded-md bg-[#2e7d32] hover:bg-[#388e3c] text-white text-[12.5px] font-semibold inline-flex items-center gap-1.5 transition"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Download TXT File
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!it.content) return toast.error("File is empty");
+                      void copy(it.content);
+                    }}
+                    className="h-8 px-3 rounded-md border border-white/15 hover:bg-white/10 text-white/80 text-[12.5px] inline-flex items-center gap-1.5 transition"
+                  >
+                    <Copy className="h-3.5 w-3.5" /> Copy
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div className="mt-4 rounded-xl border border-white/10 bg-[#0d1526] overflow-x-auto">
         <table className="w-full min-w-[980px] text-[12.5px]">
           <thead>
@@ -547,6 +607,13 @@ const OrderDetail = ({
             </tr>
           </thead>
           <tbody className="text-white/80">
+            {pairs.length === 0 && (
+              <tr>
+                <td colSpan={8} className="p-8 text-center text-white/50">
+                  Bulk dump file delivered above. Click &quot;Download TXT File&quot; to save your file.
+                </td>
+              </tr>
+            )}
             {pairs.map(({ card, check }) => {
               const info = bins[card.pan.slice(0, 6)];
               const status = check?.status ?? null;
