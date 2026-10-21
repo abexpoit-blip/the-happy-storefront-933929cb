@@ -295,6 +295,8 @@ export const buyCheckCredits = async (usd: number): Promise<number> => {
 };
 
 export const translatePurchaseError = (msg: string) => {
+  if (msg.includes("dump_deposit_required")) return "DUMP section is locked. You must make at least 1 deposit to unlock.";
+  if (msg.includes("dump_already_purchased")) return "You have already purchased this dump file. Check your Orders.";
   if (msg.includes("insufficient_credits")) return "Not enough check credits. Buy credits on the Checker page.";
   if (msg.includes("insufficient_balance")) return "Недостаточно средств на балансе.";
   if (msg.includes("out_of_stock")) return "Товар закончился.";

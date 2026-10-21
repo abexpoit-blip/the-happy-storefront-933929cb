@@ -48,8 +48,29 @@ export const listSection = async (section: Section, limit = 2000): Promise<Secti
 
   const { data, error } = await q;
   if (error) throw error;
-  return mapRows(data ?? [])
+  let items = mapRows(data ?? [])
     .filter((p) => p.delivery_type !== "key" || (p.stock ?? 0) > 0);
+
+  if (section === "dump") {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        // Exclude dump products already purchased by this user so other users can still buy it
+        const { data: myBought } = await supabase
+          .from("order_items")
+          .select("product_id");
+        if (myBought && myBought.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const boughtSet = new Set(myBought.map((x: any) => x.product_id).filter(Boolean));
+          items = items.filter((p) => !boughtSet.has(p.id));
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return items;
 };
 
 /** Admin list (includes hidden / sold out). */
@@ -202,4 +223,18 @@ export const adminCreateDump = async (input: DumpInput): Promise<string> => {
 export const adminSetProductActive = async (id: string, active: boolean) => {
   const { error } = await supabase.from("products").update({ active }).eq("id", id);
   if (error) throw error;
+};
+
+/** Checks if current logged-in user has made at least 1 deposit (or is admin). */
+export const checkHasDeposited = async (): Promise<boolean> => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) return false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc("has_deposited");
+    if (error) return false;
+    return !!data;
+  } catch {
+    return false;
+  }
 };
