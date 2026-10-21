@@ -425,7 +425,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
   const handleBroadcastExisting = async () => {
     if (
       !window.confirm(
-        "Broadcast alerts for all active bases currently in shop to Telegram (@Zorushopupdatebot & @zorushop)?\n\nEach distinct base will be broadcasted one by one."
+        "Broadcast alerts for all active bases currently in shop to Telegram (@Zorushopupdatebot & @zorushop)?\n\nA single consolidated notice listing all bases will be sent to Telegram."
       )
     ) {
       return;

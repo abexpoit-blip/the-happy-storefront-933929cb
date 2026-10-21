@@ -351,12 +351,12 @@ const Admin = () => {
         kind: "update",
       }).catch(() => {});
 
-      // Telegram Channel & Bot Broadcast for each distinct base uploaded
+      // Telegram Channel & Bot Broadcast: ONE single combined notice for all uploaded bases
       if (tgBroadcastCardUpload && rows.length > 0) {
         setUploadProgress({
           done: count,
           total: count,
-          stage: "Broadcasting base alerts to Telegram @zorushop & update bot...",
+          stage: "Broadcasting combined base alert to Telegram @zorushop & update bot...",
           percent: 98,
         });
 
@@ -368,26 +368,34 @@ const Admin = () => {
           basesMap.set(b, list);
         }
 
-        for (const [bName, bRows] of basesMap.entries()) {
-          try {
-            const sample = bRows[0];
-            const countries = [...new Set(bRows.map((r) => r.country).filter(Boolean))].slice(0, 4).join(", ");
-            const avgP = bRows.reduce((acc, x) => acc + (Number(x.price) || fixedPriceVal), 0) / bRows.length;
-            await broadcastChannelAlert({
-              data: {
-                baseName: bName,
-                count: bRows.length,
-                brand: sample.brand,
-                country: countries || "MIX",
-                price: Number(avgP.toFixed(2)),
-              },
-            });
-          } catch {
-            /* ignore */
-          }
-          await new Promise((r) => setTimeout(r, 600)); // safe rate limit delay
+        const basesList = Array.from(basesMap.entries()).map(([bName, bRows]) => {
+          const sample = bRows[0];
+          const countries = [...new Set(bRows.map((r) => r.country).filter(Boolean))].slice(0, 3).join(", ");
+          const avgP = bRows.reduce((acc, x) => acc + (Number(x.price) || fixedPriceVal), 0) / bRows.length;
+          return {
+            name: bName,
+            count: bRows.length,
+            brand: sample.brand || "VISA/MC",
+            country: countries || "MIX",
+            price: Number(avgP.toFixed(2)),
+          };
+        });
+
+        try {
+          await broadcastChannelAlert({
+            data: {
+              baseName: basesList[0]?.name || "NEW_BASE",
+              count: count,
+              bases: basesList,
+              customNote: basesList.length > 1
+                ? `Uploaded ${count} fresh cards across ${basesList.length} base(s).`
+                : undefined,
+            },
+          });
+          toast.info(`Sent single combined alert for ${basesList.length} base(s) to Telegram!`);
+        } catch (tgErr) {
+          console.warn("Telegram broadcast error:", tgErr);
         }
-        toast.info(`Sent alert for ${basesMap.size} base(s) to Telegram @zorushop & update bot!`);
       }
 
       toast.success(`Published ${count} cards` + (dropped > 0 ? ` (${dropped} dupes removed)` : "") + (failed.length > 0 ? ` · ${failed.length} unparseable` : ""));

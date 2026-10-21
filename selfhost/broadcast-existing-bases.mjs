@@ -230,94 +230,93 @@ async function main() {
   let sentCount = 0;
   let failCount = 0;
 
-  for (let i = 0; i < toBroadcast.length; i++) {
-    const b = toBroadcast[i];
-    const pBase = publicBase(b.baseName);
-    const text = [
-      `⚡ <b>ZORU SHOP — BASE UPDATE!</b> ⚡`,
-      `━━━━━━━━━━━━━━━━━━━━━━`,
-      `📦 <b>Base:</b> <code>${pBase}</code>`,
-      `🏷 <b>Brand:</b> ${b.brand}`,
-      `🌍 <b>Country:</b> ${b.country}`,
-      `💳 <b>In Stock:</b> ${b.count} Verified Cards`,
-      `💰 <b>Price:</b> $${b.price.toFixed(2)}`,
-      `⚡ <b>Delivery:</b> Instant Automated Delivery`,
-      ``,
-      `🛒 <b>Shop Now:</b> <a href="https://zoru.cc/shop">zoru.cc/shop</a>`,
-      `🤖 <b>Checker Bot:</b> <a href="https://t.me/ZoruCheckerbot">@ZoruCheckerbot</a>`,
-      `📢 <b>Official Channel:</b> ${channels[0] || "@zorushop"}`,
-      `💬 <b>Support:</b> @Zorushop_service`,
-      `━━━━━━━━━━━━━━━━━━━━━━`,
-    ].join("\n");
+  const totalCardsInBases = toBroadcast.reduce((acc, b) => acc + b.count, 0);
+  const displayBases = toBroadcast.slice(0, 30);
+  const baseLines = displayBases.map(
+    (b) =>
+      `📦 <code>${publicBase(b.baseName)}</code> — ${b.count} cards · ${b.brand} · ${b.country} · $${b.price.toFixed(2)}`
+  );
+  if (toBroadcast.length > 30) {
+    baseLines.push(`➕ <i>...and ${toBroadcast.length - 30} more bases available in shop!</i>`);
+  }
 
-    const replyMarkup = {
-      inline_keyboard: [
-        [
-          { text: "🛒 Buy Cards Now", url: "https://zoru.cc/shop" },
-          { text: "🤖 Telegram Checker Bot", url: "https://t.me/ZoruCheckerbot" },
-        ],
-        [
-          { text: "💬 Support", url: "https://t.me/Zorushop_service" },
-          { text: "📢 Official Channel", url: "https://t.me/zorushop" },
-        ],
+  const text = [
+    `⚡ <b>ZORU SHOP — BASE DROP UPDATE!</b> ⚡`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    ...baseLines,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `💳 <b>Total Cards in Shop:</b> ${totalCardsInBases} Verified Cards across ${toBroadcast.length} base(s)`,
+    `⚡ <b>Delivery:</b> Instant Automated Delivery`,
+    ``,
+    `🛒 <b>Shop Now:</b> <a href="https://zoru.cc/shop">zoru.cc/shop</a>`,
+    `🤖 <b>Checker Bot:</b> <a href="https://t.me/ZoruCheckerbot">@ZoruCheckerbot</a>`,
+    `📢 <b>Official Channel:</b> ${channels[0] || "@zorushop"}`,
+    `💬 <b>Support:</b> @Zorushop_service`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+  ].join("\n");
+
+  const replyMarkup = {
+    inline_keyboard: [
+      [
+        { text: "🛒 Buy Cards Now", url: "https://zoru.cc/shop" },
+        { text: "🤖 Telegram Checker Bot", url: "https://t.me/ZoruCheckerbot" },
       ],
-    };
+      [
+        { text: "💬 Support", url: "https://t.me/Zorushop_service" },
+        { text: "📢 Official Channel", url: "https://t.me/zorushop" },
+      ],
+    ],
+  };
 
-    try {
-      // 1. Post to ALL registered channels
-      for (const ch of channels) {
-        try {
-          const res = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: ch,
-              text,
-              parse_mode: "HTML",
-              disable_web_page_preview: true,
-              reply_markup: replyMarkup,
-            }),
-            signal: AbortSignal.timeout(10000),
-          });
-
-          const json = await res.json().catch(() => ({}));
-          if (res.ok && json.ok) {
-            sentCount++;
-            console.log(`[${i + 1}/${toBroadcast.length}] ✔ Broadcasted ${pBase} to ${ch} (${b.count} cards, $${b.price})`);
-          } else {
-            failCount++;
-            console.warn(`[${i + 1}/${toBroadcast.length}] ❌ Failed to broadcast ${pBase} to ${ch}: ${json.description || res.statusText}`);
-          }
-        } catch (chErr) {
-          failCount++;
-          console.error(`[${i + 1}/${toBroadcast.length}] ❌ Network error for ${pBase} on ${ch}:`, chErr.message);
-        }
-      }
-
-      // 2. Post to update bot subscribers
-      for (const tid of subscriberIds) {
-        fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+  try {
+    // 1. Post to ALL registered channels
+    for (const ch of channels) {
+      try {
+        const res = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            chat_id: tid,
+            chat_id: ch,
             text,
             parse_mode: "HTML",
             disable_web_page_preview: true,
             reply_markup: replyMarkup,
           }),
-        }).catch(() => {});
-        await new Promise((r) => setTimeout(r, 40));
+          signal: AbortSignal.timeout(10000),
+        });
+
+        const json = await res.json().catch(() => ({}));
+        if (res.ok && json.ok) {
+          sentCount++;
+          console.log(`✔ Broadcasted combined bases alert to ${ch}`);
+        } else {
+          failCount++;
+          console.warn(`❌ Failed to broadcast to ${ch}: ${json.description || res.statusText}`);
+        }
+      } catch (chErr) {
+        failCount++;
+        console.error(`❌ Network error on ${ch}:`, chErr.message);
       }
-    } catch (err) {
-      failCount++;
-      console.error(`[${i + 1}/${toBroadcast.length}] ❌ Error for ${pBase}:`, err.message);
     }
 
-    // Rate limit throttle: 600ms between each message
-    if (i < toBroadcast.length - 1) {
-      await new Promise((r) => setTimeout(r, 600));
+    // 2. Post to update bot subscribers
+    for (const tid of subscriberIds) {
+      fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: tid,
+          text,
+          parse_mode: "HTML",
+          disable_web_page_preview: true,
+          reply_markup: replyMarkup,
+        }),
+      }).catch(() => {});
+      await new Promise((r) => setTimeout(r, 40));
     }
+  } catch (err) {
+    failCount++;
+    console.error(`❌ Error broadcasting:`, err.message);
   }
 
   console.log("\n=================================================");

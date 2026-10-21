@@ -195,26 +195,35 @@ export const broadcastChannelAlert = createServerFn({ method: "POST" })
       ? multiBases.reduce((sum, b) => sum + (Number(b.count) || 0), 0)
       : Number(data.count ?? 0);
 
-    const baseLines = multiBases.length
-      ? multiBases.map(
-          (b) =>
-            `📦 <code>${publicBase(b.name)}</code> — ${b.count} cards · ${b.brand || "VISA/MC"} · ${b.country || "MIX"} · $${Number(b.price ?? 1.5).toFixed(2)}`
-        )
-      : [
-          `📦 <b>Base:</b> <code>${pBase}</code>`,
-          `🏷 <b>Brand:</b> ${brandStr}`,
-          `🌍 <b>Country:</b> ${countryStr}`,
-          data.count ? `💳 <b>Cards Added:</b> ${data.count} Verified Cards` : ``,
-          `💰 <b>Price:</b> ${priceStr}`,
-        ];
+    let baseLines: string[] = [];
+    if (multiBases.length > 0) {
+      const displayBases = multiBases.slice(0, 30);
+      baseLines = displayBases.map(
+        (b) =>
+          `📦 <code>${publicBase(b.name)}</code> — ${b.count} cards · ${b.brand || "VISA/MC"} · ${b.country || "MIX"} · $${Number(b.price ?? 1.5).toFixed(2)}`
+      );
+      if (multiBases.length > 30) {
+        baseLines.push(`➕ <i>...and ${multiBases.length - 30} more bases available in shop!</i>`);
+      }
+    } else {
+      baseLines = [
+        `📦 <b>Base:</b> <code>${pBase}</code>`,
+        `🏷 <b>Brand:</b> ${brandStr}`,
+        `🌍 <b>Country:</b> ${countryStr}`,
+        data.count ? `💳 <b>Cards Added:</b> ${data.count} Verified Cards` : ``,
+        `💰 <b>Price:</b> ${priceStr}`,
+      ];
+    }
 
     const text = [
       `⚡ <b>ZORU SHOP — NEW BASE UPDATE!</b> ⚡`,
       `━━━━━━━━━━━━━━━━━━━━━━`,
       ...baseLines,
-      multiBases.length ? `💳 <b>Total Cards Added:</b> ${totalCards} Verified Cards` : ``,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+      multiBases.length ? `💳 <b>Total Cards Added:</b> ${totalCards} Verified Cards across ${multiBases.length} base(s)` : ``,
       `⚡ <b>Delivery:</b> Instant Automated Delivery`,
-      data.customNote ? `📝 <b>Note:</b> ${data.customNote}\n` : ``,
+      data.customNote ? `📝 <b>Note:</b> ${data.customNote}` : ``,
+      ``,
       `🛒 <b>Shop Now:</b> <a href="https://zoru.cc/shop">zoru.cc/shop</a>`,
       `🤖 <b>Checker Bot:</b> <a href="https://t.me/ZoruCheckerbot">@ZoruCheckerbot</a>`,
       `📢 <b>Official Channel:</b> ${channels[0] || "@zorushop"}`,
@@ -406,82 +415,91 @@ export const broadcastAllExistingBasesAlert = createServerFn({ method: "POST" })
     let sentCount = 0;
     let failedCount = 0;
 
-    for (let i = 0; i < toBroadcast.length; i++) {
-      const b = toBroadcast[i];
-      const pBase = publicBase(b.baseName);
-      const text = [
-        `⚡ <b>ZORU SHOP — NEW BASE UPDATE!</b> ⚡`,
-        `━━━━━━━━━━━━━━━━━━━━━━`,
-        `📦 <b>Base:</b> <code>${pBase}</code>`,
-        `🏷 <b>Brand:</b> ${b.brand}`,
-        `🌍 <b>Country:</b> ${b.country}`,
-        `💳 <b>In Stock:</b> ${b.count} Verified Cards`,
-        `💰 <b>Price:</b> $${b.price.toFixed(2)}`,
-        `⚡ <b>Delivery:</b> Instant Automated Delivery`,
-        `🛒 <b>Shop Now:</b> <a href="https://zoru.cc/shop">zoru.cc/shop</a>`,
-        `🤖 <b>Checker Bot:</b> <a href="https://t.me/ZoruCheckerbot">@ZoruCheckerbot</a>`,
-        `📢 <b>Official Channel:</b> ${channels[0] || "@zorushop"}`,
-        `💬 <b>Support:</b> @Zorushop_service`,
-        `━━━━━━━━━━━━━━━━━━━━━━`,
-      ].join("\n");
+    const totalCardsInBases = toBroadcast.reduce((acc, b) => acc + b.count, 0);
 
-      const replyMarkup = {
-        inline_keyboard: [
-          [
-            { text: "🛒 Buy Cards Now", url: "https://zoru.cc/shop" },
-            { text: "🤖 Telegram Checker Bot", url: "https://t.me/ZoruCheckerbot" },
-          ],
-          [
-            { text: "💬 Support", url: "https://t.me/Zorushop_service" },
-            { text: "📢 Official Channel", url: "https://t.me/zorushop" },
-          ],
+    const displayBases = toBroadcast.slice(0, 30);
+    const baseLines = displayBases.map(
+      (b) =>
+        `📦 <code>${publicBase(b.baseName)}</code> — ${b.count} cards · ${b.brand} · ${b.country} · $${b.price.toFixed(2)}`
+    );
+    if (toBroadcast.length > 30) {
+      baseLines.push(`➕ <i>...and ${toBroadcast.length - 30} more bases available in shop!</i>`);
+    }
+
+    // ONE single combined message containing ALL active bases
+    const text = [
+      `⚡ <b>ZORU SHOP — BASE DROP UPDATE!</b> ⚡`,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+      ...baseLines,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+      `💳 <b>Total Cards in Shop:</b> ${totalCardsInBases} Verified Cards across ${toBroadcast.length} base(s)`,
+      `⚡ <b>Delivery:</b> Instant Automated Delivery`,
+      ``,
+      `🛒 <b>Shop Now:</b> <a href="https://zoru.cc/shop">zoru.cc/shop</a>`,
+      `🤖 <b>Checker Bot:</b> <a href="https://t.me/ZoruCheckerbot">@ZoruCheckerbot</a>`,
+      `📢 <b>Official Channel:</b> ${channels[0] || "@zorushop"}`,
+      `💬 <b>Support:</b> @Zorushop_service`,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+    ].join("\n");
+
+    const replyMarkup = {
+      inline_keyboard: [
+        [
+          { text: "🛒 Buy Cards Now", url: "https://zoru.cc/shop" },
+          { text: "🤖 Telegram Checker Bot", url: "https://t.me/ZoruCheckerbot" },
         ],
-      };
+        [
+          { text: "💬 Support", url: "https://t.me/Zorushop_service" },
+          { text: "📢 Official Channel", url: "https://t.me/zorushop" },
+        ],
+      ],
+    };
 
-      // Broadcast to all channels
-      for (const ch of channels) {
-        try {
-          const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: ch,
-              text,
-              parse_mode: "HTML",
-              disable_web_page_preview: true,
-              reply_markup: replyMarkup,
-            }),
-            signal: AbortSignal.timeout(10000),
-          });
-          if (res.ok) sentCount++;
-          else failedCount++;
-        } catch {
-          failedCount++;
-        }
-      }
-
-      // Push to subscribers
-      for (const tid of subscriberIds) {
-        fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    // Send the SINGLE consolidated alert to all channels
+    for (const ch of channels) {
+      try {
+        const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            chat_id: tid,
+            chat_id: ch,
             text,
             parse_mode: "HTML",
             disable_web_page_preview: true,
             reply_markup: replyMarkup,
           }),
-        }).catch(() => {});
-        await new Promise((r) => setTimeout(r, 40));
-      }
-
-      if (i < toBroadcast.length - 1) {
-        await new Promise((r) => setTimeout(r, 600));
+          signal: AbortSignal.timeout(10000),
+        });
+        if (res.ok) sentCount++;
+        else failedCount++;
+      } catch {
+        failedCount++;
       }
     }
 
-    return { ok: true, totalBases: baseList.length, broadcasted: sentCount, failed: failedCount, channelsCount: channels.length };
+    // Push the SINGLE consolidated alert to subscribers
+    for (const tid of subscriberIds) {
+      fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: tid,
+          text,
+          parse_mode: "HTML",
+          disable_web_page_preview: true,
+          reply_markup: replyMarkup,
+        }),
+      }).catch(() => {});
+      await new Promise((r) => setTimeout(r, 40));
+    }
+
+    return {
+      ok: true,
+      totalBases: toBroadcast.length,
+      broadcasted: sentCount,
+      failed: failedCount,
+      channelsCount: channels.length,
+    };
   });
 
 /**
