@@ -147,11 +147,17 @@ export const saveBotSettings = createServerFn({ method: "POST" })
     if (data.bot_admin_contact !== undefined) pairs.push(["bot_admin_contact", data.bot_admin_contact]);
     if (data.bot_website_url !== undefined) pairs.push(["bot_website_url", data.bot_website_url]);
     if (data.telegram_broadcast_channels !== undefined) {
-      // Normalize into clean list
-      const chList = data.telegram_broadcast_channels
-        .split(/[,\s]+/)
-        .map((s) => s.trim().replace(/^["']|["']$/g, ""))
-        .filter(Boolean);
+      // Normalize into clean list and deduplicate
+      const chList = Array.from(new Set(
+        data.telegram_broadcast_channels
+          .split(/[,\s]+/)
+          .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+          .filter(Boolean)
+      ));
+      if (chList.includes("@zorushop") || chList.includes("zorushop")) {
+        const idx = chList.indexOf("-1002006367260");
+        if (idx !== -1) chList.splice(idx, 1);
+      }
       pairs.push(["telegram_broadcast_channels", JSON.stringify(chList)]);
     }
     await Promise.all(

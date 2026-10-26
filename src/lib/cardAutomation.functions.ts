@@ -96,6 +96,11 @@ export async function getAllBroadcastChannels(db?: any): Promise<string[]> {
     channelSet.add("@zorushop");
   }
 
+  // Deduplicate known synonymous channel IDs (e.g. @zorushop is -1002006367260)
+  if (channelSet.has("@zorushop") || channelSet.has("zorushop")) {
+    channelSet.delete("-1002006367260");
+  }
+
   return Array.from(channelSet);
 }
 

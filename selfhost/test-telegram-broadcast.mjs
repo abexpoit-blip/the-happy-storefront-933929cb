@@ -111,6 +111,10 @@ async function getAllBroadcastChannels() {
     channelSet.add("@zorushop");
   }
 
+  if (channelSet.has("@zorushop") || channelSet.has("zorushop")) {
+    channelSet.delete("-1002006367260");
+  }
+
   return Array.from(channelSet);
 }
 

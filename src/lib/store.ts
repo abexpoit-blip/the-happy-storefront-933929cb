@@ -1125,8 +1125,8 @@ const cardStatus = (p: {
     const end = new Date(full, m, 1);
     if (end.getTime() < Date.now()) return "expired";
   }
+  if ((p.sold_count ?? 0) > 0 || (p.stock ?? 0) <= 0) return "sold";
   if (!p.active) return "hidden";
-  if ((p.stock ?? 0) <= 0) return "sold";
   return "available";
 };
 

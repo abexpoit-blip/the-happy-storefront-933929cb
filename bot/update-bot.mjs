@@ -206,6 +206,11 @@ export async function getAllBroadcastChannels(database = db) {
     channelSet.add("@zorushop");
   }
 
+  // Deduplicate known synonymous channel IDs (e.g. @zorushop is -1002006367260)
+  if (channelSet.has("@zorushop") || channelSet.has("zorushop")) {
+    channelSet.delete("-1002006367260");
+  }
+
   return Array.from(channelSet);
 }
 
@@ -235,9 +240,11 @@ async function registerBroadcastChannel(chat, sendGreeting = true) {
       }
     }
 
-    const wasAlreadyRegistered = channelSet.has(primaryId) || channelSet.has(channelIdStr);
+    const wasAlreadyRegistered = channelSet.has(primaryId) || (channelIdStr && channelSet.has(channelIdStr));
     channelSet.add(primaryId);
-    if (channelIdStr) channelSet.add(channelIdStr);
+    if (channelUsername && channelIdStr) {
+      channelSet.delete(channelIdStr);
+    }
 
     if (!wasAlreadyRegistered) {
       await db.from("site_settings").upsert({
