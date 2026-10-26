@@ -724,6 +724,7 @@ export interface FullCardInput {
   card_level?: string | null;
   bank?: string | null;
   created_at?: string;
+  active?: boolean;
 }
 
 export const adminPublishFullCards = async (
@@ -808,7 +809,7 @@ export const adminPublishFullCards = async (
       slug: `${cleanBin}-${stamp}-${i}-${Math.random().toString(36).slice(2, 8)}`,
       price: Number(c.price) || 1.5,
       delivery_type: "key" as DeliveryType,
-      active: true,
+      active: c.active !== undefined ? c.active : (c.created_at ? new Date(c.created_at).getTime() <= Date.now() : true),
       // Exactly one key per product, so stock is known up front — no extra round-trips.
       stock: 1,
       bin: cleanBin,

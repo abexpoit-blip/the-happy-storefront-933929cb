@@ -211,10 +211,9 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
 
       for (let dayIdx = 0; dayIdx < totalDays; dayIdx++) {
         const curDate = new Date(s.getTime() + dayIdx * 86_400_000);
-        const effectiveDate = curDate.getTime() > Date.now() ? new Date() : curDate;
-        const yyyy = effectiveDate.getUTCFullYear();
-        const mm = String(effectiveDate.getUTCMonth() + 1).padStart(2, "0");
-        const dd = String(effectiveDate.getUTCDate()).padStart(2, "0");
+        const yyyy = curDate.getUTCFullYear();
+        const mm = String(curDate.getUTCMonth() + 1).padStart(2, "0");
+        const dd = String(curDate.getUTCDate()).padStart(2, "0");
         const dateStr = `${yyyy}_${mm}_${dd}`;
         const dayCards = allCards.slice(dayIdx * perDay, (dayIdx + 1) * perDay);
 
@@ -302,6 +301,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
               bank: binInfo.bank,
               category_id: backdateCategoryId || null,
               created_at: curDate.toISOString(),
+              active: curDate.getTime() <= Date.now(),
             };
           });
 
@@ -1032,18 +1032,18 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
           {/* TAB 2: DAILY AUTO-DRIP SCHEDULER */}
           {/* ========================================================= */}
           <TabsContent value="drip" className="space-y-6">
-            {/* Fixed 10:00 AM Schedule Highlight */}
+            {/* Fixed 12:00 PM Schedule Highlight */}
             <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border border-amber-500/40 text-xs text-amber-200 flex items-start gap-3 shadow-md">
               <Clock className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold text-amber-300 mb-1 text-sm flex items-center gap-2">
-                  <span>⏰ Fixed Daily Release Schedule: 10:00 AM</span>
+                  <span>⏰ Fixed Daily Release Schedule: 12:00 PM</span>
                   <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px]">
                     Active Daemon
                   </Badge>
                 </p>
                 <p className="text-slate-300 leading-relaxed text-xs">
-                  The automated background drip engine monitors active queues and triggers card releases every single morning at <b>10:00 AM</b>. The daily batch is automatically minted with today's base, published to the shop, and broadcasted to Telegram.
+                  The automated background drip engine monitors active queues and triggers card releases every single day at <b>12:00 PM</b>. The daily batch is automatically minted with today's base, published to the shop, and broadcasted to Telegram.
                 </p>
               </div>
             </div>
@@ -1068,7 +1068,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                   />
                 </div>
                 <div>
-                  <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Release Per Day (10:00 AM Daily)</Label>
+                  <Label className="text-xs font-semibold text-slate-200 mb-1.5 block">Release Per Day (12:00 PM Daily)</Label>
                   <Input
                     type="number"
                     min="1"
@@ -1469,7 +1469,7 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                               <Clock className="h-3 w-3 text-emerald-400" /> Next Drop:{" "}
                               <b className="text-[#38bdf8] font-bold">
                                 {(() => {
-                                  if (!q.last_run_at) return "Today 10:00 AM";
+                                  if (!q.last_run_at) return "Today 12:00 PM";
                                   const f = (date: Date) =>
                                     new Intl.DateTimeFormat("en-US", {
                                       timeZone: "Asia/Dhaka",
@@ -1478,8 +1478,8 @@ export const BackdateCardUploadDialog: React.FC<Props> = ({
                                       day: "2-digit",
                                     }).format(date);
                                   return f(new Date(q.last_run_at)) === f(new Date())
-                                    ? "Tomorrow 10:00 AM"
-                                    : "Today 10:00 AM";
+                                    ? "Tomorrow 12:00 PM"
+                                    : "Today 12:00 PM";
                                 })()}
                               </b>{" "}
                               ({Math.ceil(q.cards_remaining / Math.max(1, q.per_day))} days left)

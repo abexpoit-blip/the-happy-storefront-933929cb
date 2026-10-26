@@ -481,6 +481,113 @@ async function autoDiscountExpiringProducts(db) {
   }
 }
 
+
+async function releaseScheduledFutureProducts(now, dhakaNow) {
+  // Never release before 12:00 PM local time
+  if (dhakaNow.hour < 12) {
+    return;
+  }
+
+  try {
+    // Look for inactive scheduled cards whose release time has arrived (created_at <= now)
+    const { data: dueProds, error: pErr } = await db
+      .from("products")
+      .select("id, base, brand, country, price")
+      .eq("active", false)
+      .gt("stock", 0)
+      .lte("created_at", now.toISOString())
+      .gte("created_at", "2026-10-27T00:00:00Z");
+
+    if (pErr) {
+      console.error("[Scheduled Products] Error querying due products:", pErr.message);
+      return;
+    }
+
+    if (!dueProds || dueProds.length === 0) {
+      return;
+    }
+
+    const ids = dueProds.map((p) => p.id);
+    console.log(`[Scheduled Products] Found ${ids.length} scheduled cards due for release at 12:00 PM!`);
+
+    // Activate in chunks of 200
+    const CHUNK = 200;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const slice = ids.slice(i, i + CHUNK);
+      await db.from("products").update({ active: true }).in("id", slice);
+    }
+
+    const distinctBases = [...new Set(dueProds.map((p) => p.base).filter(Boolean))];
+    const totalCards = dueProds.length;
+
+    if (distinctBases.length > 0) {
+      // 1. Post announcement
+      try {
+        const baseLines = distinctBases
+          .map((bName) => `• ${bName.replace(/^\s*(admin|seller)[\s_\-.:]+/i, "")}`)
+          .join("\n");
+        await db.from("announcements").insert({
+          title: `Base Update: ${totalCards} Fresh Cards Added`,
+          body: `Fresh batch of verified cards added across ${distinctBases.length} base(s):\n\n${baseLines}\n\nAvailable in shop now.`,
+          kind: "update",
+          created_at: now.toISOString(),
+        });
+      } catch (annErr) {
+        console.error("[Scheduled Products] Announcement error:", annErr.message);
+      }
+
+      // 2. Broadcast to Telegram (@zorushop)
+      try {
+        const allBrands = [...new Set(dueProds.map((p) => p.brand).filter(Boolean))].join(", ") || "VISA/MC";
+        const allCountries = [...new Set(dueProds.map((it) => it.country).filter(Boolean))].slice(0, 5).join(", ") || "MIX";
+        const avgP = (dueProds.reduce((acc, x) => acc + (Number(x.price) || 1.5), 0) / totalCards).toFixed(2);
+
+        const baseSummary = distinctBases
+          .map((bName) => {
+            const bCount = dueProds.filter((p) => p.base === bName).length;
+            const cleanName = bName.replace(/^\s*(admin|seller)[\s_\-.:]+/i, "");
+            return `🔹 <code>${cleanName}</code> (${bCount} cards)`;
+          })
+          .join("\n");
+
+        const text = [
+          `⚡ <b>ZORU SHOP — NEW BASE UPDATE!</b> ⚡`,
+          `━━━━━━━━━━━━━━━━━━━━━━`,
+          `📦 <b>Fresh Drop:</b> ${totalCards} cards across ${distinctBases.length} base(s)`,
+          `🏷 <b>Brand:</b> ${allBrands}`,
+          `🌍 <b>Country:</b> ${allCountries}`,
+          `💵 <b>Avg Price:</b> ${avgP}`,
+          `━━━━━━━━━━━━━━━━━━━━━━`,
+          `<b>Bases in this Drop:</b>`,
+          baseSummary,
+          `━━━━━━━━━━━━━━━━━━━━━━`,
+          `🛒 <b>Shop Now:</b> https://zoru.cc/`,
+          `⚡ Fast auto-delivery · Fresh daily dump`,
+        ].join("\n");
+
+        const channels = await getAllBroadcastChannels(db);
+        for (const ch of channels) {
+          await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: ch,
+              text,
+              parse_mode: "HTML",
+              disable_web_page_preview: true,
+            }),
+          });
+        }
+        console.log(`[Scheduled Products] Successfully broadcasted 12:00 PM drop to Telegram channels: ${channels.join(", ")}`);
+      } catch (tgErr) {
+        console.error("[Scheduled Products] Telegram broadcast error:", tgErr.message);
+      }
+    }
+  } catch (err) {
+    console.error("[Scheduled Products] Error in releaseScheduledFutureProducts:", err.message);
+  }
+}
+
 async function processActiveQueues() {
   const now = new Date();
   const dhakaNow = getDhakaDateAndHour(now);
@@ -491,8 +598,11 @@ async function processActiveQueues() {
   // Run running-month auto-discount check for existing active products
   await autoDiscountExpiringProducts(db);
 
-  // Target release hour: 10:00 AM Asia/Dhaka time (04:00 AM UTC)
-  const TARGET_RELEASE_HOUR_DHAKA = 10;
+  // Release cards scheduled for today at 12:00 PM
+  await releaseScheduledFutureProducts(now, dhakaNow);
+
+  // Target release hour: 12:00 PM (midday) (06:00 AM UTC)
+  const TARGET_RELEASE_HOUR_DHAKA = 12;
 
   // Queues with status = active and remaining > 0
   const { data: queues, error: qErr } = await db
@@ -522,10 +632,10 @@ async function processActiveQueues() {
         }
       }
 
-      // 2. Never release before 10:00 AM Asia/Dhaka — applies to new AND recurring queues
+      // 2. Never release before 12:00 PM — applies to new AND recurring queues
       if (dhakaNow.hour < TARGET_RELEASE_HOUR_DHAKA) {
         console.log(
-          `[Drip Worker] Queue '${queue.name}' scheduled for 10:00 AM Asia/Dhaka (current Dhaka time: ${String(dhakaNow.hour).padStart(2, "0")}:${String(dhakaNow.minute).padStart(2, "0")}). Waiting.`
+          `[Drip Worker] Queue '${queue.name}' scheduled for 12:00 PM (current local time: ${String(dhakaNow.hour).padStart(2, "0")}:${String(dhakaNow.minute).padStart(2, "0")}). Waiting.`
         );
         continue;
       }
@@ -964,7 +1074,7 @@ if (runOnce) {
     process.exit(0);
   });
 } else {
-  console.log("[Drip Worker] Starting daemon loop (interval: 3 minutes, daily target: 10:00 AM Asia/Dhaka)...");
+  console.log("[Drip Worker] Starting daemon loop (interval: 3 minutes, daily target: 12:00 PM)...");
   processActiveQueues();
   reconcilePendingDeposits();
   setInterval(processActiveQueues, 3 * 60 * 1000);
