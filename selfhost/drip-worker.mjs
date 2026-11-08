@@ -961,7 +961,30 @@ async function reconcilePendingDeposits() {
         }
       }
 
-      // 2. Plisio Invoice check
+      // 2. NOWPayments Check
+      let nowpaymentsApiKey = (process.env.NOWPAYMENTS_API_KEY || "").trim();
+      if (!nowpaymentsApiKey) {
+        const { data: row } = await db.from("site_settings").select("value").eq("key", "nowpayments_api_key").maybeSingle();
+        if (row?.value) nowpaymentsApiKey = String(row.value).trim();
+      }
+      if (!isApproved && nowpaymentsApiKey && dep.invoice_id) {
+        try {
+          const npRes = await fetch(`https://api.nowpayments.io/v1/payment/${encodeURIComponent(dep.invoice_id)}`, {
+            headers: { "x-api-key": nowpaymentsApiKey },
+            signal: AbortSignal.timeout(6000),
+          });
+          if (npRes.ok) {
+            const npData = await npRes.json();
+            const st = String(npData.payment_status || "").toLowerCase();
+            if (st === "finished" || st === "confirmed" || st === "sending") {
+              isApproved = true;
+              matchedTxid = npData.outcome_tx_hash || null;
+            }
+          }
+        } catch {}
+      }
+
+      // 3. Plisio Invoice check
       if (!isApproved && plisioApiKey && dep.invoice_id) {
         try {
           const pRes = await fetch(`https://api.plisio.net/api/v1/operations/${encodeURIComponent(dep.invoice_id)}?api_key=${encodeURIComponent(plisioApiKey)}`, {

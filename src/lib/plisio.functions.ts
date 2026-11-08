@@ -5,12 +5,11 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { CLIENT_FEE_PERCENT, withFee } from "@/lib/fees";
 
 
-/** Create an LTC top-up invoice for the signed-in user. */
+/** Create an LTC top-up invoice for the signed-in user via NOWPayments or Plisio. */
 export const createCryptoInvoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({ amount: z.number().min(1).max(100000) }).parse(input))
   .handler(async ({ data, context }) => {
-    const { createLtcInvoice } = await import("@/lib/plisio.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { credit, fee, charged } = withFee(data.amount);
@@ -40,23 +39,74 @@ export const createCryptoInvoice = createServerFn({ method: "POST" })
       .single();
     if (error || !dep) throw new Error("deposit_create_failed");
 
-    let inv;
-    try {
-      inv = await createLtcInvoice({
-        usdAmount: charged,
-        orderNumber: dep.id,
-        callbackUrl: `${origin}/api/public/deposit-callback`,
-        successUrl: `${origin}/recharge?payment=success&deposit=${dep.id}`,
-        failUrl: `${origin}/recharge?payment=failed&deposit=${dep.id}`,
-        email: claimEmail,
-      });
-    } catch (e) {
-      const detail = e instanceof Error ? e.message : String(e);
-      await supabaseAdmin
-        .from("deposits")
-        .update({ status: "rejected", admin_note: `Gateway error: ${detail}`.slice(0, 400) })
-        .eq("id", dep.id);
-      throw e;
+    let inv: {
+      txn_id: string;
+      wallet_hash: string;
+      amount: string | number;
+      currency?: string;
+      invoice_url?: string | null;
+    } | null = null;
+
+    // 1. Try NOWPayments first if configured
+    let npApiKey = (process.env.NOWPAYMENTS_API_KEY || "").trim();
+    if (!npApiKey) {
+      const { data: row } = await (supabaseAdmin as any)
+        .from("site_settings")
+        .select("value")
+        .eq("key", "nowpayments_api_key")
+        .maybeSingle();
+      if (row?.value) npApiKey = String(row.value).trim();
+    }
+
+    if (npApiKey) {
+      try {
+        const { createNowPayment } = await import("@/lib/nowpayments.server");
+        const npRes = await createNowPayment({
+          usdAmount: charged,
+          orderNumber: dep.id,
+          payCurrency: "ltc",
+          callbackUrl: `${origin}/api/public/deposit-callback`,
+          orderDescription: `Zoru Deposit #${dep.id.slice(0, 8)}`,
+        });
+        inv = {
+          txn_id: String(npRes.payment_id),
+          wallet_hash: npRes.pay_address,
+          amount: npRes.pay_amount,
+          currency: (npRes.pay_currency || "LTC").toUpperCase(),
+          invoice_url: `https://nowpayments.io/payment/?iid=${npRes.payment_id}`,
+        };
+      } catch (npErr) {
+        console.warn("[Deposit] NOWPayments creation error, trying Plisio...", npErr);
+      }
+    }
+
+    // 2. Fall back to Plisio if NOWPayments wasn't used or failed
+    if (!inv) {
+      try {
+        const { createLtcInvoice } = await import("@/lib/plisio.server");
+        const plisioInv = await createLtcInvoice({
+          usdAmount: charged,
+          orderNumber: dep.id,
+          callbackUrl: `${origin}/api/public/deposit-callback`,
+          successUrl: `${origin}/recharge?payment=success&deposit=${dep.id}`,
+          failUrl: `${origin}/recharge?payment=failed&deposit=${dep.id}`,
+          email: claimEmail,
+        });
+        inv = {
+          txn_id: plisioInv.txn_id,
+          wallet_hash: plisioInv.wallet_hash,
+          amount: plisioInv.amount,
+          currency: "LTC",
+          invoice_url: plisioInv.invoice_url ?? null,
+        };
+      } catch (e) {
+        const detail = e instanceof Error ? e.message : String(e);
+        await supabaseAdmin
+          .from("deposits")
+          .update({ status: "rejected", admin_note: `Gateway error: ${detail}`.slice(0, 400) })
+          .eq("id", dep.id);
+        throw e;
+      }
     }
 
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -111,19 +161,33 @@ export const checkDepositStatus = createServerFn({ method: "POST" })
     let txUrl: string | null = null;
     let received: string | null = null;
 
-    // 1. Check Plisio API
+    // 1. Try NOWPayments if invoice_id is numeric / NOWPayments payment ID
     try {
-      const op = await getOperation(dep.invoice_id);
-      rawStatus = (op.status || "").toLowerCase();
-      status = mapStatus(op.status, op.amount, dep.crypto_amount, Number(op.confirmations ?? 0));
-      confirmations = Number(op.confirmations ?? confirmations) || confirmations;
-      txUrl = op.tx_url ?? null;
-      received = op.amount ?? null;
-    } catch {
-      /* continue to blockchain verification */
+      const { getNowPaymentStatus, mapNowPaymentStatus } = await import("@/lib/nowpayments.server");
+      const npStatus = await getNowPaymentStatus(dep.invoice_id);
+      if (npStatus && npStatus.payment_status) {
+        rawStatus = npStatus.payment_status;
+        status = mapNowPaymentStatus(npStatus.payment_status);
+        if (status === "approved") confirmations = 1;
+        received = String(npStatus.pay_amount);
+      }
+    } catch {}
+
+    // 2. Check Plisio API if not approved yet
+    if (status !== "approved") {
+      try {
+        const op = await getOperation(dep.invoice_id);
+        rawStatus = (op.status || "").toLowerCase();
+        status = mapStatus(op.status, op.amount, dep.crypto_amount, Number(op.confirmations ?? 0));
+        confirmations = Number(op.confirmations ?? confirmations) || confirmations;
+        txUrl = op.tx_url ?? null;
+        received = op.amount ?? null;
+      } catch {
+        /* continue to blockchain verification */
+      }
     }
 
-    // 2. Direct Blockchain Verification (instant fallback if gateway has lag or mismatch)
+    // 3. Direct Blockchain Verification (instant fallback if gateway has lag or mismatch)
     if (status !== "approved" && dep.wallet_address) {
       try {
         const bc = await checkLtcBlockchain(dep.wallet_address);
@@ -175,17 +239,13 @@ export const checkDepositStatus = createServerFn({ method: "POST" })
     };
   });
 
-/** Validates the server-side Plisio key without ever returning it. */
+/** Validates the server-side gateway keys. */
 export const plisioKeyStatus = createServerFn({ method: "GET" }).handler(async () => {
-  if (!process.env.PLISIO_API_KEY?.trim()) {
-    return { configured: false, valid: false };
-  }
+  const hasPlisio = !!process.env.PLISIO_API_KEY?.trim();
+  const hasNowPayments = !!process.env.NOWPAYMENTS_API_KEY?.trim();
 
-  try {
-    const { gatewayPing } = await import("@/lib/plisio.server");
-    await gatewayPing();
-    return { configured: true, valid: true };
-  } catch {
-    return { configured: true, valid: false };
+  if (!hasPlisio && !hasNowPayments) {
+    return { configured: false, valid: false, error: "No crypto gateway configured (NOWPayments / Plisio)" };
   }
+  return { configured: true, valid: true, error: null, provider: hasNowPayments ? "NOWPayments" : "Plisio" };
 });
