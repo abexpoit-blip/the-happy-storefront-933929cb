@@ -26,10 +26,18 @@ export const Route = createFileRoute("/api/public/deposit-callback")({
           } catch {
             return new Response("Bad request", { status: 400 });
           }
-        } else {
+        } else if (raw.trim()) {
           for (const [k, v] of new URLSearchParams(raw).entries()) {
             fields[k] = v;
           }
+        }
+
+        // Test or verification ping from NOWPayments dashboard (e.g. { test: true } or empty)
+        if (fields.test || (!fields.txn_id && !fields.payment_id && !fields.order_id)) {
+          return new Response(JSON.stringify({ ok: true, message: "IPN URL verified" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
         }
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -40,14 +48,11 @@ export const Route = createFileRoute("/api/public/deposit-callback")({
         const isNowPayments = !!(nowpaymentsSig || fields.payment_id || fields.payment_status);
 
         if (isNowPayments) {
-          // Dashboard test ping from NOWPayments:
-          // Often sent as { test: true } or with payment_status without matching order
           const paymentId = String(fields.payment_id || fields.id || "");
           const orderId = String(fields.order_id || "");
 
           if (!paymentId && !orderId) {
-            // It's a test/verification ping from NOWPayments dashboard
-            return new Response(JSON.stringify({ ok: true, message: "IPN URL verified" }), {
+            return new Response(JSON.stringify({ ok: true, message: "IPN verified" }), {
               status: 200,
               headers: { "Content-Type": "application/json" },
             });
@@ -57,7 +62,6 @@ export const Route = createFileRoute("/api/public/deposit-callback")({
 
           // Verify signature if provided
           if (nowpaymentsSig) {
-            // Check IPN secret from env or site_settings
             let secret = (process.env.NOWPAYMENTS_IPN_SECRET || "").trim();
             if (!secret) {
               const { data: row } = await (supabaseAdmin as any)
@@ -71,7 +75,6 @@ export const Route = createFileRoute("/api/public/deposit-callback")({
               const sigOk = verifyNowpaymentsIpn(raw, nowpaymentsSig, secret);
               if (!sigOk) {
                 console.warn("[NOWPayments IPN] Invalid signature received:", nowpaymentsSig);
-                // Allow fallback if order matches valid pending deposit
               }
             }
           }
@@ -87,12 +90,11 @@ export const Route = createFileRoute("/api/public/deposit-callback")({
 
           if (!depRecord) {
             console.warn("[NOWPayments IPN] Deposit record not found for payment:", paymentId, "order:", orderId);
-            return new Response("ok", { status: 200 }); // Return 200 to acknowledge webhook
+            return new Response("ok", { status: 200 });
           }
 
           const rawStatus = String(fields.payment_status || "").toLowerCase();
           const mappedStatus = mapNowPaymentStatus(rawStatus);
-
           const actuallyPaid = fields.actually_paid || fields.pay_amount || null;
 
           await (supabaseAdmin as any)
