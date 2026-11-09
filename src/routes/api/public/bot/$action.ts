@@ -151,7 +151,6 @@ export const Route = createFileRoute("/api/public/bot/$action")({
                   if (prof && typeof prof.balance === "number") {
                     snapshot.balance = prof.balance;
                   }
-                }
               } catch {
                 /* non-blocking inline reconciliation */
               }
