@@ -109,26 +109,43 @@ export const Route = createFileRoute("/api/public/bot/$action")({
 
                 if (pendingDeps && pendingDeps.length > 0) {
                   for (const dep of pendingDeps) {
-                    if (dep.wallet_address) {
-                      const { checkLtcBlockchain } = await import("@/lib/plisio.server");
-                      const bc = await checkLtcBlockchain(dep.wallet_address);
-                      if (bc.confirmed && bc.receivedLtc > 0) {
-                        const { data: res } = await db.rpc("settle_crypto_deposit", {
-                          _invoice_id: dep.invoice_id || dep.id,
-                          _status: "approved",
-                          _confirmations: 1,
-                          _txid: bc.txid ?? null,
-                        });
-                        if (res === "approved") {
-                          try {
-                            await db.rpc("award_referral_bonus", { _user_id: account.userId });
-                          } catch {
-                            // ignore
-                          }
+                    let isApproved = false;
+                    let txId: string | null = null;
+                    if (dep.invoice_id) {
+                      try {
+                        const { getOperation } = await import("@/lib/plisio.server");
+                        const op = await getOperation(dep.invoice_id);
+                        if (op && (op.status === "completed" || op.status === "paid" || op.status === "confirmed")) {
+                          isApproved = true;
+                          txId = op.tx_url ?? null;
                         }
+                      } catch {}
+                    }
+                    if (!isApproved && dep.wallet_address) {
+                      try {
+                        const { checkLtcBlockchain } = await import("@/lib/plisio.server");
+                        const bc = await checkLtcBlockchain(dep.wallet_address);
+                        if (bc.confirmed && bc.receivedLtc > 0) {
+                          isApproved = true;
+                          txId = bc.txid ?? null;
+                        }
+                      } catch {}
+                    }
+                    if (isApproved) {
+                      const { data: res } = await db.rpc("settle_crypto_deposit", {
+                        _invoice_id: dep.invoice_id || dep.id,
+                        _status: "approved",
+                        _confirmations: 1,
+                        _txid: txId,
+                      });
+                      if (res === "approved") {
+                        try {
+                          await db.rpc("award_referral_bonus", { _user_id: account.userId });
+                        } catch {}
                       }
                     }
                   }
+                }
                   // Refresh balance
                   const { data: prof } = await db.from("profiles").select("balance").eq("id", account.userId).maybeSingle();
                   if (prof && typeof prof.balance === "number") {

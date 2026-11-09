@@ -248,15 +248,16 @@ function buildDepositCard(d, expiresMs) {
   ].filter((l) => l !== "").join("\n");
 }
 
-function depositButtons(depositId) {
-  return {
-    inline_keyboard: [
-      [
-        { text: "🔄 Check Payment Status", callback_data: `dep_status:${depositId}` },
-        { text: "❌ Cancel", callback_data: "balance" },
-      ],
-    ],
-  };
+function depositButtons(depositId, invoiceUrl = null) {
+  const rows = [];
+  if (invoiceUrl) {
+    rows.push([{ text: "💳 Pay Online / Multi-Crypto (Hosted)", url: invoiceUrl }]);
+  }
+  rows.push([
+    { text: "🔄 Check Payment Status", callback_data: `dep_status:${depositId}` },
+    { text: "❌ Cancel", callback_data: "balance" },
+  ]);
+  return { inline_keyboard: rows };
 }
 
 function startDepositTimer(chat, msgId, depositId, expiresMs, from = { id: chat }) {
@@ -319,7 +320,7 @@ function startDepositTimer(chat, msgId, depositId, expiresMs, from = { id: chat 
     if (current) {
       await edit(chat, msgId,
         buildDepositCard({ credit: current.credit, fee: current.fee, charged: current.charged, crypto_amount: current.crypto_amount, wallet_address: current.wallet_address, invoice_url: current.invoice_url }, expiresMs),
-        { reply_markup: depositButtons(depositId) }
+        { reply_markup: depositButtons(depositId, current.invoice_url) }
       );
     }
   };
@@ -415,7 +416,7 @@ async function startDeposit(chat) {
     ``,
     `💡 <i>Examples:</i> <code>${examplesStr}</code>`,
     ``,
-    `⚡ <b>Payment Method:</b> Litecoin (LTC)`,
+    `⚡ <b>Supported:</b> Litecoin (LTC), USDT, BTC, TRX, SOL & more`,
     `💵 <b>Minimum Recharge:</b> <code>$${minDep}</code>`,
     `━━━━━━━━━━━━━━━━━━━`,
   ].join("\n"), {
@@ -433,7 +434,7 @@ async function createDeposit(chat, from, amount) {
   const expiresMs = Number(d.expires_ms || Date.now() + 25 * 60 * 1000);
 
   const msgText = buildDepositCard(d, expiresMs);
-  const msg = await send(chat, msgText, { reply_markup: depositButtons(d.deposit_id) });
+  const msg = await send(chat, msgText, { reply_markup: depositButtons(d.deposit_id, d.invoice_url) });
 
   // Store state for timer and status check
   pendingDeposits.set(chat, {
