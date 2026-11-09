@@ -1,5 +1,5 @@
 /**
- * Server-only payment provider helpers (Plisio merchant API).
+ * Server-only payment provider helpers (NOWPayments & Plisio merchant APIs).
  * Never imported from client code.
  */
 import { createHmac, timingSafeEqual } from "crypto";
@@ -66,6 +66,13 @@ export const CLIENT_FEE_PERCENT = 2;
 
 /** Lightweight health probe — throws when the payment gateway is unusable. */
 export async function gatewayPing(): Promise<void> {
+  const npApiKey = (process.env.NOWPAYMENTS_API_KEY || "").trim();
+  if (npApiKey) {
+    const res = await fetch("https://api.nowpayments.io/v1/status", {
+      headers: { "x-api-key": npApiKey },
+    });
+    if (res.ok) return;
+  }
   await call<unknown>("/balances/LTC", {}, { quiet: true });
 }
 
@@ -80,6 +87,31 @@ export async function createLtcInvoice(input: {
   failUrl: string;
   email?: string;
 }): Promise<NewInvoice> {
+  // 1. Try NOWPayments first if configured
+  const npApiKey = (process.env.NOWPAYMENTS_API_KEY || "").trim();
+  if (npApiKey) {
+    try {
+      const { createNowPayment } = await import("@/lib/nowpayments.server");
+      const npRes = await createNowPayment({
+        usdAmount: input.usdAmount,
+        orderNumber: input.orderNumber,
+        payCurrency: "ltc",
+        callbackUrl: input.callbackUrl,
+        orderDescription: `Zoru Deposit #${input.orderNumber.slice(0, 8)}`,
+      });
+      return {
+        txn_id: String(npRes.payment_id),
+        wallet_hash: npRes.pay_address,
+        amount: String(npRes.pay_amount),
+        currency: (npRes.pay_currency || "LTC").toUpperCase(),
+        invoice_url: `https://nowpayments.io/payment/?iid=${npRes.payment_id}`,
+      };
+    } catch (npErr) {
+      console.warn("[plisio.server] NOWPayments creation failed, falling back to Plisio...", npErr);
+    }
+  }
+
+  // 2. Fallback to Plisio
   if (!input.email) throw new Error("payment_gateway_error: Customer email is missing");
   return call<NewInvoice>("/invoices/new", {
     source_currency: "USD",
@@ -93,14 +125,10 @@ export async function createLtcInvoice(input: {
     fail_callback_url: input.callbackUrl,
     success_invoice_url: input.successUrl,
     fail_invoice_url: input.failUrl,
-    // Do not send redirect_to_invoice at all. Some provider versions treat
-    // the mere presence of this query parameter as enabled, even when its
-    // string value is "false".
     expire_min: "30",
     email: input.email,
   });
 }
-
 
 export interface Operation {
   status: string;
@@ -114,6 +142,25 @@ export interface Operation {
 }
 
 export async function getOperation(txnId: string): Promise<Operation> {
+  // 0. Check NOWPayments if configured and txnId is present
+  const npApiKey = (process.env.NOWPAYMENTS_API_KEY || "").trim();
+  if (npApiKey) {
+    try {
+      const { getNowPaymentStatus, mapNowPaymentStatus } = await import("@/lib/nowpayments.server");
+      const np = await getNowPaymentStatus(txnId);
+      if (np && np.payment_status) {
+        const mapped = mapNowPaymentStatus(np.payment_status);
+        return {
+          status: mapped === "approved" ? "completed" : mapped === "rejected" ? "expired" : np.payment_status,
+          confirmations: mapped === "approved" ? 1 : 0,
+          amount: String(np.pay_amount),
+          wallet_hash: np.pay_address,
+          invoice_url: `https://nowpayments.io/payment/?iid=${np.payment_id}`,
+        };
+      }
+    } catch {}
+  }
+
   // 1. Try Plisio /operations/{id}
   try {
     const op = await call<Operation>(`/operations/${encodeURIComponent(txnId)}`, {});
@@ -234,8 +281,6 @@ export async function checkLtcBlockchain(address: string): Promise<{
 
   return { confirmed: false, confirmations: 0, receivedLtc: 0, txid: null };
 }
-
-
 
 /* ---- callback signature (PHP-serialize + HMAC-SHA1, per provider spec) ---- */
 

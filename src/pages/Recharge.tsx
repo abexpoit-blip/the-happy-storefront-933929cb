@@ -27,7 +27,7 @@ const formatCountdown = (seconds: number) => {
 };
 
 const Recharge = () => {
-  const { profile } = useAuth();
+  const { profile, refresh } = useAuth();
   const settings = useSiteSettings();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -98,7 +98,7 @@ const Recharge = () => {
           toast.success(`$${s.amount} зачислено на баланс!`);
           setActiveInvoice(null);
           if (pollRef.current) clearInterval(pollRef.current);
-          loadHistory(); loadTransactions();
+          loadHistory(); loadTransactions(); refresh?.();
           if (isActivation) setTimeout(() => navigate("/shop"), 1200);
         } else if (s.status === "rejected") {
           toast.error("Заявка отменена или истекла.");
@@ -112,7 +112,7 @@ const Recharge = () => {
   }, []);
 
   useEffect(() => {
-    loadHistory(); loadTransactions();
+    loadHistory(); loadTransactions(); refresh?.();
     const returned = searchParams.get("payment");
     if (activeInvoice?.deposit_id && activeInvoice.status === "pending") {
       // instant check when the user comes back from the payment page
@@ -122,7 +122,7 @@ const Recharge = () => {
             if (s.status === "approved") {
               toast.success(`$${s.amount} зачислено на баланс!`);
               setActiveInvoice(null);
-              loadHistory(); loadTransactions();
+              loadHistory(); loadTransactions(); refresh?.();
             } else if (s.status === "rejected") {
               toast.error("Платёж не завершён или истёк.");
               setActiveInvoice(null);
