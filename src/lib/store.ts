@@ -911,7 +911,7 @@ export interface AdminOverview {
 export const adminOverview = async (): Promise<AdminOverview> => {
   const [orders, deposits, users, roles, availableKeysRes, totalKeysRes] = await Promise.all([
     supabase.from("orders").select("id, user_id, total, status, created_at").order("created_at", { ascending: false }).limit(1000),
-    supabase.from("deposits").select("amount, status, created_at").limit(2000),
+    supabase.from("deposits").select("amount, status, created_at").order("created_at", { ascending: false }).limit(2000),
     supabase.from("profiles").select("id, username").limit(5000),
     supabase.from("user_roles").select("user_id, role").limit(5000),
     supabase.from("product_keys").select("*", { count: "exact", head: true }).eq("is_sold", false),
@@ -1131,64 +1131,51 @@ const cardStatus = (p: {
   return "available";
 };
 
+export interface AdminCardListResult {
+  rows: AdminCardRow[];
+  total: number;
+}
+
 export const adminListCards = async (opts: {
   search?: string;
   status?: "all" | "available" | "sold" | "hidden" | "expired";
-} = {}): Promise<AdminCardRow[]> => {
-  const CHUNK_SIZE = 1000;
-  const maxLimit = 100000;
+  page?: number;
+  limit?: number;
+} = {}): Promise<AdminCardListResult> => {
+  const page = Math.max(1, opts.page ?? 1);
+  const limit = Math.max(1, Math.min(opts.limit ?? 50, 100));
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
 
-  const buildQuery = (withCount = false) => {
-    let q = supabase
-      .from("products")
-      .select(
-        "id, bin, brand, country, price, active, stock, sold_count, exp_month, exp_year, created_at, category_id, base",
-        withCount ? { count: "exact" } : undefined,
-      )
-      .order("created_at", { ascending: false });
-    const s = opts.search?.trim();
-    if (s) q = q.or(`bin.ilike.%${s}%,brand.ilike.%${s}%,country.ilike.%${s}%,title.ilike.%${s}%`);
-    return q;
-  };
+  let q = supabase
+    .from("products")
+    .select(
+      "id, bin, brand, country, price, active, stock, sold_count, exp_month, exp_year, created_at, category_id, base",
+      { count: "exact" },
+    )
+    .order("created_at", { ascending: false });
 
-  const firstRes = await buildQuery(true).range(0, CHUNK_SIZE - 1);
-  if (firstRes.error) throw firstRes.error;
-
-  const allData = [...(firstRes.data ?? [])];
-  const totalCount = Math.min(firstRes.count ?? firstRes.data?.length ?? 0, maxLimit);
-
-  if (totalCount > CHUNK_SIZE) {
-    const tasks = [];
-    for (let from = CHUNK_SIZE; from < totalCount; from += CHUNK_SIZE) {
-      const to = Math.min(from + CHUNK_SIZE - 1, totalCount - 1);
-      tasks.push(
-        buildQuery()
-          .range(from, to)
-          .then((r) => {
-            if (r.error) throw r.error;
-            return r.data ?? [];
-          })
-      );
-    }
-    const pages = await Promise.all(tasks);
-    for (const page of pages) {
-      allData.push(...page);
-    }
-  } else if (firstRes.count == null && firstRes.data && firstRes.data.length === CHUNK_SIZE) {
-    let from = CHUNK_SIZE;
-    while (from < maxLimit) {
-      const to = Math.min(from + CHUNK_SIZE - 1, maxLimit - 1);
-      const r = await buildQuery().range(from, to);
-      if (r.error) throw r.error;
-      const batch = r.data ?? [];
-      if (!batch.length) break;
-      allData.push(...batch);
-      if (batch.length < CHUNK_SIZE) break;
-      from += CHUNK_SIZE;
-    }
+  const s = opts.search?.trim();
+  if (s) {
+    q = q.or(`bin.ilike.%${s}%,brand.ilike.%${s}%,country.ilike.%${s}%,title.ilike.%${s}%`);
   }
 
-  const rows: AdminCardRow[] = allData.map((p) => ({
+  const f = opts.status ?? "all";
+  if (f === "available") {
+    q = q.eq("active", true).gt("stock", 0);
+  } else if (f === "sold") {
+    q = q.eq("stock", 0);
+  } else if (f === "hidden") {
+    q = q.eq("active", false);
+  } else if (f === "expired") {
+    const curYear = new Date().getFullYear();
+    q = q.lte("exp_year", curYear);
+  }
+
+  const res = await q.range(from, to);
+  if (res.error) throw res.error;
+
+  const rows: AdminCardRow[] = (res.data ?? []).map((p) => ({
     id: p.id,
     bin: p.bin ?? "—",
     brand: p.brand ?? "—",
@@ -1201,8 +1188,11 @@ export const adminListCards = async (opts: {
     category_id: p.category_id ?? null,
     base: (p as { base?: string | null }).base ?? null,
   }));
-  const f = opts.status ?? "all";
-  return f === "all" ? rows : rows.filter((r) => r.status === f);
+
+  return {
+    rows,
+    total: res.count ?? rows.length,
+  };
 };
 
 export const adminUpdateCards = async (
@@ -1225,12 +1215,30 @@ export const adminDeleteCards = async (ids: string[]) => {
   }
 };
 
-
 /** Hides every card whose expiry month has passed. Returns how many were hidden. */
 export const adminHideExpiredCards = async () => {
-  const rows = await adminListCards({ status: "expired" });
-  const ids = rows.map((r) => r.id);
-  await adminUpdateCards(ids, { active: false });
+  const now = new Date();
+  const curYear = now.getFullYear();
+  const curMonth = now.getMonth() + 1;
+  const { data: pastYears } = await supabase
+    .from("products")
+    .select("id")
+    .lt("exp_year", curYear)
+    .eq("active", true);
+  const { data: pastMonths } = await supabase
+    .from("products")
+    .select("id")
+    .eq("exp_year", curYear)
+    .lt("exp_month", curMonth)
+    .eq("active", true);
+
+  const ids = [
+    ...(pastYears ?? []).map((r) => r.id),
+    ...(pastMonths ?? []).map((r) => r.id),
+  ];
+  if (ids.length) {
+    await adminUpdateCards(ids, { active: false });
+  }
   return ids.length;
 };
 

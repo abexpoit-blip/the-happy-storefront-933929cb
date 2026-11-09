@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AdminLayout } from "@/components/AdminLayout";
 import {
   adminListCards, adminUpdateCards, adminDeleteCards, adminHideExpiredCards,
-  adminReactivateUnsoldProducts, listCategories, type AdminCardRow, type Category,
+  adminReactivateUnsoldProducts, listCategories, listAllShopBases, type AdminCardRow, type Category,
 } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,8 +15,10 @@ type Card = AdminCardRow;
 const PER_PAGE = 50;
 
 const AdminCards = () => {
-  const [allCards, setAllCards] = useState<Card[]>([]);
+  const [cards, setCards] = useState<Card[]>([]);
+  const [totalCards, setTotalCards] = useState(0);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [knownBases, setKnownBases] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "available" | "sold" | "hidden" | "expired">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -24,14 +26,14 @@ const AdminCards = () => {
   const [page, setPage] = useState(1);
   const [showBackdateModal, setShowBackdateModal] = useState(false);
 
-  const totalCards = allCards.length;
   const totalPages = Math.max(1, Math.ceil(totalCards / PER_PAGE));
-  const cards = allCards.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-  const load = async () => {
+  const load = async (targetPage = page) => {
     setLoading(true);
     try {
-      setAllCards(await adminListCards({ search: query, status: statusFilter }));
+      const res = await adminListCards({ search: query, status: statusFilter, page: targetPage, limit: PER_PAGE });
+      setCards(res.rows);
+      setTotalCards(res.total);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load cards");
     }
@@ -40,14 +42,22 @@ const AdminCards = () => {
 
   useEffect(() => {
     (async () => {
-      try { setCategories(await listCategories(true)); } catch { /* ignore */ }
+      try {
+        const [cats, bases] = await Promise.all([listCategories(true), listAllShopBases()]);
+        setCategories(cats);
+        setKnownBases(bases);
+      } catch { /* ignore */ }
     })();
   }, []);
 
   useEffect(() => {
-    const t = setTimeout(() => { setPage(1); load(); }, 250);
+    setPage(1);
+  }, [query, statusFilter]);
+
+  useEffect(() => {
+    const t = setTimeout(() => { load(page); }, 200);
     return () => clearTimeout(t);
-  }, [query, statusFilter]); // eslint-disable-line
+  }, [query, statusFilter, page]); // eslint-disable-line
 
   const cleanupExpired = async () => {
     try {
@@ -127,16 +137,14 @@ const AdminCards = () => {
 
   // Manual BASE assignment — lets admins backdate an upload (e.g. 2026_07_25_VISA).
   const [bulkBase, setBulkBase] = useState("");
-  const knownBases = sortBasesLatestFirst(
-    [...new Set(allCards.map((c) => c.base).filter(Boolean) as string[])],
-  );
+
   const bulkSetBase = async () => {
     const ids = Array.from(selected);
     const b = bulkBase.trim();
     if (ids.length === 0 || !b) return toast.error("Select cards and type a base name");
     try {
       await adminUpdateCards(ids, { base: b });
-      setAllCards((cs) => cs.map((c) => (ids.includes(c.id) ? { ...c, base: b } : c)));
+      setCards((cs) => cs.map((c) => (ids.includes(c.id) ? { ...c, base: b } : c)));
       toast.success(`Base \u2192 ${b} on ${ids.length} cards`);
       setBulkBase(""); setSelected(new Set());
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Failed"); }
@@ -149,7 +157,7 @@ const AdminCards = () => {
     if (!p || p <= 0) return toast.error("Invalid price");
     try {
       await adminUpdateCards([id], { price: p });
-      setAllCards((cs) => cs.map((c) => (c.id === id ? { ...c, price: p } : c)));
+      setCards((cs) => cs.map((c) => (c.id === id ? { ...c, price: p } : c)));
       setEditingId(null);
       toast.success("Price updated");
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Failed"); }
@@ -159,7 +167,7 @@ const AdminCards = () => {
     if (!confirm("Delete this card?")) return;
     try {
       await adminDeleteCards([id]);
-      setAllCards((cs) => cs.filter((c) => c.id !== id));
+      setCards((cs) => cs.filter((c) => c.id !== id)); setTotalCards((t) => Math.max(0, t - 1));
       toast.success("Deleted");
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Failed"); }
   };
